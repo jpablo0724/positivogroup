@@ -56,6 +56,16 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+export function formatCurrencyPrecise(value: number): string {
+  if (!Number.isFinite(value)) return "$ 0,0";
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return "0";
   return new Intl.NumberFormat("es-CO").format(value);
@@ -66,6 +76,7 @@ export function formatDateLong(dateStr: string): string {
   const [year, month, day] = dateStr.split("-").map(Number);
   const date = new Date(year, (month ?? 1) - 1, day ?? 1);
   return new Intl.DateTimeFormat("es-CO", {
+    weekday: "long",
     day: "2-digit",
     month: "long",
     year: "numeric",

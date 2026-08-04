@@ -3,6 +3,7 @@ import {
   calcInvoiceTotals,
   calcItemTotals,
   formatCurrency,
+  formatCurrencyPrecise,
   formatDateLong,
   formatNumber,
 } from "../utils/calculations";
@@ -11,182 +12,261 @@ interface InvoicePreviewProps {
   data: InvoiceData;
 }
 
+const COMPANY = {
+  nit: "900.227.153 - 9",
+  tel: "(4) 448 3427",
+  address: "Cra 43B No. 16 - 41 EDIFICIO STAFF Oficina 607",
+  city: "Medellín - Colombia",
+  email: "comercial.digital@positivogroup.com",
+};
+
+const border = "border-slate-900";
+const cell = `border ${border} px-2 py-1`;
+
+function Logo() {
+  return (
+    <div className="flex flex-col items-center">
+      <div className="flex items-center">
+        <span className="text-lg font-extrabold tracking-tight text-slate-900">
+          POSITIVO
+        </span>
+        <span className="mx-1 inline-block h-5 w-2 -skew-x-[20deg] bg-fuchsia-600" />
+        <span className="text-lg font-extrabold tracking-tight text-slate-900">
+          GROUP
+        </span>
+      </div>
+      <p className="mt-0.5 text-[7px] font-semibold tracking-[0.2em] text-slate-500">
+        PUBLICIDAD Y COMUNICACIÓN RESIDENCIAL
+      </p>
+    </div>
+  );
+}
+
 export default function InvoicePreview({ data }: InvoicePreviewProps) {
   const totals = calcInvoiceTotals(data.items, data.ivaPorcentaje);
+  const totalCantidad = data.items.reduce((acc, i) => acc + i.cantidad, 0);
   const hasItems = data.items.some(
     (item) => item.descripcionProducto || item.cantidad || item.precioUnitario,
   );
+  const observacionesLineas = data.observaciones
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 
   return (
     <div
       id="invoice-preview"
-      className="mx-auto w-full max-w-[850px] bg-white p-10 text-slate-800 shadow-lg"
+      className="mx-auto w-full max-w-[900px] bg-white text-[11px] leading-snug text-slate-900 shadow-lg"
     >
-      <header className="flex items-start justify-between border-b border-slate-200 pb-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-500 text-base font-bold text-white">
-            PG
-          </div>
-          <div>
-            <p className="text-lg font-bold text-slate-900">Positivo Group</p>
-            <p className="text-xs text-slate-500">Sistema de facturación</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <h1 className="text-2xl font-bold text-slate-900">FACTURA</h1>
-          <p className="text-sm text-slate-500">
-            N.º{" "}
-            <span className="font-semibold text-slate-700">
-              {data.numeroFactura || "—"}
-            </span>
+      {/* Encabezado */}
+      <div className={`flex border ${border}`}>
+        <div className={`flex-1 border-r ${border} px-4 py-3 text-center`}>
+          <p className="text-base font-bold uppercase tracking-wide">
+            Factura N.º {data.numeroFactura || "—"}
           </p>
-        </div>
-      </header>
-
-      <section className="grid grid-cols-2 gap-6 py-6">
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Facturar a
-          </p>
-          <p className="text-sm font-semibold text-slate-900">
-            {data.cliente.razonSocial || "Razón social del cliente"}
-          </p>
-          <p className="text-sm text-slate-600">
-            NIT: {data.cliente.nit || "—"}
-          </p>
-          <p className="text-sm text-slate-600">
-            {data.cliente.email || "—"}
-          </p>
-          <p className="text-sm text-slate-600">
-            Contacto: {data.cliente.contacto || "—"}
-          </p>
-        </div>
-        <div className="text-sm text-slate-600">
-          <div className="grid grid-cols-2 gap-y-1.5">
-            <span className="text-slate-400">Fecha</span>
-            <span className="text-right font-medium text-slate-800">
-              {formatDateLong(data.fecha) || "—"}
-            </span>
-            <span className="text-slate-400">Válida hasta</span>
-            <span className="text-right font-medium text-slate-800">
-              {formatDateLong(data.validaHasta) || "—"}
-            </span>
-            <span className="text-slate-400">Forma de pago</span>
-            <span className="text-right font-medium text-slate-800">
-              {data.formaPago || "—"}
-            </span>
+          <div className="mt-2 space-y-0.5 text-slate-700">
+            <p>NIT: {COMPANY.nit}</p>
+            <p>Tel: {COMPANY.tel}</p>
+            <p>{COMPANY.address}</p>
+            <p>{COMPANY.city}</p>
           </div>
         </div>
-      </section>
+        <div className="flex w-56 shrink-0 items-center justify-center px-4 py-3">
+          <Logo />
+        </div>
+      </div>
 
-      {data.descripcion && (
-        <section className="mb-6 rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {data.descripcion}
-        </section>
-      )}
+      {/* Datos del cliente */}
+      <div className={`border border-t-0 ${border}`}>
+        <div
+          className={`border-b ${border} bg-slate-100 px-2 py-1 font-bold uppercase tracking-wide`}
+        >
+          Datos del cliente
+        </div>
+        <div className="flex">
+          <div className={`flex-1 space-y-1 border-r ${border} px-3 py-2`}>
+            <p>
+              <span className="font-semibold">Razón Social: </span>
+              {data.cliente.razonSocial || "—"}
+            </p>
+            <p>
+              <span className="font-semibold">NIT: </span>
+              {data.cliente.nit || "—"}
+              <span className="ml-6 font-semibold">Contacto: </span>
+              {data.cliente.contacto || "—"}
+            </p>
+            <p>
+              <span className="font-semibold">Email: </span>
+              {data.cliente.email ? (
+                <span className="text-blue-700 underline">
+                  {data.cliente.email}
+                </span>
+              ) : (
+                "—"
+              )}
+            </p>
+          </div>
+          <div className="w-64 shrink-0 space-y-1 px-3 py-2">
+            <p className="flex justify-between gap-2">
+              <span className="font-semibold">FECHA:</span>
+              <span className="text-right">
+                {formatDateLong(data.fecha) || "—"}
+              </span>
+            </p>
+            <p className="flex justify-between gap-2">
+              <span className="font-semibold">Válida hasta:</span>
+              <span className="text-right">
+                {formatDateLong(data.validaHasta) || "—"}
+              </span>
+            </p>
+            <p className="flex justify-between gap-2">
+              <span className="font-semibold">Forma de Pago:</span>
+              <span className="text-right">{data.formaPago || "—"}</span>
+            </p>
+          </div>
+        </div>
+      </div>
 
-      <section className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-slate-300 text-left text-[10px] uppercase tracking-wide text-slate-500">
-              <th className="py-2 pr-2">Producto</th>
-              <th className="py-2 pr-2">Ciudad</th>
-              <th className="py-2 pr-2">Quincena</th>
-              <th className="py-2 pr-2 text-right">Cant.</th>
-              <th className="py-2 pr-2 text-right">Precio unit.</th>
-              <th className="py-2 pr-2 text-right">Inv. antes IVA</th>
-              <th className="py-2 pr-2 text-right">Impactos 15d</th>
-              <th className="py-2 pr-2 text-right">Costo/impacto</th>
-              <th className="py-2 pr-2 text-right">Subtotal</th>
-              <th className="py-2 pr-2 text-right">IVA</th>
+      {/* Descripción */}
+      <div className={`border border-t-0 ${border}`}>
+        <div
+          className={`border-b ${border} bg-slate-100 px-2 py-1 text-center font-bold uppercase tracking-wide`}
+        >
+          Descripción
+        </div>
+        <div className="px-3 py-2">{data.descripcion || "—"}</div>
+      </div>
+
+      {/* Tabla de productos */}
+      <table className={`w-full border-collapse border border-t-0 ${border}`}>
+        <thead>
+          <tr className="bg-slate-100 text-center font-bold uppercase">
+            <th className={cell}>Descripción del producto</th>
+            <th className={cell}>Ciudad</th>
+            <th className={cell}>Quincena</th>
+            <th className={cell}>Cantidad</th>
+            <th className={cell}>Precio Unitario</th>
+            <th className={cell}>
+              Inversión Total
+              <br />
+              antes de IVA
+            </th>
+            <th className={`${cell} text-blue-700`}>
+              Impactos
+              <br />
+              promedio 15 días
+            </th>
+            <th className={`${cell} text-blue-700`}>Costo por impacto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {hasItems ? (
+            data.items.map((item) => {
+              const t = calcItemTotals(item, data.ivaPorcentaje);
+              return (
+                <tr key={item.id}>
+                  <td className={cell}>{item.descripcionProducto || "—"}</td>
+                  <td className={`${cell} text-center`}>
+                    {item.ciudad || "—"}
+                  </td>
+                  <td className={`${cell} text-center`}>
+                    {item.quincena || "—"}
+                  </td>
+                  <td className={`${cell} text-center`}>
+                    {formatNumber(item.cantidad)}
+                  </td>
+                  <td className={`${cell} text-right`}>
+                    {formatCurrency(item.precioUnitario)}
+                  </td>
+                  <td className={`${cell} text-right`}>
+                    {formatCurrency(t.inversionTotalAntesIva)}
+                  </td>
+                  <td className={`${cell} text-right text-blue-700`}>
+                    {formatNumber(item.impactosPromedio15Dias)}
+                  </td>
+                  <td className={`${cell} text-right text-blue-700`}>
+                    {formatCurrencyPrecise(t.costoPorImpacto)}
+                  </td>
+                </tr>
+              );
+            })
+          ) : (
+            <tr>
+              <td colSpan={8} className={`${cell} py-6 text-center text-slate-400`}>
+                Agrega productos en el formulario para verlos aquí
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {hasItems ? (
-              data.items.map((item) => {
-                const t = calcItemTotals(item, data.ivaPorcentaje);
-                return (
-                  <tr key={item.id} className="border-b border-slate-100">
-                    <td className="py-2 pr-2 font-medium text-slate-800">
-                      {item.descripcionProducto || "—"}
-                    </td>
-                    <td className="py-2 pr-2 text-slate-600">
-                      {item.ciudad || "—"}
-                    </td>
-                    <td className="py-2 pr-2 text-slate-600">
-                      {item.quincena || "—"}
-                    </td>
-                    <td className="py-2 pr-2 text-right text-slate-600">
-                      {formatNumber(item.cantidad)}
-                    </td>
-                    <td className="py-2 pr-2 text-right text-slate-600">
-                      {formatCurrency(item.precioUnitario)}
-                    </td>
-                    <td className="py-2 pr-2 text-right text-slate-600">
-                      {formatCurrency(t.inversionTotalAntesIva)}
-                    </td>
-                    <td className="py-2 pr-2 text-right text-slate-600">
-                      {formatNumber(item.impactosPromedio15Dias)}
-                    </td>
-                    <td className="py-2 pr-2 text-right text-slate-600">
-                      {formatCurrency(t.costoPorImpacto)}
-                    </td>
-                    <td className="py-2 pr-2 text-right text-slate-600">
-                      {formatCurrency(t.subtotal)}
-                    </td>
-                    <td className="py-2 pr-2 text-right text-slate-600">
-                      {formatCurrency(t.iva)}
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td
-                  colSpan={10}
-                  className="py-6 text-center text-slate-400"
-                >
-                  Agrega productos en el formulario para verlos aquí
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="mt-6 flex justify-end">
-        <div className="w-64 text-sm">
-          <div className="flex justify-between border-b border-slate-100 py-1.5">
-            <span className="text-slate-500">Subtotal</span>
-            <span className="font-medium text-slate-800">
+          )}
+          <tr className="bg-slate-50 font-bold">
+            <td className={`${cell} text-right`} colSpan={3}>
+              SUBTOTAL
+            </td>
+            <td className={`${cell} text-center`}>
+              {formatNumber(totalCantidad)}
+            </td>
+            <td className={cell}></td>
+            <td className={`${cell} text-right`}>
               {formatCurrency(totals.subtotal)}
-            </span>
+            </td>
+            <td className={cell} colSpan={2}></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* IVA / Total */}
+      <div className={`flex justify-end border border-t-0 ${border}`}>
+        <div className={`w-64 divide-y ${border} border-l`}>
+          <div className="flex justify-between px-3 py-1.5">
+            <span>IVA {data.ivaPorcentaje}%</span>
+            <span>{formatCurrency(totals.iva)}</span>
           </div>
-          <div className="flex justify-between border-b border-slate-100 py-1.5">
-            <span className="text-slate-500">IVA ({data.ivaPorcentaje}%)</span>
-            <span className="font-medium text-slate-800">
-              {formatCurrency(totals.iva)}
-            </span>
-          </div>
-          <div className="flex justify-between py-2 text-base">
-            <span className="font-semibold text-slate-900">Total</span>
-            <span className="font-bold text-emerald-600">
-              {formatCurrency(totals.total)}
-            </span>
+          <div className="flex justify-between px-3 py-2 text-sm font-bold">
+            <span>TOTAL</span>
+            <span>{formatCurrency(totals.total)}</span>
           </div>
         </div>
-      </section>
+      </div>
 
-      {data.observaciones && (
-        <section className="mt-6 border-t border-slate-200 pt-4">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Observaciones
-          </p>
-          <p className="text-sm text-slate-600 whitespace-pre-wrap">
-            {data.observaciones}
-          </p>
-        </section>
-      )}
+      {/* Observaciones */}
+      <div className={`border border-t-0 ${border}`}>
+        <div
+          className={`border-b ${border} bg-slate-100 px-2 py-1 font-bold uppercase tracking-wide`}
+        >
+          Observaciones
+        </div>
+        <div className="px-3 py-2">
+          {observacionesLineas.length > 0 ? (
+            <ul className="list-disc space-y-1 pl-4">
+              {observacionesLineas.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-slate-400">—</p>
+          )}
+        </div>
+      </div>
+
+      {/* Firma */}
+      <div className={`flex justify-between gap-6 border border-t-0 ${border} px-4 py-4`}>
+        <div className="space-y-0.5">
+          <p className="font-semibold">Positivo Group S.A.S.</p>
+          <p>Ejecutiva Comercial</p>
+          <p>Tel: {COMPANY.tel}</p>
+          <p>Email: {COMPANY.email}</p>
+        </div>
+        <div className={`w-64 shrink-0 border ${border}`}>
+          <div
+            className={`border-b ${border} px-2 py-1 text-center font-bold uppercase tracking-wide`}
+          >
+            Firma Aprobado
+          </div>
+          <div className="space-y-4 px-2 py-3 text-slate-500">
+            <p className="border-b border-slate-300 pb-1">Nombre</p>
+            <p className="border-b border-slate-300 pb-1">Cargo</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
