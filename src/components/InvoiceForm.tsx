@@ -1,9 +1,12 @@
-import { FORMAS_PAGO, type InvoiceData, type InvoiceItem } from "../types";
+import { useState } from "react";
+import { CIUDADES, FORMAS_PAGO, type InvoiceData, type InvoiceItem } from "../types";
 
 interface InvoiceFormProps {
   data: InvoiceData;
   onChange: (data: InvoiceData) => void;
 }
+
+const CIUDAD_AGREGAR = "__agregar__";
 
 function emptyItem(): InvoiceItem {
   return {
@@ -23,6 +26,16 @@ const inputClass =
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 
 export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
+  const [customCityIds, setCustomCityIds] = useState<Set<string>>(new Set());
+
+  function isCiudadCustom(item: InvoiceItem) {
+    return (
+      customCityIds.has(item.id) ||
+      (item.ciudad !== "" &&
+        !(CIUDADES as readonly string[]).includes(item.ciudad))
+    );
+  }
+
   function updateCliente<K extends keyof InvoiceData["cliente"]>(
     field: K,
     value: InvoiceData["cliente"][K],
@@ -226,13 +239,61 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                 </div>
                 <div>
                   <label className={labelClass}>Ciudad</label>
-                  <input
-                    className={inputClass}
-                    value={item.ciudad}
-                    onChange={(e) =>
-                      updateItem(item.id, { ciudad: e.target.value })
-                    }
-                  />
+                  {isCiudadCustom(item) ? (
+                    <div className="flex gap-1">
+                      <input
+                        className={inputClass}
+                        value={item.ciudad}
+                        onChange={(e) =>
+                          updateItem(item.id, { ciudad: e.target.value })
+                        }
+                        placeholder="Escribe la ciudad"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomCityIds((prev) => {
+                            const next = new Set(prev);
+                            next.delete(item.id);
+                            return next;
+                          });
+                          updateItem(item.id, { ciudad: "" });
+                        }}
+                        title="Elegir de la lista"
+                        className="shrink-0 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-500 shadow-sm hover:bg-slate-100"
+                      >
+                        Lista
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      className={inputClass}
+                      value={item.ciudad}
+                      onChange={(e) => {
+                        if (e.target.value === CIUDAD_AGREGAR) {
+                          setCustomCityIds((prev) =>
+                            new Set(prev).add(item.id),
+                          );
+                          updateItem(item.id, { ciudad: "" });
+                        } else {
+                          updateItem(item.id, { ciudad: e.target.value });
+                        }
+                      }}
+                    >
+                      <option value="" disabled>
+                        Selecciona una ciudad
+                      </option>
+                      {CIUDADES.map((ciudad) => (
+                        <option key={ciudad} value={ciudad}>
+                          {ciudad}
+                        </option>
+                      ))}
+                      <option value={CIUDAD_AGREGAR}>
+                        + Agregar si no existe
+                      </option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className={labelClass}>Quincena</label>

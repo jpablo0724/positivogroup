@@ -34,3 +34,15 @@ export const FORMAS_PAGO = [
   "Crédito 60 días",
   "Crédito 90 días",
 ] as const;
+
+export const CIUDADES = [
+  "Medellin",
+  "Bogotá",
+  "Cali",
+  "Barranquilla",
+  "Pereira",
+  "Armenia",
+  "Oriente Antioqueño",
+  "A convenir",
+  "En cobertura P+G",
+] as const;
