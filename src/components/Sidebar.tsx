@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import PositivoLogo from "./PositivoLogo";
 
 export type View = "crear-factura";
 
@@ -41,14 +42,9 @@ interface SidebarProps {
 export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col bg-slate-900 text-slate-200">
-      <div className="flex items-center gap-3 border-b border-slate-800 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500 text-sm font-bold text-slate-900">
-          PG
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-white">Positivo Group</p>
-          <p className="text-xs text-slate-400">Sistema de facturación</p>
-        </div>
+      <div className="border-b border-slate-800 px-5 py-5">
+        <PositivoLogo variant="light" />
+        <p className="mt-1 text-xs text-slate-400">Sistema de facturación</p>
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">

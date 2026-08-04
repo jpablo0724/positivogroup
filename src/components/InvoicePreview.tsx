@@ -1,4 +1,5 @@
 import type { InvoiceData } from "../types";
+import PositivoLogo from "./PositivoLogo";
 import {
   calcInvoiceTotals,
   calcItemTotals,
@@ -22,25 +23,6 @@ const COMPANY = {
 
 const border = "border-slate-900";
 const cell = `border ${border} px-2 py-1`;
-
-function Logo() {
-  return (
-    <div className="flex flex-col items-center">
-      <div className="flex items-center">
-        <span className="text-lg font-extrabold tracking-tight text-slate-900">
-          POSITIVO
-        </span>
-        <span className="mx-1 inline-block h-5 w-2 -skew-x-[20deg] bg-fuchsia-600" />
-        <span className="text-lg font-extrabold tracking-tight text-slate-900">
-          GROUP
-        </span>
-      </div>
-      <p className="mt-0.5 text-[7px] font-semibold tracking-[0.2em] text-slate-500">
-        PUBLICIDAD Y COMUNICACIÓN RESIDENCIAL
-      </p>
-    </div>
-  );
-}
 
 export default function InvoicePreview({ data }: InvoicePreviewProps) {
   const totals = calcInvoiceTotals(data.items, data.ivaPorcentaje);
@@ -72,7 +54,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
           </div>
         </div>
         <div className="flex w-56 shrink-0 items-center justify-center px-4 py-3">
-          <Logo />
+          <PositivoLogo showTagline />
         </div>
       </div>
 
