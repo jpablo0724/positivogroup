@@ -18,6 +18,28 @@ const inputClass = selectTriggerClass;
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 
+function emptyItem(): InvoiceItem {
+  return {
+    id: crypto.randomUUID(),
+    descripcionProducto: "",
+    ciudad: "",
+    quincena: "",
+    cantidad: 0,
+    precioUnitario: 0,
+    impactosPromedio15Dias: 0,
+  };
+}
+
+function isItemFilled(item: InvoiceItem) {
+  return (
+    item.descripcionProducto !== "" &&
+    item.ciudad !== "" &&
+    item.quincena !== "" &&
+    item.cantidad > 0 &&
+    item.precioUnitario > 0
+  );
+}
+
 export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const [customCityIds, setCustomCityIds] = useState<Set<string>>(new Set());
 
@@ -49,6 +71,19 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
       items: data.items.map((item) =>
         item.id === id ? { ...item, ...patch } : item,
       ),
+    });
+  }
+
+  function addItem() {
+    onChange({ ...data, items: [...data.items, emptyItem()] });
+  }
+
+  function removeItem(id: string) {
+    onChange({ ...data, items: data.items.filter((item) => item.id !== id) });
+    setCustomCityIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
     });
   }
 
@@ -167,15 +202,30 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Producto
+          Productos
         </h2>
 
         <div className="space-y-4">
-          {data.items.map((item) => (
+          {data.items.map((item, index) => (
             <div
               key={item.id}
               className="rounded-lg border border-slate-200 bg-slate-50 p-4"
             >
+              {data.items.length > 1 && (
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-500">
+                    Producto {index + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(item.id)}
+                    className="text-xs font-medium text-red-500 hover:text-red-600"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className={labelClass}>Descripción del producto</label>
@@ -290,6 +340,16 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                 Inversión total antes de IVA, costo por impacto, subtotal e
                 IVA se calculan automáticamente en la factura.
               </p>
+
+              {index === data.items.length - 1 && isItemFilled(item) && (
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="mt-3 w-full rounded-md border border-dashed border-emerald-400 bg-emerald-50 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                >
+                  + Agregar otro producto
+                </button>
+              )}
             </div>
           ))}
         </div>
