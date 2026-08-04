@@ -41,7 +41,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
       className="mx-auto w-full max-w-[900px] bg-white text-[11px] leading-snug text-slate-900 shadow-lg"
     >
       {/* Encabezado */}
-      <div className={`flex border ${border}`}>
+      <div className={`flex break-inside-avoid border ${border}`}>
         <div className={`flex-1 border-r ${border} px-4 py-3 text-center`}>
           <p className="text-base font-bold uppercase tracking-wide">
             Factura N.º {data.numeroFactura || "—"}
@@ -59,7 +59,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
       </div>
 
       {/* Datos del cliente */}
-      <div className={`border border-t-0 ${border}`}>
+      <div className={`break-inside-avoid border border-t-0 ${border}`}>
         <div
           className={`border-b ${border} bg-slate-100 px-2 py-1 font-bold uppercase tracking-wide`}
         >
@@ -110,7 +110,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
       </div>
 
       {/* Descripción */}
-      <div className={`border border-t-0 ${border}`}>
+      <div className={`break-inside-avoid border border-t-0 ${border}`}>
         <div
           className={`border-b ${border} bg-slate-100 px-2 py-1 text-center font-bold uppercase tracking-wide`}
         >
@@ -196,7 +196,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
       </table>
 
       {/* IVA / Total */}
-      <div className={`flex justify-end border border-t-0 ${border}`}>
+      <div className={`flex break-inside-avoid justify-end border border-t-0 ${border}`}>
         <div className={`w-64 divide-y ${border} border-l`}>
           <div className="flex justify-between px-3 py-1.5">
             <span>IVA {data.ivaPorcentaje}%</span>
@@ -210,7 +210,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
       </div>
 
       {/* Observaciones */}
-      <div className={`border border-t-0 ${border}`}>
+      <div className={`break-inside-avoid border border-t-0 ${border}`}>
         <div
           className={`border-b ${border} bg-slate-100 px-2 py-1 font-bold uppercase tracking-wide`}
         >
@@ -230,7 +230,9 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
       </div>
 
       {/* Firma */}
-      <div className={`flex justify-between gap-6 border border-t-0 ${border} px-4 py-4`}>
+      <div
+        className={`flex break-inside-avoid justify-between gap-6 border border-t-0 ${border} px-4 py-4`}
+      >
         <div className="space-y-0.5">
           <p className="font-semibold">Positivo Group S.A.S.</p>
           <p>Ejecutiva Comercial</p>

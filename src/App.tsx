@@ -46,13 +46,13 @@ function App() {
   const [invoice, setInvoice] = useState<InvoiceData>(createInitialInvoice);
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
+    <div className="flex min-h-screen bg-slate-100 print:block">
       <div className="print:hidden">
         <Sidebar activeView={activeView} onNavigate={setActiveView} />
       </div>
 
       {activeView === "crear-factura" && (
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex flex-1 flex-col overflow-hidden print:block print:overflow-visible">
           <header className="flex items-center justify-between border-b border-slate-200 bg-white px-8 py-5 print:hidden">
             <div>
               <h1 className="text-xl font-semibold text-slate-900">
@@ -72,7 +72,7 @@ function App() {
             </button>
           </header>
 
-          <div className="flex flex-1 gap-6 overflow-auto p-6">
+          <div className="flex flex-1 gap-6 overflow-auto p-6 print:block print:overflow-visible print:gap-0 print:p-0">
             <div className="w-[440px] shrink-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:hidden">
               <InvoiceForm data={invoice} onChange={setInvoice} />
             </div>
