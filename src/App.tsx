@@ -2,7 +2,7 @@ import { useState } from "react";
 import Sidebar, { type View } from "./components/Sidebar";
 import InvoiceForm from "./components/InvoiceForm";
 import InvoicePreview from "./components/InvoicePreview";
-import type { InvoiceData } from "./types";
+import { OBSERVACIONES_DEFAULT, type InvoiceData } from "./types";
 import { todayIso } from "./utils/calculations";
 
 function createInvoiceNumber(): string {
@@ -20,7 +20,7 @@ function createInitialInvoice(): InvoiceData {
     formaPago: "",
     descripcion: "",
     ivaPorcentaje: 19,
-    observaciones: "",
+    observaciones: OBSERVACIONES_DEFAULT,
     cliente: {
       razonSocial: "Positivo Group",
       nit: "",
