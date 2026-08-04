@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { CIUDADES, FORMAS_PAGO, type InvoiceData, type InvoiceItem } from "../types";
+import {
+  CIUDADES,
+  FORMAS_PAGO,
+  PRODUCTOS,
+  type InvoiceData,
+  type InvoiceItem,
+} from "../types";
 
 interface InvoiceFormProps {
   data: InvoiceData;
@@ -7,18 +13,6 @@ interface InvoiceFormProps {
 }
 
 const CIUDAD_AGREGAR = "__agregar__";
-
-function emptyItem(): InvoiceItem {
-  return {
-    id: crypto.randomUUID(),
-    descripcionProducto: "",
-    ciudad: "",
-    quincena: "",
-    cantidad: 0,
-    precioUnitario: 0,
-    impactosPromedio15Dias: 0,
-  };
-}
 
 const inputClass =
   "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
@@ -57,14 +51,6 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         item.id === id ? { ...item, ...patch } : item,
       ),
     });
-  }
-
-  function addItem() {
-    onChange({ ...data, items: [...data.items, emptyItem()] });
-  }
-
-  function removeItem(id: string) {
-    onChange({ ...data, items: data.items.filter((item) => item.id !== id) });
   }
 
   return (
@@ -189,44 +175,20 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Productos
-          </h2>
-          <button
-            type="button"
-            onClick={addItem}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-          >
-            + Agregar producto
-          </button>
-        </div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Producto
+        </h2>
 
         <div className="space-y-4">
-          {data.items.map((item, index) => (
+          {data.items.map((item) => (
             <div
               key={item.id}
               className="rounded-lg border border-slate-200 bg-slate-50 p-4"
             >
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">
-                  Producto {index + 1}
-                </span>
-                {data.items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    className="text-xs font-medium text-red-500 hover:text-red-600"
-                  >
-                    Eliminar
-                  </button>
-                )}
-              </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className={labelClass}>Descripción del producto</label>
-                  <input
+                  <select
                     className={inputClass}
                     value={item.descripcionProducto}
                     onChange={(e) =>
@@ -234,8 +196,16 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                         descripcionProducto: e.target.value,
                       })
                     }
-                    placeholder="Ej. Pauta valla digital"
-                  />
+                  >
+                    <option value="" disabled>
+                      Selecciona un producto
+                    </option>
+                    {PRODUCTOS.map((producto) => (
+                      <option key={producto} value={producto}>
+                        {producto}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className={labelClass}>Ciudad</label>
