@@ -3,19 +3,18 @@ import {
   CIUDADES,
   FORMAS_PAGO,
   PRODUCTOS,
+  QUINCENAS,
   type InvoiceData,
   type InvoiceItem,
 } from "../types";
+import SearchableSelect, { selectTriggerClass } from "./SearchableSelect";
 
 interface InvoiceFormProps {
   data: InvoiceData;
   onChange: (data: InvoiceData) => void;
 }
 
-const CIUDAD_AGREGAR = "__agregar__";
-
-const inputClass =
-  "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
+const inputClass = selectTriggerClass;
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 
@@ -133,20 +132,12 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
           </div>
           <div>
             <label className={labelClass}>Forma de pago</label>
-            <select
-              className={inputClass}
+            <SearchableSelect
               value={data.formaPago}
-              onChange={(e) => updateField("formaPago", e.target.value)}
-            >
-              <option value="" disabled>
-                Selecciona una opción
-              </option>
-              {FORMAS_PAGO.map((forma) => (
-                <option key={forma} value={forma}>
-                  {forma}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => updateField("formaPago", value)}
+              options={FORMAS_PAGO}
+              placeholder="Selecciona una opción"
+            />
           </div>
           <div>
             <label className={labelClass}>IVA (%)</label>
@@ -188,24 +179,14 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className={labelClass}>Descripción del producto</label>
-                  <select
-                    className={inputClass}
+                  <SearchableSelect
                     value={item.descripcionProducto}
-                    onChange={(e) =>
-                      updateItem(item.id, {
-                        descripcionProducto: e.target.value,
-                      })
+                    onChange={(value) =>
+                      updateItem(item.id, { descripcionProducto: value })
                     }
-                  >
-                    <option value="" disabled>
-                      Selecciona un producto
-                    </option>
-                    {PRODUCTOS.map((producto) => (
-                      <option key={producto} value={producto}>
-                        {producto}
-                      </option>
-                    ))}
-                  </select>
+                    options={PRODUCTOS}
+                    placeholder="Selecciona un producto"
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Ciudad</label>
@@ -237,43 +218,26 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                       </button>
                     </div>
                   ) : (
-                    <select
-                      className={inputClass}
+                    <SearchableSelect
                       value={item.ciudad}
-                      onChange={(e) => {
-                        if (e.target.value === CIUDAD_AGREGAR) {
-                          setCustomCityIds((prev) =>
-                            new Set(prev).add(item.id),
-                          );
-                          updateItem(item.id, { ciudad: "" });
-                        } else {
-                          updateItem(item.id, { ciudad: e.target.value });
-                        }
+                      onChange={(value) => updateItem(item.id, { ciudad: value })}
+                      options={CIUDADES}
+                      placeholder="Selecciona una ciudad"
+                      extraOptionLabel="+ Agregar si no existe"
+                      onExtraOption={() => {
+                        setCustomCityIds((prev) => new Set(prev).add(item.id));
+                        updateItem(item.id, { ciudad: "" });
                       }}
-                    >
-                      <option value="" disabled>
-                        Selecciona una ciudad
-                      </option>
-                      {CIUDADES.map((ciudad) => (
-                        <option key={ciudad} value={ciudad}>
-                          {ciudad}
-                        </option>
-                      ))}
-                      <option value={CIUDAD_AGREGAR}>
-                        + Agregar si no existe
-                      </option>
-                    </select>
+                    />
                   )}
                 </div>
                 <div>
                   <label className={labelClass}>Quincena</label>
-                  <input
-                    className={inputClass}
+                  <SearchableSelect
                     value={item.quincena}
-                    onChange={(e) =>
-                      updateItem(item.id, { quincena: e.target.value })
-                    }
-                    placeholder="Ej. 1ra quincena julio"
+                    onChange={(value) => updateItem(item.id, { quincena: value })}
+                    options={QUINCENAS}
+                    placeholder="Selecciona la quincena"
                   />
                 </div>
                 <div>

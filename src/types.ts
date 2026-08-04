@@ -78,3 +78,23 @@ export const PRODUCTOS = [
   "BONIFICADO. Ascensores adicionales sin costo (Incluye impresión)",
   "BONIFICADO. Cambio de arte a mitad de cada quincena (incluye impresión)",
 ] as const;
+
+const MESES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+export const QUINCENAS: readonly string[] = MESES.flatMap((mes) => [
+  `${mes} Q1`,
+  `${mes} Q2`,
+]);
