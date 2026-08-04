@@ -1,0 +1,90 @@
+import { useState } from "react";
+import Sidebar, { type View } from "./components/Sidebar";
+import InvoiceForm from "./components/InvoiceForm";
+import InvoicePreview from "./components/InvoicePreview";
+import type { InvoiceData } from "./types";
+import { todayIso } from "./utils/calculations";
+
+function createInvoiceNumber(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const stamp = String(now.getTime()).slice(-5);
+  return `FAC-${year}-${stamp}`;
+}
+
+function createInitialInvoice(): InvoiceData {
+  return {
+    numeroFactura: createInvoiceNumber(),
+    fecha: todayIso(),
+    validaHasta: "",
+    formaPago: "",
+    descripcion: "",
+    ivaPorcentaje: 19,
+    observaciones: "",
+    cliente: {
+      razonSocial: "Positivo Group",
+      nit: "",
+      email: "",
+      contacto: "",
+    },
+    items: [
+      {
+        id: crypto.randomUUID(),
+        descripcionProducto: "",
+        ciudad: "",
+        quincena: "",
+        cantidad: 0,
+        precioUnitario: 0,
+        impactosPromedio15Dias: 0,
+      },
+    ],
+  };
+}
+
+function App() {
+  const [activeView, setActiveView] = useState<View>("crear-factura");
+  const [invoice, setInvoice] = useState<InvoiceData>(createInitialInvoice);
+
+  return (
+    <div className="flex min-h-screen bg-slate-100">
+      <div className="print:hidden">
+        <Sidebar activeView={activeView} onNavigate={setActiveView} />
+      </div>
+
+      {activeView === "crear-factura" && (
+        <main className="flex flex-1 flex-col overflow-hidden">
+          <header className="flex items-center justify-between border-b border-slate-200 bg-white px-8 py-5 print:hidden">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">
+                Crear factura
+              </h1>
+              <p className="text-sm text-slate-500">
+                Completa el formulario y la factura se genera automáticamente
+                a la derecha.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800"
+            >
+              Imprimir / Guardar PDF
+            </button>
+          </header>
+
+          <div className="flex flex-1 gap-6 overflow-auto p-6">
+            <div className="w-[440px] shrink-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:hidden">
+              <InvoiceForm data={invoice} onChange={setInvoice} />
+            </div>
+
+            <div className="flex-1 overflow-auto rounded-xl bg-slate-200/60 p-6 print:overflow-visible print:bg-transparent print:p-0">
+              <InvoicePreview data={invoice} />
+            </div>
+          </div>
+        </main>
+      )}
+    </div>
+  );
+}
+
+export default App;
