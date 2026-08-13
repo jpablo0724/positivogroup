@@ -4,7 +4,6 @@ import {
   calcInvoiceTotals,
   calcItemTotals,
   formatCurrency,
-  formatCurrencyPrecise,
   formatDateLong,
   formatNumber,
 } from "../utils/calculations";
@@ -114,8 +113,6 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
         <thead>
           <tr className="bg-slate-100 text-center font-bold uppercase">
             <th className={cell}>Descripción del producto</th>
-            <th className={cell}>Ciudad</th>
-            <th className={cell}>Quincena</th>
             <th className={cell}>Cantidad</th>
             <th className={cell}>Precio Unitario</th>
             <th className={cell}>
@@ -123,12 +120,6 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
               <br />
               antes de IVA
             </th>
-            <th className={`${cell} text-blue-700`}>
-              Impactos
-              <br />
-              promedio 15 días
-            </th>
-            <th className={`${cell} text-blue-700`}>Costo por impacto</th>
           </tr>
         </thead>
         <tbody>
@@ -139,12 +130,6 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
                 <tr key={item.id}>
                   <td className={cell}>{item.descripcionProducto || "—"}</td>
                   <td className={`${cell} text-center`}>
-                    {item.ciudad || "—"}
-                  </td>
-                  <td className={`${cell} text-center`}>
-                    {item.quincena || "—"}
-                  </td>
-                  <td className={`${cell} text-center`}>
                     {formatNumber(item.cantidad)}
                   </td>
                   <td className={`${cell} text-right`}>
@@ -153,26 +138,18 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
                   <td className={`${cell} text-right`}>
                     {formatCurrency(t.inversionTotalAntesIva)}
                   </td>
-                  <td className={`${cell} text-right text-blue-700`}>
-                    {formatNumber(item.impactosPromedio15Dias)}
-                  </td>
-                  <td className={`${cell} text-right text-blue-700`}>
-                    {formatCurrencyPrecise(t.costoPorImpacto)}
-                  </td>
                 </tr>
               );
             })
           ) : (
             <tr>
-              <td colSpan={8} className={`${cell} py-6 text-center text-slate-400`}>
+              <td colSpan={4} className={`${cell} py-6 text-center text-slate-400`}>
                 Agrega productos en el formulario para verlos aquí
               </td>
             </tr>
           )}
           <tr className="bg-slate-50 font-bold">
-            <td className={`${cell} text-right`} colSpan={3}>
-              SUBTOTAL
-            </td>
+            <td className={`${cell} text-right`}>SUBTOTAL</td>
             <td className={`${cell} text-center`}>
               {formatNumber(totalCantidad)}
             </td>
@@ -180,7 +157,6 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
             <td className={`${cell} text-right`}>
               {formatCurrency(totals.subtotal)}
             </td>
-            <td className={cell} colSpan={2}></td>
           </tr>
         </tbody>
       </table>

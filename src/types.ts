@@ -8,11 +8,8 @@ export interface ClientData {
 export interface InvoiceItem {
   id: string;
   descripcionProducto: string;
-  ciudad: string;
-  quincena: string;
   cantidad: number;
   precioUnitario: number;
-  impactosPromedio15Dias: number;
 }
 
 export interface InvoiceData {
@@ -34,18 +31,6 @@ export const FORMAS_PAGO = [
   "Crédito a 60 días",
   "Crédito a 90 días",
   "50 anticipo y 50 al finalizar",
-] as const;
-
-export const CIUDADES = [
-  "Medellin",
-  "Bogotá",
-  "Cali",
-  "Barranquilla",
-  "Pereira",
-  "Armenia",
-  "Oriente Antioqueño",
-  "A convenir",
-  "En cobertura P+G",
 ] as const;
 
 export const PRODUCTOS = [
@@ -79,26 +64,6 @@ export const PRODUCTOS = [
   "BONIFICADO. Ascensores adicionales sin costo (Incluye impresión)",
   "BONIFICADO. Cambio de arte a mitad de cada quincena (incluye impresión)",
 ] as const;
-
-const MESES = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
-
-export const QUINCENAS: readonly string[] = MESES.flatMap((mes) => [
-  `${mes} Q1`,
-  `${mes} Q2`,
-]);
 
 export const OBSERVACIONES_DEFAULT = [
   "PRECIOS ANTES DE IVA / PRECIOS DE PAUTA EN ASCENSORES CORRESPONDE A CICLO QUINCENAL",

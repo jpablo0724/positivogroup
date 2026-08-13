@@ -24,11 +24,8 @@ function createInitialInvoice(): InvoiceData {
       {
         id: crypto.randomUUID(),
         descripcionProducto: "",
-        ciudad: "",
-        quincena: "",
         cantidad: 0,
         precioUnitario: 0,
-        impactosPromedio15Dias: 0,
       },
     ],
   };

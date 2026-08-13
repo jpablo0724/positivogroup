@@ -2,7 +2,6 @@ import type { InvoiceItem } from "../types";
 
 export interface ItemTotals {
   inversionTotalAntesIva: number;
-  costoPorImpacto: number;
   subtotal: number;
   iva: number;
   total: number;
@@ -13,15 +12,11 @@ export function calcItemTotals(
   ivaPorcentaje: number,
 ): ItemTotals {
   const inversionTotalAntesIva = item.cantidad * item.precioUnitario;
-  const costoPorImpacto =
-    item.impactosPromedio15Dias > 0
-      ? inversionTotalAntesIva / item.impactosPromedio15Dias
-      : 0;
   const subtotal = inversionTotalAntesIva;
   const iva = subtotal * (ivaPorcentaje / 100);
   const total = subtotal + iva;
 
-  return { inversionTotalAntesIva, costoPorImpacto, subtotal, iva, total };
+  return { inversionTotalAntesIva, subtotal, iva, total };
 }
 
 export interface InvoiceTotals {
@@ -53,16 +48,6 @@ export function formatCurrency(value: number): string {
     style: "currency",
     currency: "COP",
     maximumFractionDigits: 0,
-  }).format(value);
-}
-
-export function formatCurrencyPrecise(value: number): string {
-  if (!Number.isFinite(value)) return "$ 0,0";
-  return new Intl.NumberFormat("es-CO", {
-    style: "currency",
-    currency: "COP",
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
   }).format(value);
 }
 

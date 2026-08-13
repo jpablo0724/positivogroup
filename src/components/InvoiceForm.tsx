@@ -1,9 +1,6 @@
-import { useState } from "react";
 import {
-  CIUDADES,
   FORMAS_PAGO,
   PRODUCTOS,
-  QUINCENAS,
   type InvoiceData,
   type InvoiceItem,
 } from "../types";
@@ -22,35 +19,20 @@ function emptyItem(): InvoiceItem {
   return {
     id: crypto.randomUUID(),
     descripcionProducto: "",
-    ciudad: "",
-    quincena: "",
     cantidad: 0,
     precioUnitario: 0,
-    impactosPromedio15Dias: 0,
   };
 }
 
 function isItemFilled(item: InvoiceItem) {
   return (
     item.descripcionProducto !== "" &&
-    item.ciudad !== "" &&
-    item.quincena !== "" &&
     item.cantidad > 0 &&
     item.precioUnitario > 0
   );
 }
 
 export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
-  const [customCityIds, setCustomCityIds] = useState<Set<string>>(new Set());
-
-  function isCiudadCustom(item: InvoiceItem) {
-    return (
-      customCityIds.has(item.id) ||
-      (item.ciudad !== "" &&
-        !(CIUDADES as readonly string[]).includes(item.ciudad))
-    );
-  }
-
   function updateCliente<K extends keyof InvoiceData["cliente"]>(
     field: K,
     value: InvoiceData["cliente"][K],
@@ -80,11 +62,6 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
 
   function removeItem(id: string) {
     onChange({ ...data, items: data.items.filter((item) => item.id !== id) });
-    setCustomCityIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
   }
 
   return (
@@ -221,58 +198,6 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Ciudad</label>
-                  {isCiudadCustom(item) ? (
-                    <div className="flex gap-1">
-                      <input
-                        className={inputClass}
-                        value={item.ciudad}
-                        onChange={(e) =>
-                          updateItem(item.id, { ciudad: e.target.value })
-                        }
-                        placeholder="Escribe la ciudad"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomCityIds((prev) => {
-                            const next = new Set(prev);
-                            next.delete(item.id);
-                            return next;
-                          });
-                          updateItem(item.id, { ciudad: "" });
-                        }}
-                        title="Elegir de la lista"
-                        className="shrink-0 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-500 shadow-sm hover:bg-slate-100"
-                      >
-                        Lista
-                      </button>
-                    </div>
-                  ) : (
-                    <SearchableSelect
-                      value={item.ciudad}
-                      onChange={(value) => updateItem(item.id, { ciudad: value })}
-                      options={CIUDADES}
-                      placeholder="Selecciona una ciudad"
-                      extraOptionLabel="+ Agregar si no existe"
-                      onExtraOption={() => {
-                        setCustomCityIds((prev) => new Set(prev).add(item.id));
-                        updateItem(item.id, { ciudad: "" });
-                      }}
-                    />
-                  )}
-                </div>
-                <div>
-                  <label className={labelClass}>Quincena</label>
-                  <SearchableSelect
-                    value={item.quincena}
-                    onChange={(value) => updateItem(item.id, { quincena: value })}
-                    options={QUINCENAS}
-                    placeholder="Selecciona la quincena"
-                  />
-                </div>
-                <div>
                   <label className={labelClass}>Cantidad</label>
                   <input
                     type="number"
@@ -300,27 +225,11 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                     }
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>
-                    Impactos promedio 15 días
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClass}
-                    value={item.impactosPromedio15Dias}
-                    onChange={(e) =>
-                      updateItem(item.id, {
-                        impactosPromedio15Dias: Number(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
               </div>
 
               <p className="mt-2 text-[11px] text-slate-400">
-                Inversión total antes de IVA, costo por impacto, subtotal e
-                IVA se calculan automáticamente en la factura.
+                Inversión total antes de IVA, subtotal e IVA se calculan
+                automáticamente en la factura.
               </p>
 
               {index === data.items.length - 1 && isItemFilled(item) && (
