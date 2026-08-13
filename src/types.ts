@@ -28,10 +28,12 @@ export interface InvoiceData {
 
 export const FORMAS_PAGO = [
   "Contado",
-  "Transferencia bancaria",
-  "Crédito 30 días",
-  "Crédito 60 días",
-  "Crédito 90 días",
+  "Crédito a 15 días",
+  "Crédito a 30 días",
+  "Crédito a 45 días",
+  "Crédito a 60 días",
+  "Crédito a 90 días",
+  "50 anticipo y 50 al finalizar",
 ] as const;
 
 export const CIUDADES = [
