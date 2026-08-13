@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import PositivoLogo from "./PositivoLogo";
 
-export type View = "crear-factura";
+export type View = "crear-factura" | "listado-cotizaciones";
 
 interface NavItem {
   id: View;
@@ -29,6 +29,29 @@ const navItems: NavItem[] = [
         <path d="M9 13h6" />
         <path d="M9 17h6" />
         <path d="M9 9h1" />
+      </svg>
+    ),
+  },
+  {
+    id: "listado-cotizaciones",
+    label: "Listado de Cotizaciones",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5"
+      >
+        <path d="M8 6h13" />
+        <path d="M8 12h13" />
+        <path d="M8 18h13" />
+        <path d="M3 6h.01" />
+        <path d="M3 12h.01" />
+        <path d="M3 18h.01" />
       </svg>
     ),
   },
