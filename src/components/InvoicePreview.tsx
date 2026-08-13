@@ -44,7 +44,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
       <div className={`flex break-inside-avoid border ${border}`}>
         <div className={`flex-1 border-r ${border} px-4 py-3 text-center`}>
           <p className="text-base font-bold uppercase tracking-wide">
-            Factura N.º {data.numeroFactura || "—"}
+            Cotización N.º {data.numeroFactura || "—"}
           </p>
           <div className="mt-2 space-y-0.5 text-slate-700">
             <p>NIT: {COMPANY.nit}</p>

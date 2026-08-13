@@ -140,14 +140,6 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         </h2>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>Número de factura</label>
-            <input
-              className={inputClass}
-              value={data.numeroFactura}
-              onChange={(e) => updateField("numeroFactura", e.target.value)}
-            />
-          </div>
-          <div>
             <label className={labelClass}>Fecha</label>
             <input
               type="date"
