@@ -7,6 +7,7 @@ export interface ClientData {
 
 export interface InvoiceItem {
   id: string;
+  nombreProducto: string;
   descripcionProducto: string;
   cantidad: number;
   precioUnitario: number;

@@ -27,12 +27,15 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
   const totals = calcInvoiceTotals(data.items, data.ivaPorcentaje);
   const totalCantidad = data.items.reduce((acc, i) => acc + i.cantidad, 0);
   const hasItems = data.items.some(
-    (item) => item.descripcionProducto || item.cantidad || item.precioUnitario,
+    (item) => item.nombreProducto || item.cantidad || item.precioUnitario,
   );
   const observacionesLineas = data.observaciones
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+  const itemsConDescripcion = data.items.filter(
+    (item) => item.descripcionProducto.trim() !== "",
+  );
 
   return (
     <div
@@ -108,11 +111,32 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
         </div>
       </div>
 
+      {/* Descripción del producto */}
+      {itemsConDescripcion.length > 0 && (
+        <div className={`break-inside-avoid border border-t-0 ${border}`}>
+          <div
+            className={`border-b ${border} bg-slate-100 px-2 py-1 font-bold uppercase tracking-wide`}
+          >
+            Descripción del producto
+          </div>
+          <div className="space-y-3 px-3 py-2">
+            {itemsConDescripcion.map((item) => (
+              <div key={item.id} className="whitespace-pre-wrap">
+                {itemsConDescripcion.length > 1 && (
+                  <p className="mb-1 font-semibold">{item.nombreProducto}</p>
+                )}
+                {item.descripcionProducto}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tabla de productos */}
       <table className={`w-full border-collapse border border-t-0 ${border}`}>
         <thead>
           <tr className="bg-slate-100 text-center font-bold uppercase">
-            <th className={cell}>Descripción del producto</th>
+            <th className={cell}>Nombre producto</th>
             <th className={cell}>Cantidad</th>
             <th className={cell}>Precio Unitario</th>
             <th className={cell}>
@@ -128,7 +152,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
               const t = calcItemTotals(item, data.ivaPorcentaje);
               return (
                 <tr key={item.id}>
-                  <td className={cell}>{item.descripcionProducto || "—"}</td>
+                  <td className={cell}>{item.nombreProducto || "—"}</td>
                   <td className={`${cell} text-center`}>
                     {formatNumber(item.cantidad)}
                   </td>

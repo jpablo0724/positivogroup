@@ -4,6 +4,7 @@ import {
   type InvoiceData,
   type InvoiceItem,
 } from "../types";
+import { PRODUCTOS_INFO } from "../data/productosInfo";
 import SearchableSelect, { selectTriggerClass } from "./SearchableSelect";
 
 interface InvoiceFormProps {
@@ -18,6 +19,7 @@ const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 function emptyItem(): InvoiceItem {
   return {
     id: crypto.randomUUID(),
+    nombreProducto: "",
     descripcionProducto: "",
     cantidad: 0,
     precioUnitario: 0,
@@ -26,9 +28,7 @@ function emptyItem(): InvoiceItem {
 
 function isItemFilled(item: InvoiceItem) {
   return (
-    item.descripcionProducto !== "" &&
-    item.cantidad > 0 &&
-    item.precioUnitario > 0
+    item.nombreProducto !== "" && item.cantidad > 0 && item.precioUnitario > 0
   );
 }
 
@@ -52,6 +52,23 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
       ...data,
       items: data.items.map((item) =>
         item.id === id ? { ...item, ...patch } : item,
+      ),
+    });
+  }
+
+  function selectProducto(id: string, nombreProducto: string) {
+    const info = PRODUCTOS_INFO[nombreProducto];
+    onChange({
+      ...data,
+      observaciones: info?.observaciones ? info.observaciones : data.observaciones,
+      items: data.items.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              nombreProducto,
+              descripcionProducto: info?.descripcion ?? "",
+            }
+          : item,
       ),
     });
   }
@@ -187,14 +204,24 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <label className={labelClass}>Descripción del producto</label>
+                  <label className={labelClass}>Nombre producto</label>
                   <SearchableSelect
-                    value={item.descripcionProducto}
-                    onChange={(value) =>
-                      updateItem(item.id, { descripcionProducto: value })
-                    }
+                    value={item.nombreProducto}
+                    onChange={(value) => selectProducto(item.id, value)}
                     options={PRODUCTOS}
                     placeholder="Selecciona un producto"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>Descripción del producto</label>
+                  <textarea
+                    className={inputClass}
+                    rows={4}
+                    value={item.descripcionProducto}
+                    onChange={(e) =>
+                      updateItem(item.id, { descripcionProducto: e.target.value })
+                    }
+                    placeholder="Se completa automáticamente al elegir el producto"
                   />
                 </div>
                 <div>

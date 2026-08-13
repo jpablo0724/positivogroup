@@ -23,6 +23,7 @@ function createInitialInvoice(): InvoiceData {
     items: [
       {
         id: crypto.randomUUID(),
+        nombreProducto: "",
         descripcionProducto: "",
         cantidad: 0,
         precioUnitario: 0,
