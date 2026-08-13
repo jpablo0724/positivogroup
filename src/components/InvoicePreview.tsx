@@ -109,16 +109,6 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
         </div>
       </div>
 
-      {/* Descripción */}
-      <div className={`break-inside-avoid border border-t-0 ${border}`}>
-        <div
-          className={`border-b ${border} bg-slate-100 px-2 py-1 text-center font-bold uppercase tracking-wide`}
-        >
-          Descripción
-        </div>
-        <div className="px-3 py-2">{data.descripcion || "—"}</div>
-      </div>
-
       {/* Tabla de productos */}
       <table className={`w-full border-collapse border border-t-0 ${border}`}>
         <thead>

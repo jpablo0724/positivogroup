@@ -188,16 +188,6 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
             />
           </div>
         </div>
-        <div className="mt-3">
-          <label className={labelClass}>Descripción</label>
-          <textarea
-            className={inputClass}
-            rows={2}
-            value={data.descripcion}
-            onChange={(e) => updateField("descripcion", e.target.value)}
-            placeholder="Descripción general de la factura / campaña"
-          />
-        </div>
       </section>
 
       <section>

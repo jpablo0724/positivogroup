@@ -20,7 +20,6 @@ export interface InvoiceData {
   fecha: string;
   validaHasta: string;
   formaPago: string;
-  descripcion: string;
   ivaPorcentaje: number;
   observaciones: string;
   cliente: ClientData;

@@ -1,24 +1,17 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Sidebar, { type View } from "./components/Sidebar";
 import InvoiceForm from "./components/InvoiceForm";
 import InvoicePreview from "./components/InvoicePreview";
 import { OBSERVACIONES_DEFAULT, type InvoiceData } from "./types";
 import { todayIso } from "./utils/calculations";
-
-function createInvoiceNumber(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const stamp = String(now.getTime()).slice(-5);
-  return `FAC-${year}-${stamp}`;
-}
+import { nextInvoiceNumber } from "./utils/invoiceNumber";
 
 function createInitialInvoice(): InvoiceData {
   return {
-    numeroFactura: createInvoiceNumber(),
+    numeroFactura: nextInvoiceNumber(),
     fecha: todayIso(),
     validaHasta: "",
     formaPago: "",
-    descripcion: "",
     ivaPorcentaje: 19,
     observaciones: OBSERVACIONES_DEFAULT,
     cliente: {
@@ -43,7 +36,16 @@ function createInitialInvoice(): InvoiceData {
 
 function App() {
   const [activeView, setActiveView] = useState<View>("crear-factura");
-  const [invoice, setInvoice] = useState<InvoiceData>(createInitialInvoice);
+
+  // Ref (no useState lazy initializer) para que StrictMode no dispare
+  // nextInvoiceNumber() dos veces y salte números de la secuencia.
+  const initialInvoiceRef = useRef<InvoiceData | null>(null);
+  if (initialInvoiceRef.current === null) {
+    initialInvoiceRef.current = createInitialInvoice();
+  }
+  const [invoice, setInvoice] = useState<InvoiceData>(
+    initialInvoiceRef.current,
+  );
 
   return (
     <div className="flex min-h-screen bg-slate-100 print:block">
