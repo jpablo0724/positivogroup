@@ -26,15 +26,7 @@ function createInitialInvoice(): InvoiceData {
       email: "",
       contacto: "",
     },
-    items: [
-      {
-        id: crypto.randomUUID(),
-        nombreProducto: "",
-        descripcionProducto: "",
-        cantidad: 0,
-        precioUnitario: 0,
-      },
-    ],
+    items: [],
   };
 }
 

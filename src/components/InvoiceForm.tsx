@@ -1,10 +1,7 @@
-import {
-  FORMAS_PAGO,
-  PRODUCTOS,
-  type InvoiceData,
-  type InvoiceItem,
-} from "../types";
+import { useState } from "react";
+import { FORMAS_PAGO, PRODUCTOS, type InvoiceData } from "../types";
 import { PRODUCTOS_INFO } from "../data/productosInfo";
+import { formatCurrency, formatNumber } from "../utils/calculations";
 import SearchableSelect, { selectTriggerClass } from "./SearchableSelect";
 
 interface InvoiceFormProps {
@@ -16,23 +13,23 @@ const inputClass = selectTriggerClass;
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 
-function emptyItem(): InvoiceItem {
-  return {
-    id: crypto.randomUUID(),
-    nombreProducto: "",
-    descripcionProducto: "",
-    cantidad: 0,
-    precioUnitario: 0,
-  };
+interface Draft {
+  nombreProducto: string;
+  descripcionProducto: string;
+  cantidad: number;
+  precioUnitario: number;
 }
 
-function isItemFilled(item: InvoiceItem) {
-  return (
-    item.nombreProducto !== "" && item.cantidad > 0 && item.precioUnitario > 0
-  );
-}
+const draftVacio: Draft = {
+  nombreProducto: "",
+  descripcionProducto: "",
+  cantidad: 0,
+  precioUnitario: 0,
+};
 
 export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
+  const [draft, setDraft] = useState<Draft>(draftVacio);
+
   function updateCliente<K extends keyof InvoiceData["cliente"]>(
     field: K,
     value: InvoiceData["cliente"][K],
@@ -47,34 +44,32 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
     onChange({ ...data, [field]: value });
   }
 
-  function updateItem(id: string, patch: Partial<InvoiceItem>) {
-    onChange({
-      ...data,
-      items: data.items.map((item) =>
-        item.id === id ? { ...item, ...patch } : item,
-      ),
-    });
+  function updateDraft<K extends keyof Draft>(field: K, value: Draft[K]) {
+    setDraft((prev) => ({ ...prev, [field]: value }));
   }
 
-  function selectProducto(id: string, nombreProducto: string) {
+  function selectProducto(nombreProducto: string) {
     const info = PRODUCTOS_INFO[nombreProducto];
-    onChange({
-      ...data,
-      observaciones: info?.observaciones ? info.observaciones : data.observaciones,
-      items: data.items.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              nombreProducto,
-              descripcionProducto: info?.descripcion ?? "",
-            }
-          : item,
-      ),
-    });
+    setDraft((prev) => ({
+      ...prev,
+      nombreProducto,
+      descripcionProducto: info?.descripcion ?? "",
+    }));
+    if (info?.observaciones) {
+      onChange({ ...data, observaciones: info.observaciones });
+    }
   }
 
-  function addItem() {
-    onChange({ ...data, items: [...data.items, emptyItem()] });
+  const draftValido =
+    draft.nombreProducto !== "" && draft.cantidad > 0 && draft.precioUnitario > 0;
+
+  function agregarProducto() {
+    if (!draftValido) return;
+    onChange({
+      ...data,
+      items: [...data.items, { id: crypto.randomUUID(), ...draft }],
+    });
+    setDraft(draftVacio);
   }
 
   function removeItem(id: string) {
@@ -181,95 +176,96 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
           Productos
         </h2>
 
-        <div className="space-y-4">
-          {data.items.map((item, index) => (
-            <div
-              key={item.id}
-              className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-            >
-              {data.items.length > 1 && (
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-500">
-                    Producto {index + 1}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    className="text-xs font-medium text-red-500 hover:text-red-600"
-                  >
-                    Eliminar
-                  </button>
+        {data.items.length > 0 && (
+          <div className="mb-4 space-y-2">
+            {data.items.map((item, index) => (
+              <div
+                key={item.id}
+                className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">
+                    {index + 1}. {item.nombreProducto}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Cantidad: {formatNumber(item.cantidad)} · Precio unitario:{" "}
+                    {formatCurrency(item.precioUnitario)}
+                  </p>
                 </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className={labelClass}>Nombre producto</label>
-                  <SearchableSelect
-                    value={item.nombreProducto}
-                    onChange={(value) => selectProducto(item.id, value)}
-                    options={PRODUCTOS}
-                    placeholder="Selecciona un producto"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Descripción del producto</label>
-                  <textarea
-                    className={inputClass}
-                    rows={4}
-                    value={item.descripcionProducto}
-                    onChange={(e) =>
-                      updateItem(item.id, { descripcionProducto: e.target.value })
-                    }
-                    placeholder="Se completa automáticamente al elegir el producto"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Cantidad</label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClass}
-                    value={item.cantidad}
-                    onChange={(e) =>
-                      updateItem(item.id, {
-                        cantidad: Number(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Precio unitario</label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClass}
-                    value={item.precioUnitario}
-                    onChange={(e) =>
-                      updateItem(item.id, {
-                        precioUnitario: Number(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <p className="mt-2 text-[11px] text-slate-400">
-                Inversión total antes de IVA, subtotal e IVA se calculan
-                automáticamente en la factura.
-              </p>
-
-              {index === data.items.length - 1 && isItemFilled(item) && (
                 <button
                   type="button"
-                  onClick={addItem}
-                  className="mt-3 w-full rounded-md border border-dashed border-emerald-400 bg-emerald-50 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
+                  onClick={() => removeItem(item.id)}
+                  className="shrink-0 text-xs font-medium text-red-500 hover:text-red-600"
                 >
-                  + Agregar otro producto
+                  Eliminar
                 </button>
-              )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className={labelClass}>Nombre producto</label>
+              <SearchableSelect
+                value={draft.nombreProducto}
+                onChange={selectProducto}
+                options={PRODUCTOS}
+                placeholder="Selecciona un producto"
+              />
             </div>
-          ))}
+            <div className="col-span-2">
+              <label className={labelClass}>Descripción del producto</label>
+              <textarea
+                className={inputClass}
+                rows={4}
+                value={draft.descripcionProducto}
+                onChange={(e) =>
+                  updateDraft("descripcionProducto", e.target.value)
+                }
+                placeholder="Se completa automáticamente al elegir el producto"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Cantidad</label>
+              <input
+                type="number"
+                min={0}
+                className={inputClass}
+                value={draft.cantidad}
+                onChange={(e) =>
+                  updateDraft("cantidad", Number(e.target.value) || 0)
+                }
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Precio unitario</label>
+              <input
+                type="number"
+                min={0}
+                className={inputClass}
+                value={draft.precioUnitario}
+                onChange={(e) =>
+                  updateDraft("precioUnitario", Number(e.target.value) || 0)
+                }
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={agregarProducto}
+            disabled={!draftValido}
+            className="mt-3 w-full rounded-md bg-emerald-600 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            Agregar producto
+          </button>
+
+          <p className="mt-2 text-[11px] text-slate-400">
+            Se agrega a la cotización y los campos quedan vacíos para seguir
+            agregando productos.
+          </p>
         </div>
       </section>
 
