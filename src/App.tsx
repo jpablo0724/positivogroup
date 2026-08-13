@@ -11,6 +11,7 @@ import {
   guardarCotizacion,
   listarCotizaciones,
 } from "./utils/cotizacionesGuardadas";
+import { exportElementToPdf, sanitizeFilename } from "./utils/exportPdf";
 
 function createInitialInvoice(): InvoiceData {
   return {
@@ -47,11 +48,30 @@ function App() {
     listarCotizaciones(),
   );
   const [guardadoMensaje, setGuardadoMensaje] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
+  const [pdfError, setPdfError] = useState(false);
 
   function handleGuardar() {
     setCotizaciones(guardarCotizacion(invoice));
     setGuardadoMensaje(true);
     setTimeout(() => setGuardadoMensaje(false), 2000);
+  }
+
+  async function handleGuardarPdf() {
+    setGenerandoPdf(true);
+    setPdfError(false);
+    try {
+      const nombre = sanitizeFilename(
+        `Cotizacion-${invoice.numeroFactura || "sin-numero"}.pdf`,
+      );
+      await exportElementToPdf("invoice-preview", nombre);
+    } catch (err) {
+      console.error("No se pudo generar el PDF", err);
+      setPdfError(true);
+      setTimeout(() => setPdfError(false), 3000);
+    } finally {
+      setGenerandoPdf(false);
+    }
   }
 
   function handleVer(cotizacion: CotizacionGuardada) {
@@ -87,6 +107,11 @@ function App() {
                   Cotización guardada
                 </span>
               )}
+              {pdfError && (
+                <span className="text-sm font-medium text-red-600">
+                  No se pudo generar el PDF
+                </span>
+              )}
               <button
                 type="button"
                 onClick={handleGuardar}
@@ -97,9 +122,17 @@ function App() {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800"
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100"
               >
-                Imprimir / Guardar PDF
+                Imprimir
+              </button>
+              <button
+                type="button"
+                onClick={handleGuardarPdf}
+                disabled={generandoPdf}
+                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {generandoPdf ? "Generando PDF..." : "Guardar PDF"}
               </button>
             </div>
           </header>
