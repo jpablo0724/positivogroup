@@ -129,14 +129,13 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
               return (
                 <tr key={item.id}>
                   <td className={cell}>
-                    {item.nombreProducto || "—"}
+                    <div className="font-semibold">
+                      {item.nombreProducto || "—"}
+                    </div>
                     {item.descripcionProducto.trim() !== "" && (
-                      <>
-                        <br />
-                        <span className="font-normal text-slate-600">
-                          {item.descripcionProducto.replace(/\s+/g, " ").trim()}
-                        </span>
-                      </>
+                      <div className="mt-1 whitespace-pre-wrap font-normal text-slate-600">
+                        {item.descripcionProducto}
+                      </div>
                     )}
                   </td>
                   <td className={`${cell} text-center`}>
