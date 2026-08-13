@@ -128,7 +128,17 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
               const t = calcItemTotals(item, data.ivaPorcentaje);
               return (
                 <tr key={item.id}>
-                  <td className={cell}>{item.nombreProducto || "—"}</td>
+                  <td className={cell}>
+                    {item.nombreProducto || "—"}
+                    {item.descripcionProducto.trim() !== "" && (
+                      <>
+                        <br />
+                        <span className="font-normal text-slate-600">
+                          {item.descripcionProducto.replace(/\s+/g, " ").trim()}
+                        </span>
+                      </>
+                    )}
+                  </td>
                   <td className={`${cell} text-center`}>
                     {formatNumber(item.cantidad)}
                   </td>
