@@ -29,10 +29,11 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
   const hasItems = data.items.some(
     (item) => item.nombreProducto || item.cantidad || item.precioUnitario,
   );
-  // Cada bloque son las observaciones de un producto, separadas por una línea
-  // en blanco. Dentro del bloque se respetan los saltos de línea originales.
+  // Cada bloque son las observaciones de un producto. Se separan con una línea
+  // "---", que aquí se dibuja como línea divisoria. Dentro de cada bloque se
+  // respetan los saltos de línea originales.
   const observacionesBloques = data.observaciones
-    .split(/\n\s*\n/)
+    .split(/^[ \t]*---[ \t]*$/m)
     .map((bloque) => bloque.trim())
     .filter(Boolean);
 
@@ -195,11 +196,12 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
         </div>
         <div className="px-3 py-2">
           {observacionesBloques.length > 0 ? (
-            <div className="space-y-3">
+            <div>
               {observacionesBloques.map((bloque, i) => (
-                <p key={i} className="whitespace-pre-wrap">
-                  {bloque}
-                </p>
+                <div key={i}>
+                  {i > 0 && <hr className={`my-3 ${border}`} />}
+                  <p className="whitespace-pre-wrap">{bloque}</p>
+                </div>
               ))}
             </div>
           ) : (

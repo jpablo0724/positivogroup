@@ -34,9 +34,15 @@ const draftVacio: Draft = {
   precioUnitario: "",
 };
 
+// Separador entre las observaciones de un producto y las del siguiente. Se
+// escribe como "---" en su propia línea, y la factura lo dibuja como una
+// línea divisoria. Es un marcador explícito porque las observaciones de un
+// mismo producto ya contienen líneas en blanco entre sus párrafos.
+export const SEPARADOR_OBSERVACIONES = "\n\n---\n\n";
+
 // Une las observaciones de todos los productos de la cotización, una debajo
-// de otra y separadas por una línea en blanco. Omite las repetidas para que
-// dos productos que comparten observaciones no las dupliquen.
+// de otra y divididas entre sí. Omite las repetidas para que dos productos
+// que comparten observaciones no las dupliquen.
 function observacionesDeProductos(nombresProducto: string[]): string {
   const vistas = new Set<string>();
   const bloques: string[] = [];
@@ -49,7 +55,7 @@ function observacionesDeProductos(nombresProducto: string[]): string {
     }
   }
 
-  return bloques.join("\n\n");
+  return bloques.join(SEPARADOR_OBSERVACIONES);
 }
 
 export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
