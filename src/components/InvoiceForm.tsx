@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { FORMAS_PAGO, PRODUCTOS, type InvoiceData } from "../types";
+import {
+  FORMAS_PAGO,
+  PRODUCTOS,
+  type InvoiceData,
+  type InvoiceItem,
+} from "../types";
 import { PRODUCTOS_INFO } from "../data/productosInfo";
 import { formatCurrency, formatNumber } from "../utils/calculations";
 import SearchableSelect, { selectTriggerClass } from "./SearchableSelect";
@@ -13,18 +18,20 @@ const inputClass = selectTriggerClass;
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 
+// Cantidad y precio se guardan como texto para que el campo pueda quedar
+// vacío en vez de mostrar un 0 que hay que borrar antes de escribir.
 interface Draft {
   nombreProducto: string;
   descripcionProducto: string;
-  cantidad: number;
-  precioUnitario: number;
+  cantidad: string;
+  precioUnitario: string;
 }
 
 const draftVacio: Draft = {
   nombreProducto: "",
   descripcionProducto: "",
-  cantidad: 0,
-  precioUnitario: 0,
+  cantidad: "",
+  precioUnitario: "",
 };
 
 // Une las observaciones de todos los productos de la cotización, una debajo
@@ -47,6 +54,8 @@ function observacionesDeProductos(nombresProducto: string[]): string {
 
 export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const [draft, setDraft] = useState<Draft>(draftVacio);
+  // id del producto que se está editando; null mientras se captura uno nuevo.
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
   function updateCliente<K extends keyof InvoiceData["cliente"]>(
     field: K,
@@ -73,21 +82,39 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
       nombreProducto,
       descripcionProducto: info?.descripcion ?? "",
     }));
-    onChange({
-      ...data,
-      observaciones: observacionesDeProductos([
-        ...data.items.map((item) => item.nombreProducto),
-        nombreProducto,
-      ]),
-    });
+
+    // Al editar se sustituye el producto de ese ítem; al capturar uno nuevo
+    // se suma al final.
+    const nombres = editandoId
+      ? data.items.map((item) =>
+          item.id === editandoId ? nombreProducto : item.nombreProducto,
+        )
+      : [...data.items.map((item) => item.nombreProducto), nombreProducto];
+
+    onChange({ ...data, observaciones: observacionesDeProductos(nombres) });
   }
 
   const draftValido =
-    draft.nombreProducto !== "" && draft.cantidad > 0 && draft.precioUnitario > 0;
+    draft.nombreProducto !== "" &&
+    Number(draft.cantidad) > 0 &&
+    Number(draft.precioUnitario) > 0;
 
-  function agregarProducto() {
+  function guardarProducto() {
     if (!draftValido) return;
-    const items = [...data.items, { id: crypto.randomUUID(), ...draft }];
+
+    const producto = {
+      nombreProducto: draft.nombreProducto,
+      descripcionProducto: draft.descripcionProducto,
+      cantidad: Number(draft.cantidad),
+      precioUnitario: Number(draft.precioUnitario),
+    };
+
+    const items = editandoId
+      ? data.items.map((item) =>
+          item.id === editandoId ? { ...item, ...producto } : item,
+        )
+      : [...data.items, { id: crypto.randomUUID(), ...producto }];
+
     onChange({
       ...data,
       items,
@@ -96,18 +123,42 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
       ),
     });
     setDraft(draftVacio);
+    setEditandoId(null);
+  }
+
+  function editarProducto(item: InvoiceItem) {
+    setDraft({
+      nombreProducto: item.nombreProducto,
+      descripcionProducto: item.descripcionProducto,
+      cantidad: String(item.cantidad),
+      precioUnitario: String(item.precioUnitario),
+    });
+    setEditandoId(item.id);
+  }
+
+  function cancelarEdicion() {
+    setDraft(draftVacio);
+    setEditandoId(null);
   }
 
   function removeItem(id: string) {
     const items = data.items.filter((item) => item.id !== id);
+    const enEdicion = editandoId === id;
+
     onChange({
       ...data,
       items,
       observaciones: observacionesDeProductos([
         ...items.map((item) => item.nombreProducto),
-        draft.nombreProducto,
+        enEdicion ? "" : draft.nombreProducto,
       ]),
     });
+
+    // Si se elimina el producto que se estaba editando, se limpia el formulario.
+    if (enEdicion) {
+      setDraft(draftVacio);
+      setEditandoId(null);
+    }
   }
 
   return (
@@ -215,7 +266,11 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
             {data.items.map((item, index) => (
               <div
                 key={item.id}
-                className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"
+                className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
+                  editandoId === item.id
+                    ? "border-emerald-400 bg-emerald-50"
+                    : "border-slate-200 bg-white"
+                }`}
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-800">
@@ -225,14 +280,28 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                     Cantidad: {formatNumber(item.cantidad)} · Precio unitario:{" "}
                     {formatCurrency(item.precioUnitario)}
                   </p>
+                  {editandoId === item.id && (
+                    <p className="mt-1 text-xs font-medium text-emerald-700">
+                      Editando abajo
+                    </p>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeItem(item.id)}
-                  className="shrink-0 text-xs font-medium text-red-500 hover:text-red-600"
-                >
-                  Eliminar
-                </button>
+                <div className="flex shrink-0 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => editarProducto(item)}
+                    className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(item.id)}
+                    className="text-xs font-medium text-red-500 hover:text-red-600"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -268,9 +337,8 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                 min={0}
                 className={inputClass}
                 value={draft.cantidad}
-                onChange={(e) =>
-                  updateDraft("cantidad", Number(e.target.value) || 0)
-                }
+                onChange={(e) => updateDraft("cantidad", e.target.value)}
+                placeholder="0"
               />
             </div>
             <div>
@@ -280,25 +348,36 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                 min={0}
                 className={inputClass}
                 value={draft.precioUnitario}
-                onChange={(e) =>
-                  updateDraft("precioUnitario", Number(e.target.value) || 0)
-                }
+                onChange={(e) => updateDraft("precioUnitario", e.target.value)}
+                placeholder="0"
               />
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={agregarProducto}
-            disabled={!draftValido}
-            className="mt-3 w-full rounded-md bg-emerald-600 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            Agregar producto
-          </button>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={guardarProducto}
+              disabled={!draftValido}
+              className="w-full rounded-md bg-emerald-600 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {editandoId ? "Guardar cambios" : "Agregar producto"}
+            </button>
+            {editandoId && (
+              <button
+                type="button"
+                onClick={cancelarEdicion}
+                className="shrink-0 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
 
           <p className="mt-2 text-[11px] text-slate-400">
-            Se agrega a la cotización y los campos quedan vacíos para seguir
-            agregando productos.
+            {editandoId
+              ? "Estás editando un producto ya agregado a la cotización."
+              : "Se agrega a la cotización y los campos quedan vacíos para seguir agregando productos."}
           </p>
         </div>
       </section>
