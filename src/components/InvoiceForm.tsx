@@ -27,6 +27,24 @@ const draftVacio: Draft = {
   precioUnitario: 0,
 };
 
+// Une las observaciones de todos los productos de la cotización, una debajo
+// de otra y separadas por una línea en blanco. Omite las repetidas para que
+// dos productos que comparten observaciones no las dupliquen.
+function observacionesDeProductos(nombresProducto: string[]): string {
+  const vistas = new Set<string>();
+  const bloques: string[] = [];
+
+  for (const nombre of nombresProducto) {
+    const observaciones = PRODUCTOS_INFO[nombre]?.observaciones?.trim();
+    if (observaciones && !vistas.has(observaciones)) {
+      vistas.add(observaciones);
+      bloques.push(observaciones);
+    }
+  }
+
+  return bloques.join("\n\n");
+}
+
 export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const [draft, setDraft] = useState<Draft>(draftVacio);
 
@@ -55,9 +73,13 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
       nombreProducto,
       descripcionProducto: info?.descripcion ?? "",
     }));
-    if (info?.observaciones) {
-      onChange({ ...data, observaciones: info.observaciones });
-    }
+    onChange({
+      ...data,
+      observaciones: observacionesDeProductos([
+        ...data.items.map((item) => item.nombreProducto),
+        nombreProducto,
+      ]),
+    });
   }
 
   const draftValido =
@@ -65,15 +87,27 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
 
   function agregarProducto() {
     if (!draftValido) return;
+    const items = [...data.items, { id: crypto.randomUUID(), ...draft }];
     onChange({
       ...data,
-      items: [...data.items, { id: crypto.randomUUID(), ...draft }],
+      items,
+      observaciones: observacionesDeProductos(
+        items.map((item) => item.nombreProducto),
+      ),
     });
     setDraft(draftVacio);
   }
 
   function removeItem(id: string) {
-    onChange({ ...data, items: data.items.filter((item) => item.id !== id) });
+    const items = data.items.filter((item) => item.id !== id);
+    onChange({
+      ...data,
+      items,
+      observaciones: observacionesDeProductos([
+        ...items.map((item) => item.nombreProducto),
+        draft.nombreProducto,
+      ]),
+    });
   }
 
   return (
