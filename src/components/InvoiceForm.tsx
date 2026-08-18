@@ -7,6 +7,7 @@ import {
 } from "../types";
 import { PRODUCTOS_INFO } from "../data/productosInfo";
 import { formatCurrency, formatNumber } from "../utils/calculations";
+import BuscadorCliente from "./BuscadorCliente";
 import SearchableSelect, { selectTriggerClass } from "./SearchableSelect";
 
 interface InvoiceFormProps {
@@ -176,11 +177,22 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>Razón social</label>
-            <input
-              className={inputClass}
+            <BuscadorCliente
               value={data.cliente.razonSocial}
-              onChange={(e) => updateCliente("razonSocial", e.target.value)}
-              placeholder="Positivo Group S.A.S."
+              onChange={(razonSocial) =>
+                updateCliente("razonSocial", razonSocial)
+              }
+              onSeleccionar={(cliente) =>
+                onChange({
+                  ...data,
+                  cliente: {
+                    ...data.cliente,
+                    razonSocial: cliente.razonSocial,
+                    ...(cliente.contacto ? { contacto: cliente.contacto } : {}),
+                    ...(cliente.email ? { email: cliente.email } : {}),
+                  },
+                })
+              }
             />
           </div>
           <div>
