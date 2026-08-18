@@ -7,7 +7,15 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# La app es una SPA: cualquier ruta debe servir index.html
+# Las rutas /api/* van a la función serverless. Debe ir ANTES del catch-all
+# de la SPA, porque los redirects se evalúan en orden y si no, "/*" se las
+# tragaría y devolvería el index.html.
+[[redirects]]
+  from = "/api/clientify/*"
+  to = "/.netlify/functions/clientify/:splat"
+  status = 200
+
+# La app es una SPA: cualquier otra ruta debe servir index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
