@@ -20,7 +20,7 @@ export default function ListadoCotizaciones({
             Aún no hay cotizaciones guardadas
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            Ve a "Crear Factura" y usa el botón "Guardar cotización" para que
+            Ve a "Crear Cotización" y usa el botón "Guardar cotización" para que
             aparezcan aquí.
           </p>
         </div>

@@ -12,7 +12,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   {
     id: "crear-factura",
-    label: "Crear Factura",
+    label: "Crear Cotización",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -67,7 +67,7 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
     <aside className="flex h-screen w-64 shrink-0 flex-col bg-slate-900 text-slate-200">
       <div className="border-b border-slate-800 px-5 py-5">
         <PositivoLogo variant="light" />
-        <p className="mt-1 text-xs text-slate-400">Sistema de facturación</p>
+        <p className="mt-1 text-xs text-slate-400">Sistema de cotizaciones</p>
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">

@@ -216,7 +216,7 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Datos de la factura
+          Datos de la cotización
         </h2>
         <div className="grid grid-cols-2 gap-3">
           <div>

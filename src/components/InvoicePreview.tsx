@@ -15,7 +15,10 @@ interface InvoicePreviewProps {
 const COMPANY = {
   nit: "900.227.153 - 9",
   tel: "(4) 448 3427",
-  address: "Cra 43B No. 16 - 41 EDIFICIO STAFF Oficina 607",
+  // La dirección se parte en dos líneas para que no se desborde en el
+  // encabezado ni al imprimir.
+  address: "Cr 34A Cl 30 · CC Premium Plaza",
+  addressDetail: "Piso 4, Of. La Lonja LC 4450",
   city: "Medellín - Colombia",
   email: "comercial.digital@positivogroup.com",
 };
@@ -52,6 +55,7 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
             <p>NIT: {COMPANY.nit}</p>
             <p>Tel: {COMPANY.tel}</p>
             <p>{COMPANY.address}</p>
+            <p>{COMPANY.addressDetail}</p>
             <p>{COMPANY.city}</p>
           </div>
         </div>
