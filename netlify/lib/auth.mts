@@ -1,0 +1,190 @@
+import { getStore } from "@netlify/blobs";
+import {
+  createHash,
+  randomBytes,
+  scrypt as scryptCb,
+  timingSafeEqual,
+} from "node:crypto";
+import { promisify } from "node:util";
+
+/**
+ * Cuentas de usuario y sesiones.
+ *
+ * Reglas que sostienen esto:
+ *
+ * - La contraseña NUNCA se guarda. Se guarda su derivación con scrypt y una
+ *   sal distinta por usuario, así que ni con la base de datos en la mano se
+ *   pueden leer las contraseñas.
+ * - El testigo de sesión tampoco se guarda tal cual: se guarda su SHA-256. Si
+ *   alguien leyera la base de datos, no podría suplantar una sesión activa.
+ * - El testigo viaja en una cookie HttpOnly, que el JavaScript de la página no
+ *   puede leer; así un script inyectado no puede robarla.
+ */
+
+const scrypt = promisify(scryptCb) as (
+  contrasena: string,
+  sal: Buffer,
+  bytes: number,
+) => Promise<Buffer>;
+
+const BYTES_CLAVE = 64;
+const VIGENCIA_SESION_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
+export const NOMBRE_COOKIE = "pg_sesion";
+export const MINIMO_CONTRASENA = 8;
+
+export interface Usuario {
+  email: string;
+  nombre: string;
+  /** Derivación scrypt de la contraseña, en hexadecimal. */
+  clave: string;
+  /** Sal usada para derivarla, en hexadecimal. */
+  sal: string;
+  creadoEn: string;
+}
+
+/** Lo que se le puede contar al navegador sobre el usuario. */
+export interface UsuarioPublico {
+  email: string;
+  nombre: string;
+}
+
+interface Sesion {
+  email: string;
+  creadaEn: string;
+  expiraEn: string;
+}
+
+function almacenUsuarios() {
+  return getStore({ name: "usuarios", consistency: "strong" });
+}
+
+function almacenSesiones() {
+  return getStore({ name: "sesiones", consistency: "strong" });
+}
+
+/** Los correos no distinguen mayúsculas: se normalizan antes de usarlos. */
+export function normalizarEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function claveUsuario(email: string): string {
+  return Buffer.from(normalizarEmail(email), "utf8").toString("base64url");
+}
+
+function huella(valor: string): string {
+  return createHash("sha256").update(valor).digest("hex");
+}
+
+// --- Contraseñas ---
+
+export async function derivarContrasena(
+  contrasena: string,
+  salHex?: string,
+): Promise<{ clave: string; sal: string }> {
+  const sal = salHex ? Buffer.from(salHex, "hex") : randomBytes(16);
+  const clave = await scrypt(contrasena, sal, BYTES_CLAVE);
+  return { clave: clave.toString("hex"), sal: sal.toString("hex") };
+}
+
+export async function contrasenaCoincide(
+  contrasena: string,
+  usuario: Usuario,
+): Promise<boolean> {
+  const { clave } = await derivarContrasena(contrasena, usuario.sal);
+  const a = Buffer.from(clave, "hex");
+  const b = Buffer.from(usuario.clave, "hex");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+// --- Usuarios ---
+
+export async function buscarUsuario(email: string): Promise<Usuario | null> {
+  return (await almacenUsuarios().get(claveUsuario(email), {
+    type: "json",
+  })) as Usuario | null;
+}
+
+/**
+ * Crea el usuario solo si el correo está libre. Devuelve null si ya existe:
+ * `onlyIfNew` lo resuelve del lado del servidor, así que dos registros
+ * simultáneos con el mismo correo no se pisan.
+ */
+export async function crearUsuario(usuario: Usuario): Promise<Usuario | null> {
+  const { modified } = await almacenUsuarios().setJSON(
+    claveUsuario(usuario.email),
+    usuario,
+    { onlyIfNew: true },
+  );
+  return modified ? usuario : null;
+}
+
+export function comoPublico(usuario: Usuario): UsuarioPublico {
+  return { email: usuario.email, nombre: usuario.nombre };
+}
+
+// --- Sesiones ---
+
+/** Crea una sesión y devuelve el testigo en claro, que solo se ve aquí. */
+export async function abrirSesion(email: string): Promise<string> {
+  const testigo = randomBytes(32).toString("base64url");
+  const ahora = Date.now();
+
+  const sesion: Sesion = {
+    email: normalizarEmail(email),
+    creadaEn: new Date(ahora).toISOString(),
+    expiraEn: new Date(ahora + VIGENCIA_SESION_MS).toISOString(),
+  };
+
+  await almacenSesiones().setJSON(huella(testigo), sesion);
+  return testigo;
+}
+
+export async function cerrarSesion(testigo: string): Promise<void> {
+  await almacenSesiones().delete(huella(testigo));
+}
+
+/** Usuario dueño del testigo, o null si no vale o ya venció. */
+export async function usuarioDeSesion(
+  testigo: string,
+): Promise<Usuario | null> {
+  if (!testigo) return null;
+
+  const almacen = almacenSesiones();
+  const sesion = (await almacen.get(huella(testigo), {
+    type: "json",
+  })) as Sesion | null;
+
+  if (!sesion) return null;
+
+  if (Date.parse(sesion.expiraEn) < Date.now()) {
+    await almacen.delete(huella(testigo));
+    return null;
+  }
+
+  return buscarUsuario(sesion.email);
+}
+
+// --- Cookies ---
+
+export function leerCookie(req: Request, nombre: string): string {
+  const cabecera = req.headers.get("cookie") ?? "";
+  for (const parte of cabecera.split(";")) {
+    const [clave, ...resto] = parte.trim().split("=");
+    if (clave === nombre) return decodeURIComponent(resto.join("="));
+  }
+  return "";
+}
+
+/**
+ * SameSite=Strict porque la aplicación nunca se usa desde otro sitio; HttpOnly
+ * para que el JavaScript de la página no pueda leer el testigo.
+ */
+export function cookieSesion(testigo: string): string {
+  const segundos = Math.floor(VIGENCIA_SESION_MS / 1000);
+  return `${NOMBRE_COOKIE}=${encodeURIComponent(testigo)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${segundos}`;
+}
+
+export function cookieBorrada(): string {
+  return `${NOMBRE_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
+}

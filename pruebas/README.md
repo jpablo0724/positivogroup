@@ -1,5 +1,14 @@
 # Pruebas
 
+## Autenticación — `npm run prueba:auth`
+
+Lo más delicado del sistema. Comprueba que el registro exija el código de la
+empresa, que la contraseña nunca quede guardada en claro (se lee la base de
+datos simulada y se verifica), que dos cuentas con la misma contraseña tengan
+hashes distintos, que el mensaje de error no revele si un correo tiene cuenta,
+que la cookie sea HttpOnly/Secure/SameSite=Strict, y que el testigo de sesión
+se guarde como huella y no tal cual.
+
 ## Backend — `npm run prueba:backend`
 
 Ejercita las funciones serverless (`netlify/functions/`) sin red ni cuenta de

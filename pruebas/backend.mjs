@@ -7,13 +7,29 @@ process.env.APP_ACCESS_CODE = CODIGO;
 const { default: cotizaciones } = await import("../netlify/functions/cotizaciones.mts");
 const { default: productos } = await import("../netlify/functions/productos.mts");
 const { default: numero } = await import("../netlify/functions/numero.mts");
+const { default: auth } = await import("../netlify/functions/auth.mts");
 
 const BASE = "https://cotizador-positivo.netlify.app";
 
-function req(ruta, { metodo = "GET", cuerpo, codigo = CODIGO } = {}) {
+// Se registra una cuenta y se reutiliza su sesión para todas las pruebas: la
+// API ya no acepta un código suelto, exige sesión abierta.
+const registro = await auth(
+  new Request(`${BASE}/api/auth/registro`, {
+    method: "POST",
+    body: JSON.stringify({
+      nombre: "Prueba",
+      email: "prueba@positivogroup.com",
+      contrasena: "claveDePrueba2026",
+      codigo: CODIGO,
+    }),
+  }),
+);
+const COOKIE = (registro.headers.get("set-cookie") ?? "").split(";")[0];
+
+function req(ruta, { metodo = "GET", cuerpo, cookie = COOKIE } = {}) {
   return new Request(`${BASE}${ruta}`, {
     method: metodo,
-    headers: codigo === null ? {} : { "x-codigo-acceso": codigo },
+    headers: cookie === null ? {} : { cookie },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });
 }
@@ -44,25 +60,16 @@ function cotizacionDe(numeroFactura, razonSocial, items = []) {
   };
 }
 
-console.log("\n== Control de acceso ==");
+console.log("\n== La API exige sesión ==");
 {
-  const sinCodigo = await leer(await cotizaciones(req("/api/cotizaciones", { codigo: null })));
-  comprobar("sin código -> 401", sinCodigo.status === 401, `status ${sinCodigo.status}`);
+  const sinSesion = await leer(await cotizaciones(req("/api/cotizaciones", { cookie: null })));
+  comprobar("sin sesión -> 401", sinSesion.status === 401, sinSesion.cuerpo.error);
 
-  const malCodigo = await leer(await cotizaciones(req("/api/cotizaciones", { codigo: "otra-cosa" })));
-  comprobar("código incorrecto -> 401", malCodigo.status === 401, `status ${malCodigo.status}`);
-
-  // Un código de otra longitud no debe colarse ni romper la comparación.
-  const corto = await leer(await cotizaciones(req("/api/cotizaciones", { codigo: "x" })));
-  comprobar("código corto -> 401", corto.status === 401, `status ${corto.status}`);
-
-  delete process.env.APP_ACCESS_CODE;
-  const sinVariable = await leer(await cotizaciones(req("/api/cotizaciones")));
-  comprobar("sin APP_ACCESS_CODE -> 503", sinVariable.status === 503, sinVariable.cuerpo.error);
-  process.env.APP_ACCESS_CODE = CODIGO;
+  const inventada = await leer(await cotizaciones(req("/api/cotizaciones", { cookie: "pg_sesion=inventado" })));
+  comprobar("testigo inventado -> 401", inventada.status === 401, inventada.cuerpo.error);
 
   const bien = await leer(await cotizaciones(req("/api/cotizaciones")));
-  comprobar("código correcto -> 200", bien.status === 200, `status ${bien.status}`);
+  comprobar("con sesión -> 200", bien.status === 200, `status ${bien.status}`);
 }
 
 console.log("\n== Cotizaciones ==");

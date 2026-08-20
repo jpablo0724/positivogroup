@@ -14,12 +14,8 @@ import {
 } from "./types";
 import { todayIso } from "./utils/calculations";
 import { apartarNumero, numeroProvisional } from "./utils/invoiceNumber";
-import {
-  SinAcceso,
-  guardarCodigo,
-  leerCodigo,
-  olvidarCodigo,
-} from "./utils/api";
+import { SinSesion } from "./utils/api";
+import { salir, sesionActual, type UsuarioPublico } from "./utils/auth";
 import {
   eliminarCotizacion,
   guardarCotizacion,
@@ -45,7 +41,10 @@ function cotizacionEnBlanco(numeroFactura: string): InvoiceData {
 }
 
 function App() {
-  const [codigo, setCodigo] = useState<string | null>(() => leerCodigo() || null);
+  // undefined = todavía se está preguntando al servidor; null = sin sesión.
+  const [usuario, setUsuario] = useState<UsuarioPublico | null | undefined>(
+    undefined,
+  );
   const [avisoAcceso, setAvisoAcceso] = useState<string | null>(null);
 
   const [activeView, setActiveView] = useState<View>("crear-factura");
@@ -70,12 +69,11 @@ function App() {
   const [guardadoMensaje, setGuardadoMensaje] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /** Un 401 significa que el código dejó de servir: se vuelve a pedir. */
+  /** Un 401 significa que la sesión venció: se vuelve a pedir el ingreso. */
   const manejarError = useCallback((err: unknown) => {
-    if (err instanceof SinAcceso) {
-      olvidarCodigo();
-      setCodigo(null);
-      setAvisoAcceso("El código de acceso cambió o dejó de ser válido.");
+    if (err instanceof SinSesion) {
+      setUsuario(null);
+      setAvisoAcceso("Tu sesión venció. Vuelve a iniciar sesión.");
       return;
     }
     setError(err instanceof Error ? err.message : String(err));
@@ -102,18 +100,41 @@ function App() {
     }
   }, [manejarError]);
 
+  // Al abrir la página se le pregunta al servidor si la cookie sigue valiendo.
   useEffect(() => {
-    if (codigo === null) {
+    let cancelado = false;
+    sesionActual().then((quien) => {
+      if (!cancelado) setUsuario(quien);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (usuario === undefined) return;
+    if (usuario === null) {
       setCargando(false);
       return;
     }
     void cargar();
-  }, [codigo, cargar]);
+  }, [usuario, cargar]);
 
-  function entrar(nuevoCodigo: string) {
-    guardarCodigo(nuevoCodigo);
+  function entrar(quien: UsuarioPublico) {
     setAvisoAcceso(null);
-    setCodigo(nuevoCodigo);
+    setUsuario(quien);
+  }
+
+  async function handleSalir() {
+    try {
+      await salir();
+    } catch {
+      // Aunque falle la petición, en este navegador se cierra igual.
+    }
+    setUsuario(null);
+    setAvisoAcceso(null);
+    setCotizaciones([]);
+    setProductos([]);
   }
 
   async function handleGuardar() {
@@ -166,7 +187,15 @@ function App() {
     }
   }
 
-  if (codigo === null) {
+  if (usuario === undefined) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-900">
+        <p className="text-sm text-slate-400">Cargando…</p>
+      </div>
+    );
+  }
+
+  if (usuario === null) {
     return <PantallaAcceso onEntrar={entrar} aviso={avisoAcceso} />;
   }
 
@@ -181,7 +210,12 @@ function App() {
   return (
     <div className="flex min-h-screen bg-slate-100 print:block">
       <div className="print:hidden">
-        <Sidebar activeView={activeView} onNavigate={setActiveView} />
+        <Sidebar
+          activeView={activeView}
+          onNavigate={setActiveView}
+          usuario={usuario}
+          onSalir={handleSalir}
+        />
       </div>
 
       {activeView === "crear-factura" && (

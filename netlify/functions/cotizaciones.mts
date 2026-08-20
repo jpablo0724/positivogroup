@@ -1,4 +1,4 @@
-import { json, revisarAcceso } from "../lib/acceso.mts";
+import { json, revisarSesion } from "../lib/acceso.mts";
 import {
   almacenCotizaciones,
   claveCotizacion,
@@ -30,8 +30,8 @@ function esCotizacion(valor: unknown): valor is CotizacionGuardada {
 }
 
 export default async (req: Request) => {
-  const sinAcceso = revisarAcceso(req);
-  if (sinAcceso) return sinAcceso;
+  const sinSesion = await revisarSesion(req);
+  if (sinSesion) return sinSesion;
 
   const almacen = almacenCotizaciones();
   const url = new URL(req.url);

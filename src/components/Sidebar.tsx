@@ -83,9 +83,16 @@ const navItems: NavItem[] = [
 interface SidebarProps {
   activeView: View;
   onNavigate: (view: View) => void;
+  usuario: { nombre: string; email: string };
+  onSalir: () => void;
 }
 
-export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
+export default function Sidebar({
+  activeView,
+  onNavigate,
+  usuario,
+  onSalir,
+}: SidebarProps) {
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col bg-slate-900 text-slate-200">
       <div className="border-b border-slate-800 px-5 py-5">
@@ -114,8 +121,31 @@ export default function Sidebar({ activeView, onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      <div className="border-t border-slate-800 px-5 py-4 text-xs text-slate-500">
-        &copy; {new Date().getFullYear()} Positivo Group
+      <div className="border-t border-slate-800 px-5 py-4">
+        <p className="truncate text-sm font-medium text-slate-200">
+          {usuario.nombre}
+        </p>
+        <p className="truncate text-xs text-slate-500">{usuario.email}</p>
+        <button
+          type="button"
+          onClick={onSalir}
+          className="mt-2 flex items-center gap-2 text-xs font-medium text-slate-400 transition-colors hover:text-slate-100"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.75}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <path d="m16 17 5-5-5-5" />
+            <path d="M21 12H9" />
+          </svg>
+          Cerrar sesión
+        </button>
       </div>
     </aside>
   );

@@ -1,4 +1,4 @@
-import { json, revisarAcceso } from "../lib/acceso.mts";
+import { json, revisarSesion } from "../lib/acceso.mts";
 import {
   CLAVE_CATALOGO_SEMBRADO,
   almacenContadores,
@@ -62,8 +62,8 @@ function ordenSiguiente(productos: Producto[]): number {
 }
 
 export default async (req: Request) => {
-  const sinAcceso = revisarAcceso(req);
-  if (sinAcceso) return sinAcceso;
+  const sinSesion = await revisarSesion(req);
+  if (sinSesion) return sinSesion;
 
   const almacen = almacenProductos();
   const url = new URL(req.url);

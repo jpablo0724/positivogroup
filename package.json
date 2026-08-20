@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "prueba:auth": "node pruebas/auth.mjs",
     "prueba:backend": "node pruebas/backend.mjs",
     "prueba:ui": "node pruebas/frontend.mjs"
   },

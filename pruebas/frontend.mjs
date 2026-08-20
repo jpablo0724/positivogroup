@@ -20,18 +20,67 @@ const servidor = {
   ultimo: 0,
 };
 
+// Cuentas y sesiones simuladas, con la misma forma que el backend real.
+const usuarios = new Map();
+const sesiones = new Map();
+
 function armarApi(page) {
   return page.route("**/api/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
     const ruta = url.pathname;
-    const codigo = req.headers()["x-codigo-acceso"];
 
-    const responder = (cuerpo, status = 200) =>
-      route.fulfill({ status, contentType: "application/json", body: JSON.stringify(cuerpo) });
+    const responder = (cuerpo, status = 200, cookie) =>
+      route.fulfill({
+        status,
+        contentType: "application/json",
+        headers: cookie ? { "set-cookie": cookie } : {},
+        body: JSON.stringify(cuerpo),
+      });
 
     if (ruta.startsWith("/api/clientify")) return responder({ results: [] });
-    if (codigo !== CODIGO) return responder({ error: "codigo_invalido" }, 401);
+
+    const cookies = req.headers()["cookie"] ?? "";
+    const testigo = /pg_sesion=([^;]+)/.exec(cookies)?.[1] ?? "";
+    const email = sesiones.get(testigo);
+
+    // --- Autenticación ---
+    if (ruta.startsWith("/api/auth/")) {
+      const accion = ruta.split("/").pop();
+      const cuerpo = req.postData() ? JSON.parse(req.postData()) : {};
+
+      if (accion === "sesion") {
+        if (!email) return responder({ error: "sin_sesion" }, 401);
+        return responder({ usuario: usuarios.get(email) });
+      }
+      if (accion === "salir") {
+        sesiones.delete(testigo);
+        return responder({ cerrada: true }, 200, "pg_sesion=; Path=/; Max-Age=0");
+      }
+      if (accion === "registro") {
+        const correo = (cuerpo.email ?? "").toLowerCase();
+        if (cuerpo.codigo !== CODIGO) return responder({ error: "codigo_empresa_invalido" }, 403);
+        if ((cuerpo.contrasena ?? "").length < 8) return responder({ error: "contrasena_corta" }, 400);
+        if (usuarios.has(correo)) return responder({ error: "email_ya_registrado" }, 409);
+        usuarios.set(correo, { email: correo, nombre: cuerpo.nombre, clave: cuerpo.contrasena });
+        const nuevo = `t${sesiones.size + 1}`;
+        sesiones.set(nuevo, correo);
+        return responder({ usuario: { email: correo, nombre: cuerpo.nombre } }, 200, `pg_sesion=${nuevo}; Path=/`);
+      }
+      if (accion === "entrar") {
+        const correo = (cuerpo.email ?? "").toLowerCase();
+        const cuenta = usuarios.get(correo);
+        if (!cuenta || cuenta.clave !== cuerpo.contrasena) {
+          return responder({ error: "credenciales_invalidas" }, 401);
+        }
+        const nuevo = `t${sesiones.size + 1}`;
+        sesiones.set(nuevo, correo);
+        return responder({ usuario: { email: correo, nombre: cuenta.nombre } }, 200, `pg_sesion=${nuevo}; Path=/`);
+      }
+      return responder({ error: "accion_desconocida" }, 404);
+    }
+
+    if (!email) return responder({ error: "sin_sesion" }, 401);
 
     const anio = String(new Date().getFullYear() % 100).padStart(2, "0");
     const formatear = (n) => `PG ${String(n).padStart(4, "0")}/${anio}`;
@@ -86,22 +135,58 @@ page.on("console", (m) => m.type() === "error" && errores.push(m.text()));
 await armarApi(page);
 await page.goto("http://localhost:5173", { waitUntil: "networkidle" });
 
-console.log("\n== Pantalla de acceso ==");
+console.log("\n== Registro e inicio de sesión ==");
 {
-  comprobar("pide código al entrar", await page.locator('input[type="password"]').isVisible());
+  comprobar("pide iniciar sesión al entrar", await page.locator('input[type="password"]').first().isVisible());
   comprobar("no muestra el sistema todavía", (await page.locator("text=Crear cotización").count()) === 0);
+  comprobar("ofrece las dos opciones",
+    (await page.locator('button:has-text("Iniciar sesión")').count()) > 0 &&
+    (await page.locator('button:has-text("Registrarse")').count()) > 0);
 
-  await page.fill('input[type="password"]', "codigo-equivocado");
-  await page.click('button:has-text("Entrar")');
-  await page.waitForSelector("text=Código incorrecto");
-  comprobar("rechaza el código equivocado", true, "muestra el aviso");
+  // Intentar entrar sin tener cuenta.
+  await page.fill('input[type="email"]', "juan@positivogroup.com");
+  await page.locator('input[type="password"]').first().fill("claveLarga2026");
+  await page.click('button[type="submit"]');
+  await page.waitForSelector("text=Correo o contraseña incorrectos");
+  comprobar("sin cuenta no deja entrar", true, "muestra el aviso");
 
-  await page.fill('input[type="password"]', CODIGO);
-  await page.click('button:has-text("Entrar")');
+  // Registrarse con el código equivocado.
+  await page.click('button:has-text("Registrarse")');
+  await page.waitForTimeout(200);
+  await page.fill('input[placeholder="Nombre y apellido"]', "Juan Pablo Moncada");
+  await page.fill('input[type="email"]', "juan@positivogroup.com");
+  const claves = page.locator('input[type="password"]');
+  await claves.nth(0).fill("claveLarga2026");
+  await claves.nth(1).fill("codigo-equivocado");
+  await page.click('button[type="submit"]');
+  await page.waitForSelector("text=código de la empresa no es correcto");
+  comprobar("rechaza el código de empresa equivocado", true);
+  await page.screenshot({ path: `${OUT}/B0-registro.png`, fullPage: true });
+
+  // Contraseña muy corta.
+  await claves.nth(0).fill("corta");
+  await claves.nth(1).fill(CODIGO);
+  await page.click('button[type="submit"]');
+  await page.waitForSelector("text=al menos 8 caracteres");
+  comprobar("exige contraseña de 8 o más", true);
+
+  // Registro correcto.
+  await claves.nth(0).fill("claveLarga2026");
+  await claves.nth(1).fill(CODIGO);
+  await page.click('button[type="submit"]');
   await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
-  comprobar("entra con el código correcto", true);
+  comprobar("el registro deja la sesión abierta", true);
+  comprobar("la cuenta quedó creada", usuarios.has("juan@positivogroup.com"), [...usuarios.keys()].join(", "));
+
+  // El nombre y el correo salen en el menú.
+  const menu = await page.locator("aside").innerText();
+  comprobar("el menú muestra quién está dentro", menu.includes("Juan Pablo Moncada") && menu.includes("juan@positivogroup.com"));
+
+  // Recargar mantiene la sesión.
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
+  comprobar("la sesión sobrevive a recargar", true);
 }
-await page.screenshot({ path: `${OUT}/B1-tras-entrar.png`, fullPage: true });
 
 console.log("\n== Numeración contra el servidor ==");
 {
@@ -229,7 +314,6 @@ await page.screenshot({ path: `${OUT}/B6-catalogo.png`, fullPage: true });
 
 console.log("\n== Se ve al elegir el producto, sin agregarlo ==");
 {
-  await page.evaluate((c) => localStorage.setItem("positivogroup:codigoAcceso", c), CODIGO);
   await page.reload({ waitUntil: "networkidle" });
   await page.click("text=Crear Cotización");
   await page.waitForSelector('button:has-text("Selecciona un producto")');
@@ -290,7 +374,6 @@ console.log("\n== Se ve al elegir el producto, sin agregarlo ==");
 
 console.log("\n== Producto sin cantidad ni precio ==");
 {
-  await page.evaluate((c) => localStorage.setItem("positivogroup:codigoAcceso", c), CODIGO);
   await page.reload({ waitUntil: "networkidle" });
   await page.click("text=Crear Cotización");
   await page.waitForSelector('button:has-text("Selecciona un producto")');
@@ -332,21 +415,36 @@ console.log("\n== Producto sin cantidad ni precio ==");
 }
 await page.screenshot({ path: `${OUT}/B7-sin-precio.png`, fullPage: true });
 
-console.log("\n== El código deja de servir ==");
+console.log("\n== Sesión vencida y cierre de sesión ==");
 {
-  await page.evaluate(() => localStorage.setItem("positivogroup:codigoAcceso", "ya-no-sirve"));
+  // El servidor invalida la sesión (equivale a que venza el testigo).
+  sesiones.clear();
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForSelector('input[type="password"]', { timeout: 5000 });
-  comprobar("vuelve a pedir el código", true);
-  const aviso = await page.locator("text=dejó de ser válido").count();
-  comprobar("explica por qué", aviso > 0);
+  comprobar("vuelve a pedir iniciar sesión", true);
+
+  // Y se puede volver a entrar con las mismas credenciales.
+  await page.fill('input[type="email"]', "juan@positivogroup.com");
+  await page.locator('input[type="password"]').first().fill("claveLarga2026");
+  await page.click('button[type="submit"]');
+  await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
+  comprobar("vuelve a entrar con su contraseña", true);
+
+  // Cerrar sesión desde el menú.
+  await page.click('button:has-text("Cerrar sesión")');
+  await page.waitForSelector('input[type="password"]', { timeout: 5000 });
+  comprobar("el botón de cerrar sesión funciona", true);
+
+  await page.fill('input[type="email"]', "juan@positivogroup.com");
+  await page.locator('input[type="password"]').first().fill("claveLarga2026");
+  await page.click('button[type="submit"]');
+  await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
 }
 await page.screenshot({ path: `${OUT}/B4-codigo-invalido.png`, fullPage: true });
 
 console.log("\n== Migración de datos del navegador ==");
 {
-  await page.evaluate((codigo) => {
-    localStorage.setItem("positivogroup:codigoAcceso", codigo);
+  await page.evaluate(() => {
     localStorage.removeItem("positivogroup:migradoAlServidor");
     localStorage.setItem("positivogroup:cotizacionesGuardadas", JSON.stringify([
       { guardadoEn: "2026-08-01T10:00:00.000Z", data: { numeroFactura: "PG 0100/26", fecha: "2026-08-01", validaHasta: "", formaPago: "Contado", ivaPorcentaje: 19, observaciones: "vieja", items: [], cliente: { razonSocial: "Cliente antiguo", nit: "", email: "", contacto: "" } } },
@@ -354,7 +452,7 @@ console.log("\n== Migración de datos del navegador ==");
     localStorage.setItem("positivogroup:productosPersonalizados", JSON.stringify([
       { nombre: "Z99 - Producto viejo", descripcion: "d", observaciones: "o" },
     ]));
-  }, CODIGO);
+  });
 
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForSelector("text=Subir al servidor", { timeout: 5000 });
