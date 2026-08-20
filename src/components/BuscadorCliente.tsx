@@ -18,6 +18,12 @@ interface BuscadorClienteProps {
   value: string;
   onChange: (razonSocial: string) => void;
   onSeleccionar: (cliente: ClienteSeleccionado) => void;
+  /**
+   * Empleados de la empresa elegida cuando hay más de uno, para que el
+   * formulario los ofrezca en el campo Contacto. Llega vacío cuando la
+   * empresa tiene uno solo (ya se autocompletó) o ninguno.
+   */
+  onContactosDisponibles: (contactos: ContactoClientify[]) => void;
 }
 
 const MINIMO_CARACTERES = 2;
@@ -31,16 +37,12 @@ export default function BuscadorCliente({
   value,
   onChange,
   onSeleccionar,
+  onContactosDisponibles,
 }: BuscadorClienteProps) {
   const [sugerencias, setSugerencias] = useState<EmpresaClientify[]>([]);
   const [abierto, setAbierto] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
-  // Cuando la empresa elegida tiene varios contactos, se listan para que el
-  // usuario decida cuál va en la cotización.
-  const [contactosParaElegir, setContactosParaElegir] = useState<
-    ContactoClientify[]
-  >([]);
 
   const contenedorRef = useRef<HTMLDivElement>(null);
   // Último valor puesto por el propio componente al elegir una empresa. Sirve
@@ -119,17 +121,9 @@ export default function BuscadorCliente({
       ...(unico ? { contacto: unico.nombre, email: unico.email } : {}),
     });
 
-    setContactosParaElegir(contactos.length > 1 ? contactos : []);
-  }
-
-  function elegirContacto(contacto: ContactoClientify) {
-    valorAutocompletado.current = value;
-    setContactosParaElegir([]);
-    onSeleccionar({
-      razonSocial: value,
-      contacto: contacto.nombre,
-      email: contacto.email,
-    });
+    // La lista de dónde elegir se muestra junto al campo Contacto, así que la
+    // maneja el formulario.
+    onContactosDisponibles(contactos.length > 1 ? contactos : []);
   }
 
   return (
@@ -173,43 +167,6 @@ export default function BuscadorCliente({
           ) : (
             <p className="px-3 py-2 text-xs text-slate-400">{aviso}</p>
           )}
-        </div>
-      )}
-
-      {contactosParaElegir.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full rounded-md border border-emerald-300 bg-white shadow-lg">
-          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
-            <span className="text-xs font-medium text-slate-600">
-              Elige el contacto ({contactosParaElegir.length})
-            </span>
-            <button
-              type="button"
-              onClick={() => setContactosParaElegir([])}
-              className="text-xs text-slate-400 hover:text-slate-600"
-            >
-              Omitir
-            </button>
-          </div>
-          <ul className="max-h-56 overflow-auto py-1 text-sm">
-            {contactosParaElegir.map((contacto, i) => (
-              <li key={`${contacto.nombre}-${contacto.email}-${i}`}>
-                <button
-                  type="button"
-                  onClick={() => elegirContacto(contacto)}
-                  className="block w-full px-3 py-1.5 text-left hover:bg-emerald-50"
-                >
-                  <span className="block truncate text-slate-700">
-                    {contacto.nombre || "(sin nombre)"}
-                  </span>
-                  {contacto.email && (
-                    <span className="block truncate text-xs text-slate-400">
-                      {contacto.email}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
     </div>

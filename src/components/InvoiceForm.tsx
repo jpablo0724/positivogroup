@@ -7,8 +7,10 @@ import {
 } from "../types";
 import { PRODUCTOS_INFO } from "../data/productosInfo";
 import { formatCurrency, formatNumber } from "../utils/calculations";
+import type { ContactoClientify } from "../utils/clientify";
 import BuscadorCliente from "./BuscadorCliente";
 import SearchableSelect, { selectTriggerClass } from "./SearchableSelect";
+import SelectorContacto from "./SelectorContacto";
 
 interface InvoiceFormProps {
   data: InvoiceData;
@@ -63,6 +65,11 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const [draft, setDraft] = useState<Draft>(draftVacio);
   // id del producto que se está editando; null mientras se captura uno nuevo.
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  // Empleados de la empresa elegida en Clientify cuando hay más de uno; se
+  // listan bajo el campo Contacto para escoger cuál va en la cotización.
+  const [contactosCliente, setContactosCliente] = useState<ContactoClientify[]>(
+    [],
+  );
 
   function updateCliente<K extends keyof InvoiceData["cliente"]>(
     field: K,
@@ -80,6 +87,35 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
 
   function updateDraft<K extends keyof Draft>(field: K, value: Draft[K]) {
     setDraft((prev) => ({ ...prev, [field]: value }));
+  }
+
+  /**
+   * Al borrar por completo la razón social se limpian también los datos que
+   * habían llegado de Clientify, para no dejar el NIT o el contacto de la
+   * empresa anterior pegados a una nueva.
+   */
+  function cambiarRazonSocial(razonSocial: string) {
+    if (razonSocial.trim() === "") {
+      setContactosCliente([]);
+      onChange({
+        ...data,
+        cliente: { razonSocial: "", nit: "", email: "", contacto: "" },
+      });
+      return;
+    }
+    updateCliente("razonSocial", razonSocial);
+  }
+
+  function elegirContacto(contacto: ContactoClientify) {
+    setContactosCliente([]);
+    onChange({
+      ...data,
+      cliente: {
+        ...data.cliente,
+        contacto: contacto.nombre,
+        email: contacto.email || data.cliente.email,
+      },
+    });
   }
 
   function selectProducto(nombreProducto: string) {
@@ -179,9 +215,8 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
             <label className={labelClass}>Razón social</label>
             <BuscadorCliente
               value={data.cliente.razonSocial}
-              onChange={(razonSocial) =>
-                updateCliente("razonSocial", razonSocial)
-              }
+              onChange={cambiarRazonSocial}
+              onContactosDisponibles={setContactosCliente}
               onSeleccionar={(cliente) =>
                 onChange({
                   ...data,
@@ -215,13 +250,22 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
               placeholder="contacto@positivogroup.com"
             />
           </div>
-          <div>
+          <div className="relative">
             <label className={labelClass}>Contacto</label>
             <input
               className={inputClass}
               value={data.cliente.contacto}
               onChange={(e) => updateCliente("contacto", e.target.value)}
-              placeholder="Nombre del contacto"
+              placeholder={
+                contactosCliente.length > 0
+                  ? "Elige el contacto abajo"
+                  : "Nombre del contacto"
+              }
+            />
+            <SelectorContacto
+              contactos={contactosCliente}
+              onElegir={elegirContacto}
+              onOmitir={() => setContactosCliente([])}
             />
           </div>
         </div>
