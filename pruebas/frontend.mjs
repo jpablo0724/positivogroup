@@ -227,6 +227,67 @@ console.log("\n== Catálogo de productos ==");
 }
 await page.screenshot({ path: `${OUT}/B6-catalogo.png`, fullPage: true });
 
+console.log("\n== Se ve al elegir el producto, sin agregarlo ==");
+{
+  await page.evaluate((c) => localStorage.setItem("positivogroup:codigoAcceso", c), CODIGO);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.click("text=Crear Cotización");
+  await page.waitForSelector('button:has-text("Selecciona un producto")');
+
+  const vacia = await page.locator("#invoice-preview table").innerText();
+  comprobar("arranca sin productos", vacia.includes("Agrega productos en el formulario"));
+
+  // Solo elegir en el desplegable. Nada más.
+  await page.click('button:has-text("Selecciona un producto")');
+  await page.click("text=X01 - Parqueaderos residenciales");
+  await page.waitForTimeout(300);
+
+  const tabla = await page.locator("#invoice-preview table").innerText();
+  comprobar("el nombre aparece SIN dar Agregar", tabla.includes("X01 - Parqueaderos residenciales"), tabla.replace(/\n/g, " | ").slice(0, 90));
+  comprobar("la descripción aparece también", tabla.includes("Carteleras en el acceso vehicular"));
+  comprobar("ya no dice el mensaje de vacío", !tabla.includes("Agrega productos en el formulario"));
+
+  // Escribir precio: debe reflejarse en vivo, sin agregar todavía.
+  const card = page.locator("div.bg-slate-50").first();
+  await card.locator('input[type="number"]').nth(0).fill("2");
+  await card.locator('input[type="number"]').nth(1).fill("300000");
+  await page.waitForTimeout(300);
+  const conValor = (await page.locator("#invoice-preview").innerText()).replace(/\u00a0/g, " ");
+  comprobar("el total se calcula en vivo", conValor.includes("$ 600.000"), conValor.match(/\$ [\d.]+/g)?.join(" / "));
+
+  // La fila en curso va marcada aparte.
+  const marcadas = await page.locator("#invoice-preview tr.bg-emerald-50\\/60").count();
+  comprobar("la fila en curso va marcada", marcadas === 1, `${marcadas} fila(s)`);
+
+  await page.screenshot({ path: `${OUT}/B8-solo-elegido.png`, fullPage: true });
+
+  // Al agregarlo deja de estar marcado y no se duplica.
+  await card.locator('button:has-text("Agregar producto")').click();
+  await page.waitForTimeout(300);
+  const trasAgregar = await page.locator("#invoice-preview table").innerText();
+  const veces = trasAgregar.split("X01 - Parqueaderos residenciales").length - 1;
+  comprobar("al agregarlo no se duplica", veces === 1, `${veces} vez/veces`);
+  comprobar("ya no queda fila marcada", (await page.locator("#invoice-preview tr.bg-emerald-50\\/60").count()) === 0);
+
+  // Guardar con un producto elegido y SIN agregar: no se debe perder.
+  await page.click('button:has-text("Selecciona un producto")');
+  await page.click("text=P01 - Publicidad en Ascensores");
+  await page.waitForTimeout(300);
+  const antes = servidor.cotizaciones.size;
+  await page.click('button:has-text("Guardar cotización")');
+  await page.waitForSelector("text=Cotización guardada", { timeout: 5000 });
+
+  const guardadas = [...servidor.cotizaciones.values()];
+  const ultima = guardadas[guardadas.length - 1];
+  comprobar("se guardó una cotización nueva", servidor.cotizaciones.size === antes + 1);
+  comprobar("el producto elegido sin agregar SÍ se guardó", ultima.data.items.length === 2, `${ultima.data.items.length} ítems`);
+  comprobar("no se guardó con el id de borrador", ultima.data.items.every((i) => i.id !== "__borrador__"), ultima.data.items.map((i) => i.id.slice(0, 8)).join(", "));
+
+  // Y el formulario queda limpio para la siguiente.
+  const limpia = await page.locator("#invoice-preview table").innerText();
+  comprobar("la cotización nueva arranca vacía", limpia.includes("Agrega productos en el formulario"));
+}
+
 console.log("\n== Producto sin cantidad ni precio ==");
 {
   await page.evaluate((c) => localStorage.setItem("positivogroup:codigoAcceso", c), CODIGO);

@@ -13,6 +13,13 @@ export interface InvoiceItem {
   precioUnitario: number;
 }
 
+/**
+ * Id del producto que se está capturando en el formulario y todavía no se ha
+ * agregado con el botón. Se muestra en la cotización para ver cómo va
+ * quedando, marcado aparte de los ya agregados.
+ */
+export const ID_BORRADOR = "__borrador__";
+
 export interface InvoiceData {
   numeroFactura: string;
   fecha: string;

@@ -1,4 +1,4 @@
-import type { InvoiceData } from "../types";
+import { ID_BORRADOR, type InvoiceData } from "../types";
 import PositivoLogo from "./PositivoLogo";
 import {
   calcInvoiceTotals,
@@ -130,8 +130,11 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
           {hasItems ? (
             data.items.map((item) => {
               const t = calcItemTotals(item, data.ivaPorcentaje);
+              // El producto que se está capturando se ve igual, pero con un
+              // fondo tenue: así se nota que todavía falta agregarlo.
+              const enCaptura = item.id === ID_BORRADOR;
               return (
-                <tr key={item.id}>
+                <tr key={item.id} className={enCaptura ? "bg-emerald-50/60" : ""}>
                   <td className={cell}>
                     <div className="font-semibold">
                       {item.nombreProducto || "—"}

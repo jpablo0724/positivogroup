@@ -6,7 +6,12 @@ import ListadoCotizaciones from "./components/ListadoCotizaciones";
 import CatalogoProductos from "./components/CatalogoProductos";
 import PantallaAcceso from "./components/PantallaAcceso";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
-import type { CotizacionGuardada, InvoiceData } from "./types";
+import {
+  ID_BORRADOR,
+  type CotizacionGuardada,
+  type InvoiceData,
+  type InvoiceItem,
+} from "./types";
 import { todayIso } from "./utils/calculations";
 import { apartarNumero, numeroProvisional } from "./utils/invoiceNumber";
 import {
@@ -55,6 +60,9 @@ function App() {
   const [cotizaciones, setCotizaciones] = useState<CotizacionGuardada[]>([]);
   // Catálogo completo, compartido entre el formulario y la vista de productos.
   const [productos, setProductos] = useState<Producto[]>([]);
+  // Productos tal como se ven en la cotización, incluyendo el que se está
+  // capturando en el formulario y todavía no se ha agregado.
+  const [itemsVistaPrevia, setItemsVistaPrevia] = useState<InvoiceItem[]>([]);
   const [pendientes, setPendientes] = useState<DatosLocales | null>(null);
 
   const [cargando, setCargando] = useState(true);
@@ -120,7 +128,17 @@ function App() {
         ? invoice.numeroFactura
         : await apartarNumero();
 
-      const lista = await guardarCotizacion({ ...invoice, numeroFactura });
+      // Lo que se ve en la cotización es lo que se guarda: si hay un producto
+      // capturado sin agregar, entra igual, con un id definitivo.
+      const items = itemsVistaPrevia.map((item) =>
+        item.id === ID_BORRADOR ? { ...item, id: crypto.randomUUID() } : item,
+      );
+
+      const lista = await guardarCotizacion({
+        ...invoice,
+        numeroFactura,
+        items,
+      });
       setCotizaciones(lista);
       setGuardadoMensaje(true);
       setTimeout(() => setGuardadoMensaje(false), 2500);
@@ -216,16 +234,20 @@ function App() {
           <div className="flex flex-1 gap-6 overflow-auto p-6 print:block print:overflow-visible print:gap-0 print:p-0">
             <div className="w-[440px] shrink-0 rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:hidden">
               <InvoiceForm
+                // Al cambiar de cotización (guardar una nueva, o abrir una
+                // guardada) el formulario arranca limpio.
+                key={invoice.numeroFactura}
                 data={invoice}
                 onChange={setInvoice}
                 productos={productos}
                 onProductosChange={setProductos}
+                onVistaPreviaChange={setItemsVistaPrevia}
                 onError={manejarError}
               />
             </div>
 
             <div className="flex-1 overflow-auto rounded-xl bg-slate-200/60 p-6 print:overflow-visible print:bg-transparent print:p-0">
-              <InvoicePreview data={invoice} />
+              <InvoicePreview data={{ ...invoice, items: itemsVistaPrevia }} />
             </div>
           </div>
         </main>

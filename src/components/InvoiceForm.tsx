@@ -1,5 +1,10 @@
-import { useMemo, useState } from "react";
-import { FORMAS_PAGO, type InvoiceData, type InvoiceItem } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import {
+  FORMAS_PAGO,
+  ID_BORRADOR,
+  type InvoiceData,
+  type InvoiceItem,
+} from "../types";
 import { formatCurrency, formatNumber } from "../utils/calculations";
 import type { ContactoClientify } from "../utils/clientify";
 import {
@@ -19,6 +24,11 @@ interface InvoiceFormProps {
   /** Catálogo completo, cargado por App desde la base de datos. */
   productos: Producto[];
   onProductosChange: (productos: Producto[]) => void;
+  /**
+   * Los productos tal como deben verse en la cotización, incluyendo el que se
+   * está capturando y aún no se ha agregado.
+   */
+  onVistaPreviaChange: (items: InvoiceItem[]) => void;
   onError: (err: unknown) => void;
 }
 
@@ -73,6 +83,7 @@ export default function InvoiceForm({
   onChange,
   productos,
   onProductosChange,
+  onVistaPreviaChange,
   onError,
 }: InvoiceFormProps) {
   const [draft, setDraft] = useState<Draft>(draftVacio);
@@ -100,6 +111,42 @@ export default function InvoiceForm({
       ),
     [productos],
   );
+
+  // Refleja en la cotización el producto que se está capturando, sin esperar a
+  // que se agregue. Las dependencias son valores sueltos (no el objeto draft)
+  // para que el efecto solo corra cuando algo cambia de verdad.
+  useEffect(() => {
+    const enCaptura = draft.nombreProducto !== "";
+
+    if (!enCaptura) {
+      onVistaPreviaChange(data.items);
+      return;
+    }
+
+    const borrador: InvoiceItem = {
+      id: editandoId ?? ID_BORRADOR,
+      nombreProducto: draft.nombreProducto,
+      descripcionProducto: draft.descripcionProducto,
+      cantidad: Number(draft.cantidad) || 0,
+      precioUnitario: Number(draft.precioUnitario) || 0,
+    };
+
+    // Al editar se sustituye la fila del producto; al capturar uno nuevo se
+    // suma al final.
+    onVistaPreviaChange(
+      editandoId
+        ? data.items.map((item) => (item.id === editandoId ? borrador : item))
+        : [...data.items, borrador],
+    );
+  }, [
+    data.items,
+    draft.nombreProducto,
+    draft.descripcionProducto,
+    draft.cantidad,
+    draft.precioUnitario,
+    editandoId,
+    onVistaPreviaChange,
+  ]);
 
   function updateCliente<K extends keyof InvoiceData["cliente"]>(
     field: K,
