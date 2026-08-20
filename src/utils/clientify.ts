@@ -70,7 +70,7 @@ export async function buscarEmpresas(
   consulta: string,
 ): Promise<EmpresaClientify[]> {
   const cuerpo = await pedir(
-    `/api/clientify/companies?name=${encodeURIComponent(consulta)}&page_size=15`,
+    `/api/clientify/companies?buscar=${encodeURIComponent(consulta)}`,
   );
 
   return comoLista(cuerpo)
@@ -88,10 +88,10 @@ export async function buscarEmpresas(
  * los campos de contacto de la cotización.
  */
 export async function contactoDeEmpresa(
-  empresaId: number,
+  nombreEmpresa: string,
 ): Promise<ContactoClientify | null> {
   const cuerpo = await pedir(
-    `/api/clientify/contacts?company=${empresaId}&page_size=20`,
+    `/api/clientify/contacts?empresa=${encodeURIComponent(nombreEmpresa)}`,
   );
 
   const contactos = comoLista(cuerpo).map((contacto) => {

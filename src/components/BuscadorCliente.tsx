@@ -106,7 +106,8 @@ export default function BuscadorCliente({
     onSeleccionar({ razonSocial: empresa.razonSocial, nit: empresa.nit });
 
     try {
-      const contacto = await contactoDeEmpresa(empresa.id);
+      // En la v2 el contacto guarda el nombre de la empresa, no su id.
+      const contacto = await contactoDeEmpresa(empresa.nombre);
       if (contacto) {
         recienSeleccionado.current = true;
         onSeleccionar({

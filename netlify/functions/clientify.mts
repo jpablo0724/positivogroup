@@ -1,21 +1,24 @@
 /**
- * Proxy hacia la API de Clientify.
+ * Proxy hacia la API de Clientify (v2).
  *
  * El token de Clientify da acceso a todo el CRM, así que nunca puede viajar
  * al navegador: vive solo aquí, como variable de entorno del sitio en Netlify
  * (Site configuration → Environment variables → CLIENTIFY_API_TOKEN).
  *
- * La app llama a /api/clientify/<recurso> y esta función reenvía la consulta
- * a Clientify agregándole el token.
+ * Rutas:
+ *   /api/clientify/me                      -> valida el token y devuelve la cuenta
+ *   /api/clientify/companies?buscar=texto  -> empresas cuyo nombre/NIT coincide
+ *   /api/clientify/contacts?empresa=nombre -> contactos de esa empresa
  *
- * Recursos disponibles:
- *   /api/clientify/me                    -> valida el token y devuelve la cuenta
- *   /api/clientify/companies?name=acme   -> busca empresas
- *   /api/clientify/contacts?company=123  -> busca contactos
+ * Sin "buscar"/"empresa" la consulta se reenvía tal cual a Clientify, lo que
+ * sirve para inspeccionar la API desde el navegador.
+ *
+ * Nota: la v2 ignora los filtros por parámetro (?name=, ?company=) y devuelve
+ * el listado completo, así que el filtrado se hace aquí sobre el catálogo
+ * descargado, que se guarda en memoria unos minutos para no rebajar el CRM en
+ * cada tecla que se escribe.
  */
 
-// Base de la API. Se puede sobrescribir con la variable CLIENTIFY_API_BASE
-// para cambiar de versión sin tocar el código.
 const CLIENTIFY_BASE = (
   process.env.CLIENTIFY_API_BASE ?? "https://api-plus.clientify.com/v2"
 ).replace(/\/+$/, "");
@@ -24,12 +27,19 @@ const CLIENTIFY_BASE = (
 // ni borrar nada en el CRM.
 const RECURSOS_PERMITIDOS = new Set(["me", "companies", "contacts"]);
 
-// La API v2 obliga a declarar qué campos se quieren. Si quien llama no lo
-// especifica, se piden los que necesita la cotización.
+// La v2 obliga a declarar qué campos se quieren.
 const CAMPOS_POR_DEFECTO: Record<string, string> = {
   companies: "id,name,business_name,taxpayer_identification_number",
   contacts: "id,full_name,first_name,last_name,emails,phones,company,company_name",
 };
+
+const TAMANO_PAGINA = 200;
+const MAXIMO_PAGINAS = 30;
+const VIGENCIA_CACHE_MS = 5 * 60 * 1000;
+
+type Registro = Record<string, unknown>;
+
+const cache = new Map<string, { guardadoEn: number; registros: Registro[] }>();
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
@@ -41,13 +51,75 @@ function json(body: unknown, status = 200) {
   });
 }
 
+/** Quita acentos y mayúsculas para que "Bancoldex" encuentre "Bancóldex". */
+function normalizar(valor: unknown): string {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+async function pedirAClientify(url: URL, token: string): Promise<Response> {
+  // La v1 autentica con "Token <clave>"; si la v2 esperara "Bearer", el primer
+  // intento devuelve 401 y se reintenta con el otro esquema.
+  let respuesta = await fetch(url, {
+    headers: { Authorization: `Token ${token}`, Accept: "application/json" },
+  });
+
+  if (respuesta.status === 401 || respuesta.status === 403) {
+    respuesta = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+  }
+
+  return respuesta;
+}
+
+/** Descarga el listado completo de un recurso, paginando y cacheando. */
+async function catalogoCompleto(
+  recurso: string,
+  token: string,
+): Promise<Registro[]> {
+  const enCache = cache.get(recurso);
+  if (enCache && Date.now() - enCache.guardadoEn < VIGENCIA_CACHE_MS) {
+    return enCache.registros;
+  }
+
+  const registros: Registro[] = [];
+
+  for (let pagina = 1; pagina <= MAXIMO_PAGINAS; pagina++) {
+    const url = new URL(`${CLIENTIFY_BASE}/${recurso}/`);
+    url.searchParams.set("fields", CAMPOS_POR_DEFECTO[recurso] ?? "id,name");
+    url.searchParams.set("page_size", String(TAMANO_PAGINA));
+    url.searchParams.set("page", String(pagina));
+
+    const respuesta = await pedirAClientify(url, token);
+    if (!respuesta.ok) {
+      throw new Error(
+        `Clientify respondió ${respuesta.status} al pedir ${recurso}`,
+      );
+    }
+
+    const cuerpo = (await respuesta.json()) as {
+      results?: Registro[];
+      next?: string | null;
+    };
+
+    const lote = Array.isArray(cuerpo.results) ? cuerpo.results : [];
+    registros.push(...lote);
+
+    if (!cuerpo.next || lote.length === 0) break;
+  }
+
+  cache.set(recurso, { guardadoEn: Date.now(), registros });
+  return registros;
+}
+
 export default async (req: Request) => {
   const token = process.env.CLIENTIFY_API_TOKEN;
 
   if (!token) {
-    // Diagnóstico: se listan solo los NOMBRES de variables visibles para la
-    // función (nunca sus valores), para distinguir entre "la variable no
-    // llegó al despliegue" y "llegó pero vacía".
     const nombresVisibles = Object.keys(process.env)
       .filter((nombre) => /CLIENTIFY|CONTEXT|DEPLOY/i.test(nombre))
       .sort();
@@ -69,9 +141,6 @@ export default async (req: Request) => {
   }
 
   const entrante = new URL(req.url);
-
-  // El recurso es el último segmento de la ruta, así funciona tanto en
-  // /api/clientify/<recurso> como en /.netlify/functions/clientify/<recurso>.
   const segmentos = entrante.pathname.split("/").filter(Boolean);
   const recurso = segmentos[segmentos.length - 1] ?? "";
 
@@ -80,48 +149,67 @@ export default async (req: Request) => {
       {
         error: "recurso_no_permitido",
         recurso,
-        ruta: entrante.pathname,
         permitidos: [...RECURSOS_PERMITIDOS],
-        ejemplo: "/api/clientify/me",
+        ejemplo: "/api/clientify/companies?buscar=banco",
       },
       400,
     );
   }
 
-  // Se reenvían los parámetros tal cual llegan, para poder buscar por nombre,
-  // paginar, filtrar por empresa, etc.
-  const destino = new URL(`${CLIENTIFY_BASE}/${recurso}/`);
-  entrante.searchParams.forEach((valor, clave) => {
-    destino.searchParams.append(clave, valor);
-  });
-
-  const camposPorDefecto = CAMPOS_POR_DEFECTO[recurso];
-  if (camposPorDefecto && !destino.searchParams.has("fields")) {
-    destino.searchParams.set("fields", camposPorDefecto);
-  }
-
-  // La v1 autentica con "Token <clave>"; si la v2 espera "Bearer", el primer
-  // intento devuelve 401 y se reintenta con el otro esquema.
-  const esquemas = ["Token", "Bearer"];
-  let respuesta: Response | null = null;
-  let esquemaUsado = "";
+  const buscar = entrante.searchParams.get("buscar");
+  const empresa = entrante.searchParams.get("empresa");
 
   try {
-    for (const esquema of esquemas) {
-      respuesta = await fetch(destino, {
-        headers: {
-          Authorization: `${esquema} ${token}`,
-          Accept: "application/json",
-        },
-      });
-      esquemaUsado = esquema;
-      if (respuesta.status !== 401 && respuesta.status !== 403) break;
+    // --- Búsqueda de empresas por nombre, razón social o NIT ---
+    if (recurso === "companies" && buscar !== null) {
+      const consulta = normalizar(buscar);
+      if (consulta.length < 2) return json({ count: 0, results: [] });
+
+      const todas = await catalogoCompleto("companies", token);
+      const coincidencias = todas
+        .filter(
+          (registro) =>
+            normalizar(registro.name).includes(consulta) ||
+            normalizar(registro.business_name).includes(consulta) ||
+            normalizar(registro.taxpayer_identification_number).includes(
+              consulta,
+            ),
+        )
+        .slice(0, 20);
+
+      return json({ count: coincidencias.length, results: coincidencias });
     }
 
-    if (!respuesta) {
-      return json({ error: "sin_respuesta", url: destino.toString() }, 502);
+    // --- Contactos de una empresa (se cruzan por nombre, no por id, porque
+    //     en la v2 el campo "company" del contacto es el nombre) ---
+    if (recurso === "contacts" && empresa !== null) {
+      const objetivo = normalizar(empresa);
+      if (objetivo.length < 2) return json({ count: 0, results: [] });
+
+      const todos = await catalogoCompleto("contacts", token);
+      const coincidencias = todos
+        .filter(
+          (registro) =>
+            normalizar(registro.company) === objetivo ||
+            normalizar(registro.company_name) === objetivo,
+        )
+        .slice(0, 20);
+
+      return json({ count: coincidencias.length, results: coincidencias });
     }
 
+    // --- Paso directo, útil para inspeccionar la API desde el navegador ---
+    const destino = new URL(`${CLIENTIFY_BASE}/${recurso}/`);
+    entrante.searchParams.forEach((valor, clave) => {
+      destino.searchParams.append(clave, valor);
+    });
+
+    const campos = CAMPOS_POR_DEFECTO[recurso];
+    if (campos && !destino.searchParams.has("fields")) {
+      destino.searchParams.set("fields", campos);
+    }
+
+    const respuesta = await pedirAClientify(destino, token);
     const texto = await respuesta.text();
 
     if (!respuesta.ok) {
@@ -130,7 +218,6 @@ export default async (req: Request) => {
           error: "clientify_respondio_error",
           status: respuesta.status,
           url: destino.toString(),
-          esquemaAutenticacion: esquemaUsado,
           respuesta: texto.slice(0, 1000),
         },
         respuesta.status,
@@ -141,18 +228,14 @@ export default async (req: Request) => {
       return json(JSON.parse(texto));
     } catch {
       return json(
-        {
-          error: "respuesta_no_es_json",
-          url: destino.toString(),
-          respuesta: texto.slice(0, 1000),
-        },
+        { error: "respuesta_no_es_json", respuesta: texto.slice(0, 1000) },
         502,
       );
     }
   } catch (err) {
     return json(
       {
-        error: "no_se_pudo_conectar",
+        error: "fallo_consultando_clientify",
         detalle: err instanceof Error ? err.message : String(err),
       },
       502,
