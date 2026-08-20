@@ -9,6 +9,7 @@ import { selectTriggerClass } from "./SearchableSelect";
 
 interface ClienteSeleccionado {
   razonSocial: string;
+  nit?: string;
   contacto?: string;
   email?: string;
 }
@@ -101,8 +102,8 @@ export default function BuscadorCliente({
     setAbierto(false);
     setSugerencias([]);
 
-    // La razón social se aplica de inmediato; el contacto llega después.
-    onSeleccionar({ razonSocial: empresa.razonSocial });
+    // Razón social y NIT se aplican de inmediato; el contacto llega después.
+    onSeleccionar({ razonSocial: empresa.razonSocial, nit: empresa.nit });
 
     try {
       const contacto = await contactoDeEmpresa(empresa.id);
@@ -110,6 +111,7 @@ export default function BuscadorCliente({
         recienSeleccionado.current = true;
         onSeleccionar({
           razonSocial: empresa.razonSocial,
+          nit: empresa.nit,
           contacto: contacto.nombre,
           email: contacto.email,
         });

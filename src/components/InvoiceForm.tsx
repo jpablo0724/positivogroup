@@ -188,6 +188,7 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
                   cliente: {
                     ...data.cliente,
                     razonSocial: cliente.razonSocial,
+                    ...(cliente.nit ? { nit: cliente.nit } : {}),
                     ...(cliente.contacto ? { contacto: cliente.contacto } : {}),
                     ...(cliente.email ? { email: cliente.email } : {}),
                   },

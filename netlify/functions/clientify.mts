@@ -24,6 +24,13 @@ const CLIENTIFY_BASE = (
 // ni borrar nada en el CRM.
 const RECURSOS_PERMITIDOS = new Set(["me", "companies", "contacts"]);
 
+// La API v2 obliga a declarar qué campos se quieren. Si quien llama no lo
+// especifica, se piden los que necesita la cotización.
+const CAMPOS_POR_DEFECTO: Record<string, string> = {
+  companies: "id,name,business_name,taxpayer_identification_number",
+  contacts: "id,full_name,first_name,last_name,emails,phones,company,company_name",
+};
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
     status,
@@ -87,6 +94,11 @@ export default async (req: Request) => {
   entrante.searchParams.forEach((valor, clave) => {
     destino.searchParams.append(clave, valor);
   });
+
+  const camposPorDefecto = CAMPOS_POR_DEFECTO[recurso];
+  if (camposPorDefecto && !destino.searchParams.has("fields")) {
+    destino.searchParams.set("fields", camposPorDefecto);
+  }
 
   // La v1 autentica con "Token <clave>"; si la v2 espera "Bearer", el primer
   // intento devuelve 401 y se reintenta con el otro esquema.

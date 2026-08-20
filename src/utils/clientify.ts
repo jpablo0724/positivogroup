@@ -14,6 +14,8 @@ export interface EmpresaClientify {
   nombre: string;
   /** Razón social formal, cuando el CRM la tiene registrada. */
   razonSocial: string;
+  /** NIT registrado en el CRM (taxpayer_identification_number). */
+  nit: string;
 }
 
 export interface ContactoClientify {
@@ -76,6 +78,7 @@ export async function buscarEmpresas(
       id: Number(empresa.id),
       nombre: texto(empresa.name),
       razonSocial: texto(empresa.business_name) || texto(empresa.name),
+      nit: texto(empresa.taxpayer_identification_number),
     }))
     .filter((empresa) => Number.isFinite(empresa.id) && empresa.nombre !== "");
 }
