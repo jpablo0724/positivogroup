@@ -7,6 +7,7 @@ import {
   formatDateLong,
   formatNumber,
 } from "../utils/calculations";
+import { CLASES_CONTENIDO, aHtml } from "../utils/richText";
 
 interface InvoicePreviewProps {
   data: InvoiceData;
@@ -28,17 +29,13 @@ const cell = `border ${border} px-2 py-1`;
 
 export default function InvoicePreview({ data }: InvoicePreviewProps) {
   const totals = calcInvoiceTotals(data.items, data.ivaPorcentaje);
-  const totalCantidad = data.items.reduce((acc, i) => acc + i.cantidad, 0);
   const hasItems = data.items.some(
     (item) => item.nombreProducto || item.cantidad || item.precioUnitario,
   );
-  // Cada bloque son las observaciones de un producto. Se separan con una línea
-  // "---", que aquí se dibuja como línea divisoria. Dentro de cada bloque se
-  // respetan los saltos de línea originales.
-  const observacionesBloques = data.observaciones
-    .split(/^[ \t]*---[ \t]*$/m)
-    .map((bloque) => bloque.trim())
-    .filter(Boolean);
+  // Las observaciones se guardan con formato (negrilla, viñetas, alineación).
+  // `aHtml` acepta también el texto plano de las cotizaciones antiguas y deja
+  // solo etiquetas de formato antes de pintarlas.
+  const observacionesHtml = aHtml(data.observaciones);
 
   return (
     <div
@@ -164,16 +161,6 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
               </td>
             </tr>
           )}
-          <tr className="bg-slate-50 font-bold">
-            <td className={`${cell} text-right`}>SUBTOTAL</td>
-            <td className={`${cell} text-center`}>
-              {formatNumber(totalCantidad)}
-            </td>
-            <td className={cell}></td>
-            <td className={`${cell} text-right`}>
-              {formatCurrency(totals.subtotal)}
-            </td>
-          </tr>
         </tbody>
       </table>
 
@@ -199,15 +186,11 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
           Observaciones
         </div>
         <div className="px-3 py-2">
-          {observacionesBloques.length > 0 ? (
-            <div>
-              {observacionesBloques.map((bloque, i) => (
-                <div key={i}>
-                  {i > 0 && <hr className={`my-3 ${border}`} />}
-                  <p className="whitespace-pre-wrap">{bloque}</p>
-                </div>
-              ))}
-            </div>
+          {observacionesHtml ? (
+            <div
+              className={`${CLASES_CONTENIDO} [&_hr]:my-3 [&_hr]:border-slate-900`}
+              dangerouslySetInnerHTML={{ __html: observacionesHtml }}
+            />
           ) : (
             <p className="text-slate-400">—</p>
           )}

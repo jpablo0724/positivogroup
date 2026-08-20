@@ -1,14 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   FORMAS_PAGO,
   PRODUCTOS,
   type InvoiceData,
   type InvoiceItem,
 } from "../types";
-import { PRODUCTOS_INFO } from "../data/productosInfo";
+import { PRODUCTOS_INFO, type ProductoInfo } from "../data/productosInfo";
 import { formatCurrency, formatNumber } from "../utils/calculations";
 import type { ContactoClientify } from "../utils/clientify";
+import {
+  guardarProductoPersonalizado,
+  listarProductosPersonalizados,
+  type ProductoPersonalizado,
+} from "../utils/productosPersonalizados";
+import { textoPlanoAHtml } from "../utils/richText";
 import BuscadorCliente from "./BuscadorCliente";
+import EditorObservaciones from "./EditorObservaciones";
+import ModalNuevoProducto from "./ModalNuevoProducto";
 import SearchableSelect, { selectTriggerClass } from "./SearchableSelect";
 import SelectorContacto from "./SelectorContacto";
 
@@ -37,24 +45,26 @@ const draftVacio: Draft = {
   precioUnitario: "",
 };
 
-// Separador entre las observaciones de un producto y las del siguiente. Se
-// escribe como "---" en su propia línea, y la factura lo dibuja como una
-// línea divisoria. Es un marcador explícito porque las observaciones de un
-// mismo producto ya contienen líneas en blanco entre sus párrafos.
-export const SEPARADOR_OBSERVACIONES = "\n\n---\n\n";
+// Línea divisoria entre las observaciones de un producto y las del siguiente.
+export const SEPARADOR_OBSERVACIONES = "<hr>";
+
+type Catalogo = Record<string, ProductoInfo>;
 
 // Une las observaciones de todos los productos de la cotización, una debajo
 // de otra y divididas entre sí. Omite las repetidas para que dos productos
 // que comparten observaciones no las dupliquen.
-function observacionesDeProductos(nombresProducto: string[]): string {
+function observacionesDeProductos(
+  nombresProducto: string[],
+  catalogo: Catalogo,
+): string {
   const vistas = new Set<string>();
   const bloques: string[] = [];
 
   for (const nombre of nombresProducto) {
-    const observaciones = PRODUCTOS_INFO[nombre]?.observaciones?.trim();
+    const observaciones = catalogo[nombre]?.observaciones?.trim();
     if (observaciones && !vistas.has(observaciones)) {
       vistas.add(observaciones);
-      bloques.push(observaciones);
+      bloques.push(textoPlanoAHtml(observaciones));
     }
   }
 
@@ -70,6 +80,26 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const [contactosCliente, setContactosCliente] = useState<ContactoClientify[]>(
     [],
   );
+  // Productos creados a mano, que se suman al catálogo de servicios.
+  const [productosPropios, setProductosPropios] = useState<
+    ProductoPersonalizado[]
+  >(() => listarProductosPersonalizados());
+  const [modalProductoAbierto, setModalProductoAbierto] = useState(false);
+
+  const opcionesProducto = useMemo(
+    () => [...PRODUCTOS, ...productosPropios.map((p) => p.nombre)],
+    [productosPropios],
+  );
+
+  const catalogo = useMemo<Catalogo>(() => {
+    const propios = Object.fromEntries(
+      productosPropios.map((p) => [
+        p.nombre,
+        { descripcion: p.descripcion, observaciones: p.observaciones },
+      ]),
+    );
+    return { ...PRODUCTOS_INFO, ...propios };
+  }, [productosPropios]);
 
   function updateCliente<K extends keyof InvoiceData["cliente"]>(
     field: K,
@@ -118,8 +148,8 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
     });
   }
 
-  function selectProducto(nombreProducto: string) {
-    const info = PRODUCTOS_INFO[nombreProducto];
+  function selectProducto(nombreProducto: string, catalogoActual = catalogo) {
+    const info = catalogoActual[nombreProducto];
     setDraft((prev) => ({
       ...prev,
       nombreProducto,
@@ -134,7 +164,27 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         )
       : [...data.items.map((item) => item.nombreProducto), nombreProducto];
 
-    onChange({ ...data, observaciones: observacionesDeProductos(nombres) });
+    onChange({
+      ...data,
+      observaciones: observacionesDeProductos(nombres, catalogoActual),
+    });
+  }
+
+  function crearProducto(producto: ProductoPersonalizado) {
+    const actualizados = guardarProductoPersonalizado(producto);
+    setProductosPropios(actualizados);
+    setModalProductoAbierto(false);
+
+    // Se deja elegido de una vez, que es para lo que se acaba de crear. El
+    // catálogo del estado todavía no incluye el producto nuevo, así que se le
+    // pasa uno ya actualizado.
+    selectProducto(producto.nombre, {
+      ...catalogo,
+      [producto.nombre]: {
+        descripcion: producto.descripcion,
+        observaciones: producto.observaciones,
+      },
+    });
   }
 
   const draftValido =
@@ -163,6 +213,7 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
       items,
       observaciones: observacionesDeProductos(
         items.map((item) => item.nombreProducto),
+        catalogo,
       ),
     });
     setDraft(draftVacio);
@@ -191,10 +242,13 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
     onChange({
       ...data,
       items,
-      observaciones: observacionesDeProductos([
-        ...items.map((item) => item.nombreProducto),
-        enEdicion ? "" : draft.nombreProducto,
-      ]),
+      observaciones: observacionesDeProductos(
+        [
+          ...items.map((item) => item.nombreProducto),
+          enEdicion ? "" : draft.nombreProducto,
+        ],
+        catalogo,
+      ),
     });
 
     // Si se elimina el producto que se estaba editando, se limpia el formulario.
@@ -320,9 +374,28 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Productos
-        </h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Productos
+          </h2>
+          <button
+            type="button"
+            onClick={() => setModalProductoAbierto(true)}
+            className="flex items-center gap-1 text-xs font-semibold text-emerald-600 transition-colors hover:text-emerald-700"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              className="h-3.5 w-3.5"
+            >
+              <path d="M10 4v12M4 10h12" />
+            </svg>
+            Agregar producto
+          </button>
+        </div>
 
         {data.items.length > 0 && (
           <div className="mb-4 space-y-2">
@@ -376,9 +449,11 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
               <label className={labelClass}>Nombre producto</label>
               <SearchableSelect
                 value={draft.nombreProducto}
-                onChange={selectProducto}
-                options={PRODUCTOS}
+                onChange={(nombre) => selectProducto(nombre)}
+                options={opcionesProducto}
                 placeholder="Selecciona un producto"
+                extraOptionLabel="+ Agregar producto nuevo"
+                onExtraOption={() => setModalProductoAbierto(true)}
               />
             </div>
             <div className="col-span-2">
@@ -449,14 +524,18 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
           Observaciones
         </h2>
-        <textarea
-          className={inputClass}
-          rows={3}
+        <EditorObservaciones
           value={data.observaciones}
-          onChange={(e) => updateField("observaciones", e.target.value)}
-          placeholder="Notas adicionales para el cliente"
+          onChange={(html) => updateField("observaciones", html)}
         />
       </section>
+
+      <ModalNuevoProducto
+        abierto={modalProductoAbierto}
+        nombresExistentes={opcionesProducto}
+        onGuardar={crearProducto}
+        onCerrar={() => setModalProductoAbierto(false)}
+      />
     </div>
   );
 }

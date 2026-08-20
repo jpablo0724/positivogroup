@@ -38,7 +38,7 @@ export default function ListadoCotizaciones({
               <th className="px-4 py-3">Cliente</th>
               <th className="px-4 py-3">Fecha</th>
               <th className="px-4 py-3">Válida hasta</th>
-              <th className="px-4 py-3 text-right">Total</th>
+              <th className="px-4 py-3 text-right">Total antes de IVA</th>
               <th className="px-4 py-3">Guardada</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -67,7 +67,7 @@ export default function ListadoCotizaciones({
                     {formatDateLong(c.data.validaHasta) || "—"}
                   </td>
                   <td className="px-4 py-3 text-right font-medium text-slate-900">
-                    {formatCurrency(totals.total)}
+                    {formatCurrency(totals.subtotal)}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-400">
                     {new Date(c.guardadoEn).toLocaleString("es-CO")}
