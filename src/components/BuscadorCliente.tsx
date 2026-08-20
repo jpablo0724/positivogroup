@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   buscarEmpresas,
-  contactoDeEmpresa,
+  contactosDeEmpresa,
   ClientifyNoDisponible,
+  type ContactoClientify,
   type EmpresaClientify,
 } from "../utils/clientify";
 import { selectTriggerClass } from "./SearchableSelect";
@@ -36,10 +37,18 @@ export default function BuscadorCliente({
   const [abierto, setAbierto] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Cuando la empresa elegida tiene varios contactos, se listan para que el
+  // usuario decida cuál va en la cotización.
+  const [contactosParaElegir, setContactosParaElegir] = useState<
+    ContactoClientify[]
+  >([]);
 
   const contenedorRef = useRef<HTMLDivElement>(null);
-  // Evita buscar de nuevo el texto que acabamos de rellenar al elegir.
-  const recienSeleccionado = useRef(false);
+  // Último valor puesto por el propio componente al elegir una empresa. Sirve
+  // para no volver a buscar ese texto; se compara el valor en vez de usar una
+  // bandera, porque una bandera se comería la búsqueda siguiente que escriba
+  // el usuario.
+  const valorAutocompletado = useRef<string | null>(null);
 
   useEffect(() => {
     function fueraDelCampo(evento: MouseEvent) {
@@ -55,10 +64,7 @@ export default function BuscadorCliente({
   }, []);
 
   useEffect(() => {
-    if (recienSeleccionado.current) {
-      recienSeleccionado.current = false;
-      return;
-    }
+    if (valorAutocompletado.current === value) return;
 
     const consulta = value.trim();
     if (consulta.length < MINIMO_CARACTERES) {
@@ -98,28 +104,42 @@ export default function BuscadorCliente({
   }, [value]);
 
   async function elegir(empresa: EmpresaClientify) {
-    recienSeleccionado.current = true;
+    valorAutocompletado.current = empresa.razonSocial;
     setAbierto(false);
     setSugerencias([]);
+    setContactosParaElegir([]);
 
-    // Razón social y NIT se aplican de inmediato; el contacto llega después.
+    // Razón social y NIT se completan siempre al elegir la empresa.
     onSeleccionar({ razonSocial: empresa.razonSocial, nit: empresa.nit });
 
     try {
       // En la v2 el contacto guarda el nombre de la empresa, no su id.
-      const contacto = await contactoDeEmpresa(empresa.nombre);
-      if (contacto) {
-        recienSeleccionado.current = true;
+      const contactos = await contactosDeEmpresa(empresa.nombre);
+
+      if (contactos.length === 1) {
+        // Con un solo contacto no hay nada que decidir: se completa directo.
         onSeleccionar({
           razonSocial: empresa.razonSocial,
           nit: empresa.nit,
-          contacto: contacto.nombre,
-          email: contacto.email,
+          contacto: contactos[0].nombre,
+          email: contactos[0].email,
         });
+      } else if (contactos.length > 1) {
+        setContactosParaElegir(contactos);
       }
     } catch {
-      // Sin contacto disponible se deja lo que ya se completó.
+      // Sin contactos disponibles se deja lo que ya se completó.
     }
+  }
+
+  function elegirContacto(contacto: ContactoClientify) {
+    valorAutocompletado.current = value;
+    setContactosParaElegir([]);
+    onSeleccionar({
+      razonSocial: value,
+      contacto: contacto.nombre,
+      email: contacto.email,
+    });
   }
 
   return (
@@ -163,6 +183,43 @@ export default function BuscadorCliente({
           ) : (
             <p className="px-3 py-2 text-xs text-slate-400">{aviso}</p>
           )}
+        </div>
+      )}
+
+      {contactosParaElegir.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full rounded-md border border-emerald-300 bg-white shadow-lg">
+          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
+            <span className="text-xs font-medium text-slate-600">
+              Elige el contacto ({contactosParaElegir.length})
+            </span>
+            <button
+              type="button"
+              onClick={() => setContactosParaElegir([])}
+              className="text-xs text-slate-400 hover:text-slate-600"
+            >
+              Omitir
+            </button>
+          </div>
+          <ul className="max-h-56 overflow-auto py-1 text-sm">
+            {contactosParaElegir.map((contacto, i) => (
+              <li key={`${contacto.nombre}-${contacto.email}-${i}`}>
+                <button
+                  type="button"
+                  onClick={() => elegirContacto(contacto)}
+                  className="block w-full px-3 py-1.5 text-left hover:bg-emerald-50"
+                >
+                  <span className="block truncate text-slate-700">
+                    {contacto.nombre || "(sin nombre)"}
+                  </span>
+                  {contacto.email && (
+                    <span className="block truncate text-xs text-slate-400">
+                      {contacto.email}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

@@ -84,12 +84,12 @@ export async function buscarEmpresas(
 }
 
 /**
- * Primer contacto asociado a la empresa que tenga email, para autocompletar
- * los campos de contacto de la cotización.
+ * Contactos registrados para la empresa. Se devuelven todos para que, cuando
+ * hay más de uno, la interfaz permita elegir cuál va en la cotización.
  */
-export async function contactoDeEmpresa(
+export async function contactosDeEmpresa(
   nombreEmpresa: string,
-): Promise<ContactoClientify | null> {
+): Promise<ContactoClientify[]> {
   const cuerpo = await pedir(
     `/api/clientify/contacts?empresa=${encodeURIComponent(nombreEmpresa)}`,
   );
@@ -114,5 +114,7 @@ export async function contactoDeEmpresa(
     };
   });
 
-  return contactos.find((c) => c.email) ?? contactos[0] ?? null;
+  // Se descartan los registros sin nombre ni email, que no aportan nada al
+  // momento de elegir.
+  return contactos.filter((c) => c.nombre !== "" || c.email !== "");
 }
