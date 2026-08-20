@@ -14,7 +14,11 @@
  *   /api/clientify/contacts?company=123  -> busca contactos
  */
 
-const CLIENTIFY_BASE = "https://api.clientify.net/v1";
+// Base de la API. Se puede sobrescribir con la variable CLIENTIFY_API_BASE
+// para cambiar de versión sin tocar el código.
+const CLIENTIFY_BASE = (
+  process.env.CLIENTIFY_API_BASE ?? "https://api-plus.clientify.com/v2"
+).replace(/\/+$/, "");
 
 // Solo recursos de lectura, para que el proxy no pueda usarse para modificar
 // ni borrar nada en el CRM.
@@ -84,13 +88,27 @@ export default async (req: Request) => {
     destino.searchParams.append(clave, valor);
   });
 
+  // La v1 autentica con "Token <clave>"; si la v2 espera "Bearer", el primer
+  // intento devuelve 401 y se reintenta con el otro esquema.
+  const esquemas = ["Token", "Bearer"];
+  let respuesta: Response | null = null;
+  let esquemaUsado = "";
+
   try {
-    const respuesta = await fetch(destino, {
-      headers: {
-        Authorization: `Token ${token}`,
-        Accept: "application/json",
-      },
-    });
+    for (const esquema of esquemas) {
+      respuesta = await fetch(destino, {
+        headers: {
+          Authorization: `${esquema} ${token}`,
+          Accept: "application/json",
+        },
+      });
+      esquemaUsado = esquema;
+      if (respuesta.status !== 401 && respuesta.status !== 403) break;
+    }
+
+    if (!respuesta) {
+      return json({ error: "sin_respuesta", url: destino.toString() }, 502);
+    }
 
     const texto = await respuesta.text();
 
@@ -100,6 +118,7 @@ export default async (req: Request) => {
           error: "clientify_respondio_error",
           status: respuesta.status,
           url: destino.toString(),
+          esquemaAutenticacion: esquemaUsado,
           respuesta: texto.slice(0, 1000),
         },
         respuesta.status,
