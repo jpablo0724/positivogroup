@@ -1,18 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  FORMAS_PAGO,
-  PRODUCTOS,
-  type InvoiceData,
-  type InvoiceItem,
-} from "../types";
-import { PRODUCTOS_INFO, type ProductoInfo } from "../data/productosInfo";
+import { useMemo, useState } from "react";
+import { FORMAS_PAGO, type InvoiceData, type InvoiceItem } from "../types";
 import { formatCurrency, formatNumber } from "../utils/calculations";
 import type { ContactoClientify } from "../utils/clientify";
 import {
-  guardarProductoPersonalizado,
-  listarProductosPersonalizados,
-  type ProductoPersonalizado,
-} from "../utils/productosPersonalizados";
+  guardarProducto as guardarEnCatalogo,
+  type Producto,
+} from "../utils/catalogo";
 import { textoPlanoAHtml } from "../utils/richText";
 import BuscadorCliente from "./BuscadorCliente";
 import EditorObservaciones from "./EditorObservaciones";
@@ -23,6 +16,9 @@ import SelectorContacto from "./SelectorContacto";
 interface InvoiceFormProps {
   data: InvoiceData;
   onChange: (data: InvoiceData) => void;
+  /** Catálogo completo, cargado por App desde la base de datos. */
+  productos: Producto[];
+  onProductosChange: (productos: Producto[]) => void;
   onError: (err: unknown) => void;
 }
 
@@ -49,7 +45,7 @@ const draftVacio: Draft = {
 // Línea divisoria entre las observaciones de un producto y las del siguiente.
 export const SEPARADOR_OBSERVACIONES = "<hr>";
 
-type Catalogo = Record<string, ProductoInfo>;
+type Catalogo = Record<string, { descripcion: string; observaciones: string }>;
 
 // Une las observaciones de todos los productos de la cotización, una debajo
 // de otra y divididas entre sí. Omite las repetidas para que dos productos
@@ -75,6 +71,8 @@ function observacionesDeProductos(
 export default function InvoiceForm({
   data,
   onChange,
+  productos,
+  onProductosChange,
   onError,
 }: InvoiceFormProps) {
   const [draft, setDraft] = useState<Draft>(draftVacio);
@@ -85,41 +83,23 @@ export default function InvoiceForm({
   const [contactosCliente, setContactosCliente] = useState<ContactoClientify[]>(
     [],
   );
-  // Productos creados a mano, que se suman al catálogo de servicios. Viven en
-  // el servidor, así que se cargan al abrir el formulario.
-  const [productosPropios, setProductosPropios] = useState<
-    ProductoPersonalizado[]
-  >([]);
   const [modalProductoAbierto, setModalProductoAbierto] = useState(false);
 
-  useEffect(() => {
-    let cancelado = false;
-    listarProductosPersonalizados()
-      .then((productos) => {
-        if (!cancelado) setProductosPropios(productos);
-      })
-      .catch((err) => {
-        if (!cancelado) onError(err);
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, [onError]);
-
   const opcionesProducto = useMemo(
-    () => [...PRODUCTOS, ...productosPropios.map((p) => p.nombre)],
-    [productosPropios],
+    () => productos.map((p) => p.nombre),
+    [productos],
   );
 
-  const catalogo = useMemo<Catalogo>(() => {
-    const propios = Object.fromEntries(
-      productosPropios.map((p) => [
-        p.nombre,
-        { descripcion: p.descripcion, observaciones: p.observaciones },
-      ]),
-    );
-    return { ...PRODUCTOS_INFO, ...propios };
-  }, [productosPropios]);
+  const catalogo = useMemo<Catalogo>(
+    () =>
+      Object.fromEntries(
+        productos.map((p) => [
+          p.nombre,
+          { descripcion: p.descripcion, observaciones: p.observaciones },
+        ]),
+      ),
+    [productos],
+  );
 
   function updateCliente<K extends keyof InvoiceData["cliente"]>(
     field: K,
@@ -190,7 +170,11 @@ export default function InvoiceForm({
     });
   }
 
-  async function crearProducto(producto: ProductoPersonalizado) {
+  async function crearProducto(producto: {
+    nombre: string;
+    descripcion: string;
+    observaciones: string;
+  }) {
     setModalProductoAbierto(false);
 
     // Se deja elegido de una vez, que es para lo que se acaba de crear. El
@@ -205,7 +189,7 @@ export default function InvoiceForm({
     });
 
     try {
-      setProductosPropios(await guardarProductoPersonalizado(producto));
+      onProductosChange(await guardarEnCatalogo(producto));
     } catch (err) {
       onError(err);
     }

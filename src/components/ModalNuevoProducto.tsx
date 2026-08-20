@@ -1,39 +1,49 @@
 import { useEffect, useState } from "react";
-import type { ProductoPersonalizado } from "../utils/productosPersonalizados";
 import { selectTriggerClass } from "./SearchableSelect";
 
-interface ModalNuevoProductoProps {
+export interface DatosProducto {
+  nombre: string;
+  descripcion: string;
+  observaciones: string;
+}
+
+interface ModalProductoProps {
   abierto: boolean;
+  /** Producto a editar; si no se pasa, la ventana crea uno nuevo. */
+  inicial?: DatosProducto | null;
   /** Nombres ya usados, para no crear dos productos iguales. */
   nombresExistentes: readonly string[];
-  onGuardar: (producto: ProductoPersonalizado) => void;
+  onGuardar: (producto: DatosProducto, nombreAnterior?: string) => void;
   onCerrar: () => void;
 }
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 
-const vacio: ProductoPersonalizado = {
+const vacio: DatosProducto = {
   nombre: "",
   descripcion: "",
   observaciones: "",
 };
 
 /**
- * Ventana para crear un producto nuevo con su descripción y observaciones.
- * Queda guardado en el catálogo para reutilizarlo en otras cotizaciones.
+ * Ventana para crear o editar un producto del catálogo, con su descripción y
+ * sus observaciones. El catálogo vive en la base de datos, así que el cambio
+ * lo ve todo el equipo.
  */
-export default function ModalNuevoProducto({
+export default function ModalProducto({
   abierto,
+  inicial,
   nombresExistentes,
   onGuardar,
   onCerrar,
-}: ModalNuevoProductoProps) {
-  const [producto, setProducto] = useState<ProductoPersonalizado>(vacio);
+}: ModalProductoProps) {
+  const [producto, setProducto] = useState<DatosProducto>(vacio);
+  const editando = inicial != null;
 
-  // Cada vez que se abre, empieza en blanco.
+  // Al abrir se parte del producto que se está editando, o en blanco.
   useEffect(() => {
-    if (abierto) setProducto(vacio);
-  }, [abierto]);
+    if (abierto) setProducto(inicial ?? vacio);
+  }, [abierto, inicial]);
 
   useEffect(() => {
     if (!abierto) return;
@@ -47,21 +57,24 @@ export default function ModalNuevoProducto({
   if (!abierto) return null;
 
   const nombre = producto.nombre.trim();
+  // Al editar, su propio nombre no cuenta como repetido.
   const repetido = nombresExistentes.some(
-    (existente) => existente.toLowerCase() === nombre.toLowerCase(),
+    (existente) =>
+      existente.toLowerCase() === nombre.toLowerCase() &&
+      existente !== inicial?.nombre,
   );
   const valido = nombre !== "" && !repetido;
 
-  function actualizar<K extends keyof ProductoPersonalizado>(
+  function actualizar<K extends keyof DatosProducto>(
     campo: K,
-    valor: ProductoPersonalizado[K],
+    valor: DatosProducto[K],
   ) {
     setProducto((prev) => ({ ...prev, [campo]: valor }));
   }
 
   function guardar() {
     if (!valido) return;
-    onGuardar({ ...producto, nombre });
+    onGuardar({ ...producto, nombre }, inicial?.nombre);
   }
 
   return (
@@ -75,16 +88,18 @@ export default function ModalNuevoProducto({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Agregar producto"
+        aria-label={editando ? "Editar producto" : "Agregar producto"}
         className="relative flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h2 className="text-base font-semibold text-slate-900">
-              Agregar producto
+              {editando ? "Editar producto" : "Agregar producto"}
             </h2>
             <p className="text-xs text-slate-500">
-              Queda guardado en el catálogo para próximas cotizaciones.
+              {editando
+                ? "El cambio queda guardado para todo el equipo."
+                : "Queda guardado en el catálogo para próximas cotizaciones."}
             </p>
           </div>
           <button
@@ -160,7 +175,7 @@ export default function ModalNuevoProducto({
             disabled={!valido}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            Guardar producto
+            {editando ? "Guardar cambios" : "Guardar producto"}
           </button>
         </div>
       </div>

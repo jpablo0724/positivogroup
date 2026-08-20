@@ -11,6 +11,18 @@ import { getStore } from "@netlify/blobs";
  * alguien podría guardar una cotización y no verla al recargar.
  */
 
+/** Un producto del catálogo, venga del catálogo inicial o creado a mano. */
+export interface Producto {
+  nombre: string;
+  descripcion: string;
+  observaciones: string;
+  /**
+   * Posición en la lista. Va de diez en diez para poder intercalar productos
+   * nuevos entre dos existentes sin renumerar todo.
+   */
+  orden: number;
+}
+
 export function almacenCotizaciones() {
   return getStore({ name: "cotizaciones", consistency: "strong" });
 }
@@ -19,9 +31,15 @@ export function almacenProductos() {
   return getStore({ name: "productos", consistency: "strong" });
 }
 
+/**
+ * Estado interno del sistema: el contador de la numeración y la marca de que
+ * el catálogo inicial ya se copió a la base de datos.
+ */
 export function almacenContadores() {
   return getStore({ name: "contadores", consistency: "strong" });
 }
+
+export const CLAVE_CATALOGO_SEMBRADO = "catalogo_sembrado";
 
 /**
  * Clave legible para un número de cotización: "PG 0001/26" → "pg-0001-26".

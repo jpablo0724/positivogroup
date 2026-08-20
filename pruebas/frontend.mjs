@@ -10,7 +10,15 @@ function comprobar(nombre, condicion, detalle = "") {
 }
 
 // --- API simulada, con el mismo comportamiento que las funciones reales ---
-const servidor = { cotizaciones: new Map(), productos: new Map(), ultimo: 0 };
+const CATALOGO_SEMILLA = [
+  { nombre: "P01 - Publicidad en Ascensores x 15 días", descripcion: "PUBLICIDAD EN ASCENSORES", observaciones: "Obs de ascensores", orden: 10 },
+  { nombre: "P03 - Marketing en Buzones", descripcion: "INSERTOS EN BUZONES", observaciones: "Obs de buzones", orden: 20 },
+];
+const servidor = {
+  cotizaciones: new Map(),
+  productos: new Map(CATALOGO_SEMILLA.map((p) => [p.nombre, p])),
+  ultimo: 0,
+};
 
 function armarApi(page) {
   return page.route("**/api/**", async (route) => {
@@ -49,10 +57,20 @@ function armarApi(page) {
     if (ruta.startsWith("/api/productos")) {
       if (req.method() === "POST") {
         const p = JSON.parse(req.postData());
-        servidor.productos.set(p.nombre, p);
+        const previo = servidor.productos.get(p.nombreAnterior ?? p.nombre);
+        if (p.nombreAnterior && p.nombreAnterior !== p.nombre) {
+          servidor.productos.delete(p.nombreAnterior);
+        }
+        const orden = previo?.orden ?? (servidor.productos.size + 1) * 10;
+        servidor.productos.set(p.nombre, { ...p, orden });
         return responder({ producto: p });
       }
-      return responder({ productos: [...servidor.productos.values()] });
+      if (req.method() === "DELETE") {
+        servidor.productos.delete(decodeURIComponent(ruta.replace("/api/productos/", "")));
+        return responder({ eliminado: true });
+      }
+      const lista = [...servidor.productos.values()].sort((a, b) => a.orden - b.orden);
+      return responder({ productos: lista });
     }
 
     return responder({ error: "no_encontrado" }, 404);
@@ -110,7 +128,7 @@ console.log("\n== Crear producto y guardar cotización ==");
   await dialog.locator('button:has-text("Guardar producto")').click();
   await page.waitForTimeout(400);
   comprobar("el producto sube al servidor", servidor.productos.has("X01 - Parqueaderos residenciales"),
-    [...servidor.productos.keys()].join(", "));
+    `${servidor.productos.size} productos`);
 
   const card = page.locator("div.rounded-lg.border.border-slate-200.bg-slate-50").first();
   await card.locator('input[type="number"]').nth(0).fill("10");
@@ -161,6 +179,53 @@ console.log("\n== Listado compartido ==");
   );
 }
 await page.screenshot({ path: `${OUT}/B3-listado.png`, fullPage: true });
+
+console.log("\n== Catálogo de productos ==");
+{
+  await page.reload({ waitUntil: "networkidle" });
+  await page.click("text=Catálogo de Productos");
+  await page.waitForSelector('button:has-text("+ Agregar producto")');
+
+  const tarjetas = await page.locator("text=P01 - Publicidad en Ascensores").count();
+  comprobar("muestra los servicios del catálogo", tarjetas > 0);
+
+  // Editar un servicio de fábrica.
+  const fila = page.locator("div.rounded-lg.border").filter({ hasText: "P01 - Publicidad en Ascensores" }).first();
+  await fila.locator('button:has-text("Editar")').click();
+  await page.waitForSelector('[role="dialog"]');
+  const dlg = page.locator('[role="dialog"]');
+  comprobar("el modal dice Editar producto", (await dlg.locator("h2").innerText()).includes("Editar"));
+
+  const descActual = await dlg.locator("textarea").nth(0).inputValue();
+  comprobar("precarga la descripción existente", descActual.includes("PUBLICIDAD EN ASCENSORES"), descActual.slice(0, 30));
+
+  await dlg.locator("textarea").nth(0).fill("DESCRIPCION EDITADA DESDE EL CATALOGO");
+  await dlg.locator('button:has-text("Guardar cambios")').click();
+  await page.waitForTimeout(500);
+
+  const enServidor = servidor.productos.get("P01 - Publicidad en Ascensores x 15 días");
+  comprobar("la edición llega al servidor", enServidor.descripcion === "DESCRIPCION EDITADA DESDE EL CATALOGO", enServidor.descripcion.slice(0, 30));
+
+  // El formulario de cotización debe usar ya la descripción editada.
+  await page.click("text=Crear Cotización");
+  await page.waitForSelector('button:has-text("Selecciona un producto")');
+  await page.click('button:has-text("Selecciona un producto")');
+  await page.click("text=P01 - Publicidad en Ascensores");
+  await page.waitForTimeout(300);
+  const desc = await page.locator("textarea").first().inputValue();
+  comprobar("la cotización usa la descripción editada", desc === "DESCRIPCION EDITADA DESDE EL CATALOGO", desc.slice(0, 30));
+
+  // Eliminar un producto.
+  await page.click("text=Catálogo de Productos");
+  await page.waitForSelector('button:has-text("+ Agregar producto")');
+  const fila2 = page.locator("div.rounded-lg.border").filter({ hasText: "P03 - Marketing en Buzones" }).first();
+  await fila2.locator('button:has-text("Eliminar")').click();
+  await page.waitForSelector("text=Se va a eliminar");
+  await page.click('div[role="dialog"] button:has-text("Eliminar")');
+  await page.waitForTimeout(500);
+  comprobar("elimina del servidor", !servidor.productos.has("P03 - Marketing en Buzones"), `${servidor.productos.size} productos`);
+}
+await page.screenshot({ path: `${OUT}/B6-catalogo.png`, fullPage: true });
 
 console.log("\n== El código deja de servir ==");
 {

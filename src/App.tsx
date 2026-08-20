@@ -3,6 +3,7 @@ import Sidebar, { type View } from "./components/Sidebar";
 import InvoiceForm from "./components/InvoiceForm";
 import InvoicePreview from "./components/InvoicePreview";
 import ListadoCotizaciones from "./components/ListadoCotizaciones";
+import CatalogoProductos from "./components/CatalogoProductos";
 import PantallaAcceso from "./components/PantallaAcceso";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import type { CotizacionGuardada, InvoiceData } from "./types";
@@ -23,6 +24,7 @@ import {
   datosLocalesPendientes,
   type DatosLocales,
 } from "./utils/migracion";
+import { listarProductos, type Producto } from "./utils/catalogo";
 
 function cotizacionEnBlanco(numeroFactura: string): InvoiceData {
   return {
@@ -51,6 +53,8 @@ function App() {
   const [numeroAsignado, setNumeroAsignado] = useState(false);
 
   const [cotizaciones, setCotizaciones] = useState<CotizacionGuardada[]>([]);
+  // Catálogo completo, compartido entre el formulario y la vista de productos.
+  const [productos, setProductos] = useState<Producto[]>([]);
   const [pendientes, setPendientes] = useState<DatosLocales | null>(null);
 
   const [cargando, setCargando] = useState(true);
@@ -73,11 +77,13 @@ function App() {
     setCargando(true);
     setError(null);
     try {
-      const [lista, numero] = await Promise.all([
+      const [lista, catalogo, numero] = await Promise.all([
         listarCotizaciones(),
+        listarProductos(),
         numeroProvisional(),
       ]);
       setCotizaciones(lista);
+      setProductos(catalogo);
       setInvoice(cotizacionEnBlanco(numero));
       setNumeroAsignado(false);
       setPendientes(datosLocalesPendientes());
@@ -212,6 +218,8 @@ function App() {
               <InvoiceForm
                 data={invoice}
                 onChange={setInvoice}
+                productos={productos}
+                onProductosChange={setProductos}
                 onError={manejarError}
               />
             </div>
@@ -244,6 +252,32 @@ function App() {
             cotizaciones={cotizaciones}
             onVer={handleVer}
             onEliminar={handleEliminar}
+          />
+        </main>
+      )}
+
+      {activeView === "catalogo-productos" && (
+        <main className="flex flex-1 flex-col overflow-hidden">
+          <header className="border-b border-slate-200 bg-white px-8 py-5">
+            <h1 className="text-xl font-semibold text-slate-900">
+              Catálogo de Productos
+            </h1>
+            <p className="text-sm text-slate-500">
+              Los productos y sus observaciones, guardados en la base de datos.
+              Lo que cambies aquí lo ve todo el equipo.
+            </p>
+          </header>
+
+          {error && (
+            <p className="border-b border-red-200 bg-red-50 px-8 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
+          <CatalogoProductos
+            productos={productos}
+            onProductosChange={setProductos}
+            onError={manejarError}
           />
         </main>
       )}

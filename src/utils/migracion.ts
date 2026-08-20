@@ -1,6 +1,6 @@
 import type { CotizacionGuardada } from "../types";
 import { pedir } from "./api";
-import type { ProductoPersonalizado } from "./productosPersonalizados";
+
 
 /**
  * Sube al servidor lo que quedó guardado en el navegador de cada persona,
@@ -25,9 +25,16 @@ function leerLista<T>(clave: string): T[] {
   }
 }
 
+/** Forma de los productos guardados en el navegador antes del backend. */
+interface ProductoLocal {
+  nombre: string;
+  descripcion: string;
+  observaciones: string;
+}
+
 export interface DatosLocales {
   cotizaciones: CotizacionGuardada[];
-  productos: ProductoPersonalizado[];
+  productos: ProductoLocal[];
 }
 
 /** Qué hay pendiente por subir, o null si no hay nada. */
@@ -41,7 +48,7 @@ export function datosLocalesPendientes(): DatosLocales | null {
   const cotizaciones = leerLista<CotizacionGuardada>(CLAVE_COTIZACIONES).filter(
     (c) => typeof c?.data?.numeroFactura === "string",
   );
-  const productos = leerLista<ProductoPersonalizado>(CLAVE_PRODUCTOS).filter(
+  const productos = leerLista<ProductoLocal>(CLAVE_PRODUCTOS).filter(
     (p) => typeof p?.nombre === "string" && p.nombre.trim() !== "",
   );
 

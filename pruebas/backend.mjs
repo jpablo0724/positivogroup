@@ -85,21 +85,52 @@ console.log("\n== Cotizaciones ==");
   comprobar("la que queda es la correcta", tras.cuerpo.cotizaciones[0].data.numeroFactura === "PG 0002/26");
 }
 
-console.log("\n== Productos ==");
+console.log("\n== Catálogo en la base de datos ==");
 {
-  await productos(req("/api/productos", { metodo: "POST", cuerpo: { nombre: "X01 - Parqueaderos", descripcion: "Desc", observaciones: "Obs" } }));
-  await productos(req("/api/productos", { metodo: "POST", cuerpo: { nombre: "A02 - Otro/Especial", descripcion: "D2", observaciones: "O2" } }));
+  // La primera consulta siembra el catálogo de servicios.
+  const inicial = await leer(await productos(req("/api/productos")));
+  comprobar("siembra los 21 servicios", inicial.cuerpo.productos.length === 21, `${inicial.cuerpo.productos.length}`);
+  comprobar("respeta el orden del catálogo (P01 primero)", inicial.cuerpo.productos[0].nombre.startsWith("P01"), inicial.cuerpo.productos[0].nombre.slice(0, 20));
+  comprobar("P08 va después de P10, como en el original",
+    inicial.cuerpo.productos.findIndex((p) => p.nombre.startsWith("P08")) >
+    inicial.cuerpo.productos.findIndex((p) => p.nombre.startsWith("P10")));
+  comprobar("trae descripción y observaciones", inicial.cuerpo.productos[0].descripcion.includes("ASCENSORES"));
 
-  const lista = await leer(await productos(req("/api/productos")));
-  comprobar("guarda y lista 2 productos", lista.cuerpo.productos.length === 2, `${lista.cuerpo.productos.length}`);
-  comprobar("ordenados alfabéticamente", lista.cuerpo.productos[0].nombre.startsWith("A02"));
+  // No debe volver a sembrar en cada consulta.
+  const segunda = await leer(await productos(req("/api/productos")));
+  comprobar("no duplica al consultar de nuevo", segunda.cuerpo.productos.length === 21, `${segunda.cuerpo.productos.length}`);
+
+  const P01 = inicial.cuerpo.productos[0].nombre;
+
+  // Editar un producto de fábrica.
+  await productos(req("/api/productos", { metodo: "POST", cuerpo: { nombre: P01, descripcion: "Descripción cambiada", observaciones: "Obs nuevas" } }));
+  const editado = await leer(await productos(req("/api/productos")));
+  const p01 = editado.cuerpo.productos.find((p) => p.nombre === P01);
+  comprobar("edita un servicio de fábrica", p01.descripcion === "Descripción cambiada", p01.descripcion);
+  comprobar("la edición no lo mueve de posición", editado.cuerpo.productos[0].nombre === P01);
+  comprobar("sigue habiendo 21", editado.cuerpo.productos.length === 21, `${editado.cuerpo.productos.length}`);
+
+  // Borrar un producto de fábrica y comprobar que NO reaparece.
+  await productos(req(`/api/productos/${encodeURIComponent(P01)}`, { metodo: "DELETE" }));
+  const tras = await leer(await productos(req("/api/productos")));
+  comprobar("elimina un servicio de fábrica", tras.cuerpo.productos.length === 20, `${tras.cuerpo.productos.length}`);
+  comprobar("el borrado NO reaparece al recargar", !tras.cuerpo.productos.some((p) => p.nombre === P01));
+
+  // Crear uno nuevo: va al final.
+  await productos(req("/api/productos", { metodo: "POST", cuerpo: { nombre: "X01 - Parqueaderos", descripcion: "Desc", observaciones: "Obs" } }));
+  const conNuevo = await leer(await productos(req("/api/productos")));
+  comprobar("el producto nuevo va al final", conNuevo.cuerpo.productos.at(-1).nombre === "X01 - Parqueaderos", conNuevo.cuerpo.productos.at(-1).nombre);
+
+  // Renombrar: conserva la posición y no deja duplicado.
+  const posicionAntes = conNuevo.cuerpo.productos.findIndex((p) => p.nombre === "X01 - Parqueaderos");
+  await productos(req("/api/productos", { metodo: "POST", cuerpo: { nombre: "X01 - Parqueaderos cubiertos", nombreAnterior: "X01 - Parqueaderos", descripcion: "Desc", observaciones: "Obs" } }));
+  const renombrado = await leer(await productos(req("/api/productos")));
+  comprobar("renombrar no deja duplicado", renombrado.cuerpo.productos.length === conNuevo.cuerpo.productos.length, `${renombrado.cuerpo.productos.length} vs ${conNuevo.cuerpo.productos.length}`);
+  comprobar("renombrar conserva la posición", renombrado.cuerpo.productos.findIndex((p) => p.nombre === "X01 - Parqueaderos cubiertos") === posicionAntes);
+  comprobar("el nombre viejo desapareció", !renombrado.cuerpo.productos.some((p) => p.nombre === "X01 - Parqueaderos"));
 
   const sinNombre = await leer(await productos(req("/api/productos", { metodo: "POST", cuerpo: { descripcion: "x" } })));
   comprobar("producto sin nombre -> 400", sinNombre.status === 400, sinNombre.cuerpo.error);
-
-  await productos(req(`/api/productos/${encodeURIComponent("A02 - Otro/Especial")}`, { metodo: "DELETE" }));
-  const tras = await leer(await productos(req("/api/productos")));
-  comprobar("elimina producto con barra en el nombre", tras.cuerpo.productos.length === 1, `${tras.cuerpo.productos.length}`);
 }
 
 console.log("\n== Numeración ==");
