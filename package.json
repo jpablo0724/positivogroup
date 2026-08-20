@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prueba:backend": "node pruebas/backend.mjs",
+    "prueba:ui": "node pruebas/frontend.mjs"
   },
   "dependencies": {
+    "@netlify/blobs": "^11.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

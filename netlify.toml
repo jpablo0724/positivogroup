@@ -15,6 +15,31 @@
   to = "/.netlify/functions/clientify/:splat"
   status = 200
 
+[[redirects]]
+  from = "/api/cotizaciones"
+  to = "/.netlify/functions/cotizaciones"
+  status = 200
+
+[[redirects]]
+  from = "/api/cotizaciones/*"
+  to = "/.netlify/functions/cotizaciones/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/productos"
+  to = "/.netlify/functions/productos"
+  status = 200
+
+[[redirects]]
+  from = "/api/productos/*"
+  to = "/.netlify/functions/productos/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/numero"
+  to = "/.netlify/functions/numero"
+  status = 200
+
 # La app es una SPA: cualquier otra ruta debe servir index.html
 [[redirects]]
   from = "/*"

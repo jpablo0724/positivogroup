@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Variables locales (nunca se suben)
+.env
+.env.*
+.netlify

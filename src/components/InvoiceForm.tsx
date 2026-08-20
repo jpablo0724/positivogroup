@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FORMAS_PAGO,
   PRODUCTOS,
@@ -23,6 +23,7 @@ import SelectorContacto from "./SelectorContacto";
 interface InvoiceFormProps {
   data: InvoiceData;
   onChange: (data: InvoiceData) => void;
+  onError: (err: unknown) => void;
 }
 
 const inputClass = selectTriggerClass;
@@ -71,7 +72,11 @@ function observacionesDeProductos(
   return bloques.join(SEPARADOR_OBSERVACIONES);
 }
 
-export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
+export default function InvoiceForm({
+  data,
+  onChange,
+  onError,
+}: InvoiceFormProps) {
   const [draft, setDraft] = useState<Draft>(draftVacio);
   // id del producto que se está editando; null mientras se captura uno nuevo.
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -80,11 +85,26 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
   const [contactosCliente, setContactosCliente] = useState<ContactoClientify[]>(
     [],
   );
-  // Productos creados a mano, que se suman al catálogo de servicios.
+  // Productos creados a mano, que se suman al catálogo de servicios. Viven en
+  // el servidor, así que se cargan al abrir el formulario.
   const [productosPropios, setProductosPropios] = useState<
     ProductoPersonalizado[]
-  >(() => listarProductosPersonalizados());
+  >([]);
   const [modalProductoAbierto, setModalProductoAbierto] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    listarProductosPersonalizados()
+      .then((productos) => {
+        if (!cancelado) setProductosPropios(productos);
+      })
+      .catch((err) => {
+        if (!cancelado) onError(err);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [onError]);
 
   const opcionesProducto = useMemo(
     () => [...PRODUCTOS, ...productosPropios.map((p) => p.nombre)],
@@ -170,9 +190,7 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
     });
   }
 
-  function crearProducto(producto: ProductoPersonalizado) {
-    const actualizados = guardarProductoPersonalizado(producto);
-    setProductosPropios(actualizados);
+  async function crearProducto(producto: ProductoPersonalizado) {
     setModalProductoAbierto(false);
 
     // Se deja elegido de una vez, que es para lo que se acaba de crear. El
@@ -185,6 +203,12 @@ export default function InvoiceForm({ data, onChange }: InvoiceFormProps) {
         observaciones: producto.observaciones,
       },
     });
+
+    try {
+      setProductosPropios(await guardarProductoPersonalizado(producto));
+    } catch (err) {
+      onError(err);
+    }
   }
 
   const draftValido =

@@ -1,41 +1,25 @@
-const STORAGE_KEY = "positivogroup:invoiceCounter";
+import { pedir } from "./api";
 
-interface CounterState {
-  year: number;
-  next: number;
+/**
+ * Numeración de las cotizaciones (PG 0001/26), llevada por el servidor para
+ * que dos personas trabajando a la vez nunca reciban el mismo número.
+ *
+ * `numeroProvisional` solo consulta cuál sería el siguiente, para mostrarlo
+ * mientras se llena el formulario. `apartarNumero` es el que lo consume, y se
+ * llama al guardar: así, abrir el formulario y no guardar no deja huecos en
+ * la secuencia.
+ */
+
+/** Cuál sería el siguiente número, sin apartarlo. */
+export async function numeroProvisional(): Promise<string> {
+  const { numero } = await pedir<{ numero: string }>("/api/numero");
+  return numero;
 }
 
-function readCounter(): CounterState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as CounterState;
-  } catch {
-    // localStorage no disponible o valor corrupto: se reinicia el contador
-  }
-  return { year: new Date().getFullYear() % 100, next: 1 };
-}
-
-function writeCounter(state: CounterState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // localStorage no disponible: el contador no persiste entre sesiones
-  }
-}
-
-export function nextInvoiceNumber(): string {
-  const currentYear = new Date().getFullYear() % 100;
-  let counter = readCounter();
-
-  if (counter.year !== currentYear) {
-    counter = { year: currentYear, next: 1 };
-  }
-
-  const numero = `PG ${String(counter.next).padStart(4, "0")}/${String(
-    currentYear,
-  ).padStart(2, "0")}`;
-
-  writeCounter({ year: currentYear, next: counter.next + 1 });
-
+/** Aparta el siguiente número de la secuencia y lo devuelve. */
+export async function apartarNumero(): Promise<string> {
+  const { numero } = await pedir<{ numero: string }>("/api/numero", {
+    metodo: "POST",
+  });
   return numero;
 }
