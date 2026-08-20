@@ -40,6 +40,14 @@ export function revisarAcceso(req: Request): Response | null {
   const esperado = process.env.APP_ACCESS_CODE;
 
   if (!esperado) {
+    // Diagnóstico para distinguir las causas posibles: que la variable no
+    // exista, que exista pero sin el scope "Functions", o que esté puesta en
+    // otro contexto de despliegue. Se listan solo NOMBRES de variables, nunca
+    // valores.
+    const nombresVisibles = Object.keys(process.env)
+      .filter((nombre) => /APP_|CLIENTIFY|CONTEXT|DEPLOY|SITE_NAME/i.test(nombre))
+      .sort();
+
     return json(
       {
         error: "falta_codigo_configurado",
@@ -47,6 +55,15 @@ export function revisarAcceso(req: Request): Response | null {
           "El backend no tiene definida la variable APP_ACCESS_CODE en " +
           "Netlify. Créala en Site configuration → Environment variables y " +
           "vuelve a desplegar.",
+        diagnostico: {
+          variableDefinida: "APP_ACCESS_CODE" in process.env,
+          contexto: process.env.CONTEXT ?? "(desconocido)",
+          nombresVisibles,
+          ayuda:
+            "Si variableDefinida es false pero la creaste, casi siempre es " +
+            "el scope: debe incluir Functions. Revísalo en la variable y " +
+            "vuelve a desplegar.",
+        },
       },
       503,
     );
