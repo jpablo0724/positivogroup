@@ -16,6 +16,8 @@ export interface EmpresaClientify {
   razonSocial: string;
   /** NIT registrado en el CRM (taxpayer_identification_number). */
   nit: string;
+  /** Empleados asociados a la empresa, ya listos para la cotización. */
+  contactos: ContactoClientify[];
 }
 
 export interface ContactoClientify {
@@ -79,46 +81,28 @@ export async function buscarEmpresas(
       nombre: texto(empresa.name),
       razonSocial: texto(empresa.business_name) || texto(empresa.name),
       nit: texto(empresa.taxpayer_identification_number),
+      contactos: comoEmpleados(empresa.employees),
     }))
     .filter((empresa) => Number.isFinite(empresa.id) && empresa.nombre !== "");
 }
 
 /**
- * Contactos registrados para la empresa. Se devuelven todos para que, cuando
- * hay más de uno, la interfaz permita elegir cuál va en la cotización.
+ * Los empleados llegan dentro de la empresa, con nombre y correo, así que no
+ * hace falta una segunda consulta al elegir el cliente.
  */
-export async function contactosDeEmpresa(
-  empresaId: number,
-  nombreEmpresa: string,
-): Promise<ContactoClientify[]> {
-  // Se envían id y nombre: el id permite usar el campo "employees" de la
-  // empresa, y el nombre queda como respaldo si esa lista viene vacía.
-  const cuerpo = await pedir(
-    `/api/clientify/contacts?empresaId=${empresaId}` +
-      `&empresa=${encodeURIComponent(nombreEmpresa)}`,
-  );
+function comoEmpleados(employees: unknown): ContactoClientify[] {
+  if (!Array.isArray(employees)) return [];
 
-  const contactos = comoLista(cuerpo).map((contacto) => {
-    const emails = Array.isArray(contacto.emails) ? contacto.emails : [];
-    const primerEmail = emails
-      .map((entrada) =>
-        typeof entrada === "object" && entrada !== null
-          ? texto((entrada as { email?: unknown }).email)
-          : texto(entrada),
-      )
-      .find(Boolean);
-
-    return {
-      nombre:
-        texto(contacto.full_name) ||
-        [texto(contacto.first_name), texto(contacto.last_name)]
+  return employees
+    .map((entrada) => {
+      const empleado = (entrada ?? {}) as Record<string, unknown>;
+      return {
+        nombre: [texto(empleado.first_name), texto(empleado.last_name)]
           .filter(Boolean)
-          .join(" "),
-      email: primerEmail ?? "",
-    };
-  });
-
-  // Se descartan los registros sin nombre ni email, que no aportan nada al
-  // momento de elegir.
-  return contactos.filter((c) => c.nombre !== "" || c.email !== "");
+          .join(" ")
+          .trim(),
+        email: texto(empleado.email),
+      };
+    })
+    .filter((empleado) => empleado.nombre !== "" || empleado.email !== "");
 }

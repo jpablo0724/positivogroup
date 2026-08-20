@@ -29,17 +29,19 @@ const RECURSOS_PERMITIDOS = new Set(["me", "companies", "contacts"]);
 
 // La v2 obliga a declarar qué campos se quieren.
 const CAMPOS_POR_DEFECTO: Record<string, string> = {
-  // "employees" trae los contactos asociados a la empresa: es el vínculo
-  // fiable, porque cruzar por nombre falla en cuanto difieren ("Redcol
-  // Holding" vs "Redcol Holding S.A.S").
+  // "employees" llega con los contactos completos (id, nombre, email), así que
+  // la búsqueda de empresas ya trae todo lo necesario para la cotización y no
+  // hace falta una segunda consulta.
   companies:
-    "id,name,business_name,taxpayer_identification_number,employees,employees_count",
+    "id,name,business_name,taxpayer_identification_number,employees",
   contacts: "id,full_name,first_name,last_name,emails,phones,company,company_name",
 };
 
-const TAMANO_PAGINA = 200;
+const TAMANO_PAGINA = 500;
 const MAXIMO_PAGINAS = 30;
-const VIGENCIA_CACHE_MS = 5 * 60 * 1000;
+// El catálogo de empresas cambia poco durante una jornada de trabajo, así que
+// se conserva un buen rato: cada descarga completa son varias páginas.
+const VIGENCIA_CACHE_MS = 20 * 60 * 1000;
 
 type Registro = Record<string, unknown>;
 
@@ -62,38 +64,6 @@ function normalizar(valor: unknown): string {
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim();
-}
-
-/**
- * Saca los ids de contacto del campo "employees" de una empresa. No está
- * documentado si viene como números, como URLs o como objetos, así que se
- * contemplan las tres formas.
- */
-function idsDeEmpleados(employees: unknown): number[] {
-  if (!Array.isArray(employees)) return [];
-
-  return employees
-    .map((entrada) => {
-      if (typeof entrada === "number") return entrada;
-
-      if (typeof entrada === "string") {
-        // Formato URL: https://.../contacts/167216500/
-        const encontrado = entrada.match(/(\d+)\/?$/);
-        return encontrado ? Number(encontrado[1]) : NaN;
-      }
-
-      if (typeof entrada === "object" && entrada !== null) {
-        const objeto = entrada as { id?: unknown; url?: unknown };
-        if (typeof objeto.id === "number") return objeto.id;
-        if (typeof objeto.url === "string") {
-          const encontrado = objeto.url.match(/(\d+)\/?$/);
-          return encontrado ? Number(encontrado[1]) : NaN;
-        }
-      }
-
-      return NaN;
-    })
-    .filter((id) => Number.isFinite(id));
 }
 
 async function pedirAClientify(url: URL, token: string): Promise<Response> {
@@ -193,7 +163,6 @@ export default async (req: Request) => {
   }
 
   const buscar = entrante.searchParams.get("buscar");
-  const empresa = entrante.searchParams.get("empresa");
   const empresaId = entrante.searchParams.get("empresaId");
 
   try {
@@ -217,64 +186,17 @@ export default async (req: Request) => {
       return json({ count: coincidencias.length, results: coincidencias });
     }
 
-    // --- Empleados (contactos) de una empresa ---
-    if (recurso === "contacts" && (empresaId !== null || empresa !== null)) {
-      const todos = await catalogoCompleto("contacts", token);
+    // --- Empleados de una empresa, tomados del catálogo ya cacheado ---
+    if (recurso === "contacts" && empresaId !== null) {
+      const empresas = await catalogoCompleto("companies", token);
+      const laEmpresa = empresas.find(
+        (registro) => String(registro.id) === empresaId,
+      );
+      const empleados = Array.isArray(laEmpresa?.employees)
+        ? laEmpresa.employees
+        : [];
 
-      // Vía principal: los ids que la propia empresa lista en "employees".
-      if (empresaId !== null) {
-        const empresas = await catalogoCompleto("companies", token);
-        const laEmpresa = empresas.find(
-          (registro) => String(registro.id) === empresaId,
-        );
-
-        const ids = new Set(idsDeEmpleados(laEmpresa?.employees));
-
-        if (ids.size > 0) {
-          const coincidencias = todos.filter((registro) =>
-            ids.has(Number(registro.id)),
-          );
-          return json({
-            count: coincidencias.length,
-            results: coincidencias,
-            origen: "employees",
-          });
-        }
-
-        // Si la empresa no lista empleados, se intenta por nombre antes de
-        // darla por vacía.
-        if (empresa === null && laEmpresa) {
-          const porNombre = normalizar(laEmpresa.name);
-          const coincidencias = todos.filter(
-            (registro) =>
-              normalizar(registro.company) === porNombre ||
-              normalizar(registro.company_name) === porNombre,
-          );
-          return json({
-            count: coincidencias.length,
-            results: coincidencias,
-            origen: "nombre",
-          });
-        }
-      }
-
-      // Respaldo: cruce por nombre de empresa.
-      const objetivo = normalizar(empresa);
-      if (objetivo.length < 2) return json({ count: 0, results: [] });
-
-      const coincidencias = todos
-        .filter(
-          (registro) =>
-            normalizar(registro.company) === objetivo ||
-            normalizar(registro.company_name) === objetivo,
-        )
-        .slice(0, 20);
-
-      return json({
-        count: coincidencias.length,
-        results: coincidencias,
-        origen: "nombre",
-      });
+      return json({ count: empleados.length, results: empleados });
     }
 
     // --- Paso directo, útil para inspeccionar la API desde el navegador ---

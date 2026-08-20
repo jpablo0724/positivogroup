@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   buscarEmpresas,
-  contactosDeEmpresa,
   ClientifyNoDisponible,
   type ContactoClientify,
   type EmpresaClientify,
@@ -21,7 +20,7 @@ interface BuscadorClienteProps {
   onSeleccionar: (cliente: ClienteSeleccionado) => void;
 }
 
-const MINIMO_CARACTERES = 3;
+const MINIMO_CARACTERES = 2;
 
 /**
  * Campo de razón social con búsqueda en Clientify. Se puede escribir
@@ -95,7 +94,7 @@ export default function BuscadorCliente({
       } finally {
         if (!cancelado) setBuscando(false);
       }
-    }, 400);
+    }, 200);
 
     return () => {
       cancelado = true;
@@ -103,32 +102,24 @@ export default function BuscadorCliente({
     };
   }, [value]);
 
-  async function elegir(empresa: EmpresaClientify) {
+  function elegir(empresa: EmpresaClientify) {
     valorAutocompletado.current = empresa.razonSocial;
     setAbierto(false);
     setSugerencias([]);
-    setContactosParaElegir([]);
 
-    // Razón social y NIT se completan siempre al elegir la empresa.
-    onSeleccionar({ razonSocial: empresa.razonSocial, nit: empresa.nit });
+    // Los empleados vienen dentro de la empresa, así que no hay que esperar
+    // otra consulta: con un solo contacto se completa directo y con varios se
+    // muestran para elegir.
+    const contactos = empresa.contactos;
+    const unico = contactos.length === 1 ? contactos[0] : null;
 
-    try {
-      const contactos = await contactosDeEmpresa(empresa.id, empresa.nombre);
+    onSeleccionar({
+      razonSocial: empresa.razonSocial,
+      nit: empresa.nit,
+      ...(unico ? { contacto: unico.nombre, email: unico.email } : {}),
+    });
 
-      if (contactos.length === 1) {
-        // Con un solo contacto no hay nada que decidir: se completa directo.
-        onSeleccionar({
-          razonSocial: empresa.razonSocial,
-          nit: empresa.nit,
-          contacto: contactos[0].nombre,
-          email: contactos[0].email,
-        });
-      } else if (contactos.length > 1) {
-        setContactosParaElegir(contactos);
-      }
-    } catch {
-      // Sin contactos disponibles se deja lo que ya se completó.
-    }
+    setContactosParaElegir(contactos.length > 1 ? contactos : []);
   }
 
   function elegirContacto(contacto: ContactoClientify) {
