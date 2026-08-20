@@ -227,6 +227,50 @@ console.log("\n== Catálogo de productos ==");
 }
 await page.screenshot({ path: `${OUT}/B6-catalogo.png`, fullPage: true });
 
+console.log("\n== Producto sin cantidad ni precio ==");
+{
+  await page.evaluate((c) => localStorage.setItem("positivogroup:codigoAcceso", c), CODIGO);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.click("text=Crear Cotización");
+  await page.waitForSelector('button:has-text("Selecciona un producto")');
+
+  // Elegir solo el producto, sin tocar cantidad ni precio.
+  await page.click('button:has-text("Selecciona un producto")');
+  await page.click("text=P01 - Publicidad en Ascensores");
+  await page.waitForTimeout(200);
+
+  const boton = page.locator('div.bg-slate-50 button:has-text("Agregar producto")');
+  comprobar("el botón se habilita solo con el producto", await boton.isEnabled());
+
+  await boton.click();
+  await page.waitForTimeout(300);
+
+  const tabla = await page.locator("#invoice-preview table").innerText();
+  comprobar("el producto aparece en la cotización", tabla.includes("P01 - Publicidad en Ascensores"));
+  comprobar("la descripción aparece debajo del nombre", tabla.includes("DESCRIPCION EDITADA") || tabla.includes("PUBLICIDAD EN ASCENSORES"), tabla.split("\n")[2]);
+  comprobar("cantidad y precio salen con raya, no en cero", !tabla.includes("$ 0"), tabla.replace(/\n/g, " | ").slice(0, 160));
+
+  // Y el total sigue en cero, sin romperse.
+  const totales = await page.locator("#invoice-preview").innerText();
+  comprobar("el TOTAL queda en cero", /TOTAL\s*\$\s*0/.test(totales.replace(/\u00a0/g, " ")));
+
+  // Ahora sí ponerle precio: debe recalcular.
+  await page.locator("div.rounded-lg.border").filter({ hasText: "1. P01" }).first()
+    .locator('button:has-text("Editar")').click();
+  await page.waitForTimeout(200);
+  const card = page.locator("div.bg-slate-50").first();
+  comprobar("al editar, cantidad queda vacía y no en 0", (await card.locator('input[type="number"]').nth(0).inputValue()) === "");
+
+  await card.locator('input[type="number"]').nth(0).fill("3");
+  await card.locator('input[type="number"]').nth(1).fill("500000");
+  await card.locator('button:has-text("Guardar cambios")').click();
+  await page.waitForTimeout(300);
+
+  const conPrecio = (await page.locator("#invoice-preview").innerText()).replace(/\u00a0/g, " ");
+  comprobar("al ponerle precio recalcula", conPrecio.includes("$ 1.500.000"), conPrecio.match(/\$ [\d.]+/g)?.join(" / "));
+}
+await page.screenshot({ path: `${OUT}/B7-sin-precio.png`, fullPage: true });
+
 console.log("\n== El código deja de servir ==");
 {
   await page.evaluate(() => localStorage.setItem("positivogroup:codigoAcceso", "ya-no-sirve"));

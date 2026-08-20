@@ -142,14 +142,21 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
                       </div>
                     )}
                   </td>
+                  {/* Un producto puede ir sin cantidad o sin precio (los
+                      bonificados, por ejemplo). En ese caso la celda va con
+                      raya en vez de un cero que parecería un error. */}
                   <td className={`${cell} text-center`}>
-                    {formatNumber(item.cantidad)}
+                    {item.cantidad > 0 ? formatNumber(item.cantidad) : "—"}
                   </td>
                   <td className={`${cell} text-right`}>
-                    {formatCurrency(item.precioUnitario)}
+                    {item.precioUnitario > 0
+                      ? formatCurrency(item.precioUnitario)
+                      : "—"}
                   </td>
                   <td className={`${cell} text-right`}>
-                    {formatCurrency(t.inversionTotalAntesIva)}
+                    {t.inversionTotalAntesIva > 0
+                      ? formatCurrency(t.inversionTotalAntesIva)
+                      : "—"}
                   </td>
                 </tr>
               );

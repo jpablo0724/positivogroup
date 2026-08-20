@@ -195,10 +195,9 @@ export default function InvoiceForm({
     }
   }
 
-  const draftValido =
-    draft.nombreProducto !== "" &&
-    Number(draft.cantidad) > 0 &&
-    Number(draft.precioUnitario) > 0;
+  // Basta con elegir el producto: cantidad y precio son opcionales, para poder
+  // incluir en la cotización servicios sin valor, como los bonificados.
+  const draftValido = draft.nombreProducto !== "";
 
   function guardarProducto() {
     if (!draftValido) return;
@@ -232,8 +231,11 @@ export default function InvoiceForm({
     setDraft({
       nombreProducto: item.nombreProducto,
       descripcionProducto: item.descripcionProducto,
-      cantidad: String(item.cantidad),
-      precioUnitario: String(item.precioUnitario),
+      // Un valor en cero se muestra vacío, no como "0": significa que el
+      // producto va sin cantidad o sin precio.
+      cantidad: item.cantidad > 0 ? String(item.cantidad) : "",
+      precioUnitario:
+        item.precioUnitario > 0 ? String(item.precioUnitario) : "",
     });
     setEditandoId(item.id);
   }
@@ -421,8 +423,16 @@ export default function InvoiceForm({
                     {index + 1}. {item.nombreProducto}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    Cantidad: {formatNumber(item.cantidad)} · Precio unitario:{" "}
-                    {formatCurrency(item.precioUnitario)}
+                    {[
+                      item.cantidad > 0
+                        ? `Cantidad: ${formatNumber(item.cantidad)}`
+                        : null,
+                      item.precioUnitario > 0
+                        ? `Precio unitario: ${formatCurrency(item.precioUnitario)}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "Sin cantidad ni precio"}
                   </p>
                   {editandoId === item.id && (
                     <p className="mt-1 text-xs font-medium text-emerald-700">
@@ -477,7 +487,9 @@ export default function InvoiceForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Cantidad</label>
+              <label className={labelClass}>
+                Cantidad <span className="text-slate-400">(opcional)</span>
+              </label>
               <input
                 type="number"
                 min={0}
@@ -488,7 +500,10 @@ export default function InvoiceForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Precio unitario</label>
+              <label className={labelClass}>
+                Precio unitario{" "}
+                <span className="text-slate-400">(opcional)</span>
+              </label>
               <input
                 type="number"
                 min={0}
@@ -523,7 +538,7 @@ export default function InvoiceForm({
           <p className="mt-2 text-[11px] text-slate-400">
             {editandoId
               ? "Estás editando un producto ya agregado a la cotización."
-              : "Se agrega a la cotización y los campos quedan vacíos para seguir agregando productos."}
+              : "Basta con elegir el producto. Si dejas cantidad o precio vacíos, aparece en la cotización sin valor."}
           </p>
         </div>
       </section>
