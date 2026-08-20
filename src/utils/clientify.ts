@@ -88,10 +88,14 @@ export async function buscarEmpresas(
  * hay más de uno, la interfaz permita elegir cuál va en la cotización.
  */
 export async function contactosDeEmpresa(
+  empresaId: number,
   nombreEmpresa: string,
 ): Promise<ContactoClientify[]> {
+  // Se envían id y nombre: el id permite usar el campo "employees" de la
+  // empresa, y el nombre queda como respaldo si esa lista viene vacía.
   const cuerpo = await pedir(
-    `/api/clientify/contacts?empresa=${encodeURIComponent(nombreEmpresa)}`,
+    `/api/clientify/contacts?empresaId=${empresaId}` +
+      `&empresa=${encodeURIComponent(nombreEmpresa)}`,
   );
 
   const contactos = comoLista(cuerpo).map((contacto) => {

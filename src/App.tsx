@@ -21,7 +21,7 @@ function createInitialInvoice(): InvoiceData {
     ivaPorcentaje: 19,
     observaciones: "",
     cliente: {
-      razonSocial: "Positivo Group",
+      razonSocial: "",
       nit: "",
       email: "",
       contacto: "",
