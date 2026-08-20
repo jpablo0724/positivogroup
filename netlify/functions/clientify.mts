@@ -34,13 +34,24 @@ export default async (req: Request) => {
   const token = process.env.CLIENTIFY_API_TOKEN;
 
   if (!token) {
+    // Diagnóstico: se listan solo los NOMBRES de variables visibles para la
+    // función (nunca sus valores), para distinguir entre "la variable no
+    // llegó al despliegue" y "llegó pero vacía".
+    const nombresVisibles = Object.keys(process.env)
+      .filter((nombre) => /CLIENTIFY|CONTEXT|DEPLOY/i.test(nombre))
+      .sort();
+
     return json(
       {
         error: "falta_token",
         mensaje:
-          "No está configurada la variable CLIENTIFY_API_TOKEN en Netlify " +
-          "(Site configuration → Environment variables). Después de agregarla " +
-          "hay que volver a desplegar el sitio.",
+          "La función no puede leer CLIENTIFY_API_TOKEN. Si la variable ya " +
+          "está creada en Netlify, hay que desplegar de nuevo para que entre.",
+        diagnostico: {
+          variableDefinida: "CLIENTIFY_API_TOKEN" in process.env,
+          contexto: process.env.CONTEXT ?? "(desconocido)",
+          variablesVisibles: nombresVisibles,
+        },
       },
       503,
     );
