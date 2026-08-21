@@ -19,5 +19,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts"]
+  // Las funciones del backend también se revisan aquí: antes solo entraba
+  // vite.config.ts, así que un error de tipos en netlify/ no aparecía hasta
+  // que fallara en producción.
+  "include": ["vite.config.ts", "netlify/**/*.mts"]
 }
