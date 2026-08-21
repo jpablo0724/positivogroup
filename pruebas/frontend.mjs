@@ -617,15 +617,17 @@ console.log("\n== Enviar a Clientify ==");
 
   const fila = page.locator("tbody tr").filter({ hasText: "Redcol Holding" });
   await fila.locator('button[aria-label="Enviar a Clientify"]').click();
-  await page.waitForSelector("text=Esto es lo que se va a guardar");
+  await page.waitForSelector("text=Así se verá en la ficha");
   comprobar("muestra la nota antes de mandarla", true);
 
-  const vistaPrevia = await page.locator('[role="dialog"] pre').innerText();
+  const caja = page.locator('[role="dialog"] div[class*="[&_a]"]');
+  const vistaPrevia = await caja.innerText();
   comprobar("la nota lleva el número", vistaPrevia.includes("COTIZACIÓN N° PG 0500/26"), vistaPrevia.split("\n")[0]);
   comprobar("son solo dos líneas: número y enlace", vistaPrevia.trim().split("\n").length === 2,
     JSON.stringify(vistaPrevia.trim()));
   comprobar("NO manda el detalle de productos", !vistaPrevia.includes("P01 - Ascensores"));
   comprobar("NO manda los totales", !vistaPrevia.includes("IVA"));
+  comprobar("el enlace es un hipervínculo de verdad", (await caja.locator("a").count()) === 1);
   await page.screenshot({ path: `${OUT}/C4-nota.png`, fullPage: true });
 
   comprobar("todavía no ha escrito en el CRM", clientify.notas.length === 0);
@@ -788,10 +790,15 @@ console.log("\n== Botones del listado y enlace público ==");
   const url = await page.locator('[role="dialog"] input[readonly]').inputValue();
   comprobar("genera el enlace público", /\/c\/[A-Za-z0-9_-]+$/.test(url), url);
 
-  const nota = await page.locator('[role="dialog"] pre').innerText();
-  comprobar("la nota lleva el enlace", nota.includes(url));
+  const caja = page.locator('[role="dialog"] div[class*="[&_a]"]');
+  const nota = await caja.innerText();
   comprobar("la nota es solo número y enlace", nota.trim() === `COTIZACIÓN N° PG 0500/26\n${url}`,
     JSON.stringify(nota.trim()));
+
+  const ancla = caja.locator("a");
+  comprobar("el enlace va hipervinculado", (await ancla.count()) === 1);
+  comprobar("apunta a la cotización", (await ancla.getAttribute("href")) === url, await ancla.getAttribute("href"));
+  comprobar("abre en otra pestaña", (await ancla.getAttribute("target")) === "_blank");
   await page.screenshot({ path: `${OUT}/D2-enlace.png`, fullPage: true });
   await page.click('button:has-text("Cancelar")');
 

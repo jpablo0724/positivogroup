@@ -187,11 +187,15 @@ export default function ModalEnviarClientify({
             estado.paso === "error") && (
             <>
               <p className="mt-3 mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-                Esto es lo que se va a guardar
+                Así se verá en la ficha de la empresa
               </p>
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-                {nota}
-              </pre>
+              {/* La nota es HTML armado aquí mismo, con el número y la URL
+                  escapados, así que se puede pintar tal cual para que se vea
+                  el enlace como quedará en Clientify. */}
+              <div
+                className="max-h-64 overflow-auto break-words rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 [&_a]:text-blue-700 [&_a]:underline"
+                dangerouslySetInnerHTML={{ __html: nota }}
+              />
             </>
           )}
         </div>

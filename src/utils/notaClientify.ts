@@ -22,15 +22,29 @@ export async function enlacePublico(numeroFactura: string): Promise<string> {
   return `${window.location.origin}/c/${testigo}`;
 }
 
+function escaparHtml(valor: string): string {
+  return valor
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /**
- * Cuerpo de la nota: el número de la cotización y el enlace, nada más. El
- * detalle completo está a un clic en el enlace, así que repetirlo aquí solo
- * llenaba el historial del CRM.
+ * Cuerpo de la nota: el número de la cotización y el enlace, nada más.
+ *
+ * Va en HTML porque Clientify lo renderiza como tal —se vio en que colapsó el
+ * salto de línea del texto plano—, así que el enlace tiene que ir con <a> para
+ * poder abrirse desde la ficha. El texto del enlace es la propia dirección: si
+ * algún día Clientify quitara las etiquetas, la URL seguiría a la vista para
+ * copiarla.
  */
 export function textoDeNota(data: InvoiceData, enlace?: string): string {
-  const lineas = [`COTIZACIÓN N° ${data.numeroFactura}`];
-  if (enlace) lineas.push(enlace);
-  return lineas.join("\n");
+  const numero = escaparHtml(`COTIZACIÓN N° ${data.numeroFactura}`);
+  if (!enlace) return numero;
+
+  const url = escaparHtml(enlace);
+  return `${numero}<br><a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
 }
 
 /** Quita acentos y mayúsculas, para comparar nombres de empresa. */
