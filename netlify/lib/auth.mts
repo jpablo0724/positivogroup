@@ -35,6 +35,8 @@ export const MINIMO_CONTRASENA = 8;
 export interface Usuario {
   email: string;
   nombre: string;
+  /** La primera cuenta registrada queda como administradora. */
+  admin?: boolean;
   /** Derivación scrypt de la contraseña, en hexadecimal. */
   clave: string;
   /** Sal usada para derivarla, en hexadecimal. */
@@ -46,6 +48,8 @@ export interface Usuario {
 export interface UsuarioPublico {
   email: string;
   nombre: string;
+  admin: boolean;
+  creadoEn?: string;
 }
 
 interface Sesion {
@@ -120,7 +124,92 @@ export async function crearUsuario(usuario: Usuario): Promise<Usuario | null> {
 }
 
 export function comoPublico(usuario: Usuario): UsuarioPublico {
-  return { email: usuario.email, nombre: usuario.nombre };
+  return {
+    email: usuario.email,
+    nombre: usuario.nombre,
+    admin: esAdmin(usuario),
+    creadoEn: usuario.creadoEn,
+  };
+}
+
+/**
+ * Es administrador quien registró la primera cuenta, o quien esté en la
+ * variable ADMIN_EMAILS de Netlify (separada por comas).
+ *
+ * Las dos vías suman, no se excluyen: si la primera cuenta la creó otra
+ * persona por error, basta con agregar el correo correcto a la variable, sin
+ * tocar los datos.
+ */
+export function esAdmin(usuario: Usuario): boolean {
+  const declarados = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((correo) => normalizarEmail(correo))
+    .filter(Boolean);
+
+  return usuario.admin === true || declarados.includes(usuario.email);
+}
+
+const CLAVE_PRIMER_USUARIO = "primer_usuario_registrado";
+
+/**
+ * Reclama el puesto de primera cuenta. `onlyIfNew` hace que solo una lo
+ * consiga, aunque dos personas se registren en el mismo instante.
+ */
+export async function reclamarPrimerUsuario(email: string): Promise<boolean> {
+  const { modified } = await getStore({
+    name: "contadores",
+    consistency: "strong",
+  }).setJSON(
+    CLAVE_PRIMER_USUARIO,
+    { email: normalizarEmail(email), fecha: new Date().toISOString() },
+    { onlyIfNew: true },
+  );
+  return modified;
+}
+
+/** Todas las cuentas, para la pantalla de administración. */
+export async function listarUsuarios(): Promise<Usuario[]> {
+  const almacen = almacenUsuarios();
+  const { blobs } = await almacen.list();
+  const cuentas = await Promise.all(
+    blobs.map((blob) => almacen.get(blob.key, { type: "json" })),
+  );
+  return (cuentas.filter(Boolean) as Usuario[]).sort((a, b) =>
+    (a.creadoEn ?? "").localeCompare(b.creadoEn ?? ""),
+  );
+}
+
+/** Reemplaza la contraseña de una cuenta que ya existe. */
+export async function guardarUsuario(usuario: Usuario): Promise<void> {
+  await almacenUsuarios().setJSON(claveUsuario(usuario.email), usuario);
+}
+
+export async function eliminarUsuario(email: string): Promise<void> {
+  await almacenUsuarios().delete(claveUsuario(email));
+}
+
+/**
+ * Cierra todas las sesiones abiertas de una cuenta. Es lo que le da sentido a
+ * restablecer una contraseña: si las sesiones siguieran vivas, cambiarla no
+ * sacaría a nadie.
+ */
+export async function cerrarSesionesDe(email: string): Promise<void> {
+  const almacen = almacenSesiones();
+  const correo = normalizarEmail(email);
+  const { blobs } = await almacen.list();
+
+  const suyas = await Promise.all(
+    blobs.map(async (blob) => {
+      const sesion = (await almacen.get(blob.key, {
+        type: "json",
+      })) as Sesion | null;
+      return sesion?.email === correo ? blob.key : null;
+    }),
+  );
+
+  await Promise.all(
+    suyas.filter(Boolean).map((clave) => almacen.delete(clave as string)),
+  );
 }
 
 // --- Sesiones ---

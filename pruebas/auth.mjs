@@ -6,6 +6,7 @@ process.env.APP_ACCESS_CODE = CODIGO_EMPRESA;
 
 const { default: auth } = await import("../netlify/functions/auth.mts");
 const { default: cotizaciones } = await import("../netlify/functions/cotizaciones.mts");
+const { default: admin } = await import("../netlify/functions/admin.mts");
 
 const BASE = "https://cotizador-positivo.netlify.app";
 
@@ -159,6 +160,99 @@ console.log("\n== El testigo no se guarda en claro ==");
   const { blobs } = await sesiones.list();
   comprobar("ninguna clave de sesión es el testigo", !blobs.some((b) => b.key === testigo), `${blobs.length} sesión(es)`);
   comprobar("las claves son huellas de 64 hex", blobs.every((b) => /^[0-9a-f]{64}$/.test(b.key)), blobs[0]?.key.slice(0, 20));
+}
+
+console.log("\n== Administración ==");
+{
+  // Juan fue el primero en registrarse: es el administrador.
+  const entrarJuan = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CUENTA.contrasena } })));
+  const cookieAdmin = comoCookie(entrarJuan.cookie);
+  comprobar("el primero en registrarse es admin", entrarJuan.cuerpo.usuario?.admin === true, `admin=${entrarJuan.cuerpo.usuario?.admin}`);
+
+  // "Otra Persona" se registró después: NO es admin.
+  const entrarOtra = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "otra@positivogroup.com", contrasena: CUENTA.contrasena } })));
+  const cookieOtra = comoCookie(entrarOtra.cookie);
+  comprobar("los demás NO son admin", entrarOtra.cuerpo.usuario?.admin === false, `admin=${entrarOtra.cuerpo.usuario?.admin}`);
+
+  // Un usuario normal no puede tocar la administración.
+  const prohibido = await leer(await admin(req("/api/admin/usuarios", { metodo: "GET", cookie: cookieOtra })));
+  comprobar("un usuario normal -> 403", prohibido.status === 403, prohibido.cuerpo.error);
+
+  const sinSesion = await leer(await admin(req("/api/admin/usuarios", { metodo: "GET" })));
+  comprobar("sin sesión -> 401", sinSesion.status === 401, sinSesion.cuerpo.error);
+
+  const lista = await leer(await admin(req("/api/admin/usuarios", { metodo: "GET", cookie: cookieAdmin })));
+  comprobar("el admin ve las cuentas", lista.cuerpo.usuarios?.length === 2, `${lista.cuerpo.usuarios?.length} cuentas`);
+  comprobar("la lista NO trae hashes ni sales",
+    !JSON.stringify(lista.cuerpo).match(/"clave"|"sal"/), JSON.stringify(lista.cuerpo).slice(0, 120));
+
+  // Restablecer la contraseña de otra persona.
+  const NUEVA = "contrasenaTemporal99";
+  const reset = await leer(await admin(req("/api/admin/restablecer", { cookie: cookieAdmin, cuerpo: { email: "otra@positivogroup.com", contrasena: NUEVA } })));
+  comprobar("el admin restablece -> 200", reset.status === 200, `status ${reset.status}`);
+
+  const conNueva = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "otra@positivogroup.com", contrasena: NUEVA } })));
+  comprobar("entra con la contraseña nueva", conNueva.status === 200, `status ${conNueva.status}`);
+
+  const conVieja = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "otra@positivogroup.com", contrasena: CUENTA.contrasena } })));
+  comprobar("la contraseña vieja ya no sirve", conVieja.status === 401, conVieja.cuerpo.error);
+
+  // Lo importante: restablecer corta las sesiones que estaban abiertas.
+  const sesionVieja = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieOtra })));
+  comprobar("restablecer cierra sus sesiones abiertas", sesionVieja.status === 401, sesionVieja.cuerpo.error);
+
+  const corta = await leer(await admin(req("/api/admin/restablecer", { cookie: cookieAdmin, cuerpo: { email: "otra@positivogroup.com", contrasena: "abc" } })));
+  comprobar("contraseña temporal corta -> 400", corta.status === 400, corta.cuerpo.error);
+
+  const noExiste = await leer(await admin(req("/api/admin/restablecer", { cookie: cookieAdmin, cuerpo: { email: "nadie@positivogroup.com", contrasena: NUEVA } })));
+  comprobar("restablecer a quien no existe -> 404", noExiste.status === 404, noExiste.cuerpo.error);
+
+  // El admin no puede eliminarse a sí mismo.
+  const suicidio = await leer(await admin(req(`/api/admin/usuarios/${encodeURIComponent(CUENTA.email)}`, { metodo: "DELETE", cookie: cookieAdmin })));
+  comprobar("el admin no puede eliminarse", suicidio.status === 400, suicidio.cuerpo.error);
+
+  // Quitarle el acceso a alguien.
+  const cookieOtraNueva = comoCookie(conNueva.cookie);
+  const quitado = await leer(await admin(req(`/api/admin/usuarios/${encodeURIComponent("otra@positivogroup.com")}`, { metodo: "DELETE", cookie: cookieAdmin })));
+  comprobar("quita el acceso -> 200", quitado.status === 200, `status ${quitado.status}`);
+
+  const yaNo = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "otra@positivogroup.com", contrasena: NUEVA } })));
+  comprobar("la cuenta eliminada no puede entrar", yaNo.status === 401, yaNo.cuerpo.error);
+
+  const sesionCortada = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieOtraNueva })));
+  comprobar("eliminar cierra su sesión abierta", sesionCortada.status === 401, sesionCortada.cuerpo.error);
+}
+
+console.log("\n== Cambiar la propia contraseña ==");
+{
+  const entrada = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CUENTA.contrasena } })));
+  const cookieA = comoCookie(entrada.cookie);
+  // Una segunda sesión, como si hubiera quedado abierta en otro equipo.
+  const otraSesion = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CUENTA.contrasena } })));
+  const cookieB = comoCookie(otraSesion.cookie);
+
+  const malActual = await leer(await auth(req("/api/auth/contrasena", { cookie: cookieA, cuerpo: { actual: "equivocada", nueva: "otraClaveLarga1" } })));
+  comprobar("contraseña actual equivocada -> 403", malActual.status === 403, malActual.cuerpo.error);
+
+  const nuevaCorta = await leer(await auth(req("/api/auth/contrasena", { cookie: cookieA, cuerpo: { actual: CUENTA.contrasena, nueva: "abc" } })));
+  comprobar("nueva demasiado corta -> 400", nuevaCorta.status === 400, nuevaCorta.cuerpo.error);
+
+  const sinSesion = await leer(await auth(req("/api/auth/contrasena", { cuerpo: { actual: CUENTA.contrasena, nueva: "otraClaveLarga1" } })));
+  comprobar("sin sesión -> 401", sinSesion.status === 401, sinSesion.cuerpo.error);
+
+  const CAMBIADA = "miClaveNuevaSegura7";
+  const bien = await leer(await auth(req("/api/auth/contrasena", { cookie: cookieA, cuerpo: { actual: CUENTA.contrasena, nueva: CAMBIADA } })));
+  comprobar("cambia bien -> 200", bien.status === 200, `status ${bien.status}`);
+  comprobar("entrega sesión nueva", bien.cookie.includes("pg_sesion="));
+
+  const conNueva = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CAMBIADA } })));
+  comprobar("entra con la contraseña cambiada", conNueva.status === 200, `status ${conNueva.status}`);
+
+  const laOtra = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieB })));
+  comprobar("cierra la sesión del otro equipo", laOtra.status === 401, laOtra.cuerpo.error);
+
+  const nueva = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: comoCookie(bien.cookie) })));
+  comprobar("la sesión recién abierta sí sirve", nueva.status === 200, `status ${nueva.status}`);
 }
 
 console.log(fallos === 0 ? "\nTODO OK\n" : `\n${fallos} FALLA(S)\n`);

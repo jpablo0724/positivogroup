@@ -51,6 +51,7 @@ function armarApi(page) {
 
       if (accion === "sesion") {
         if (!email) return responder({ error: "sin_sesion" }, 401);
+
         return responder({ usuario: usuarios.get(email) });
       }
       if (accion === "salir") {
@@ -62,10 +63,22 @@ function armarApi(page) {
         if (cuerpo.codigo !== CODIGO) return responder({ error: "codigo_empresa_invalido" }, 403);
         if ((cuerpo.contrasena ?? "").length < 8) return responder({ error: "contrasena_corta" }, 400);
         if (usuarios.has(correo)) return responder({ error: "email_ya_registrado" }, 409);
-        usuarios.set(correo, { email: correo, nombre: cuerpo.nombre, clave: cuerpo.contrasena });
+        usuarios.set(correo, { email: correo, nombre: cuerpo.nombre, clave: cuerpo.contrasena, admin: usuarios.size === 0 });
         const nuevo = `t${sesiones.size + 1}`;
         sesiones.set(nuevo, correo);
-        return responder({ usuario: { email: correo, nombre: cuerpo.nombre } }, 200, `pg_sesion=${nuevo}; Path=/`);
+        return responder({ usuario: usuarios.get(correo) }, 200, `pg_sesion=${nuevo}; Path=/`);
+      }
+      if (accion === "contrasena") {
+        const cuenta = usuarios.get(email);
+        if (!email) return responder({ error: "sin_sesion" }, 401);
+
+        if (cuenta.clave !== cuerpo.actual) return responder({ error: "contrasena_actual_incorrecta" }, 403);
+        if ((cuerpo.nueva ?? "").length < 8) return responder({ error: "contrasena_corta" }, 400);
+        cuenta.clave = cuerpo.nueva;
+        for (const [t, c] of [...sesiones]) if (c === email) sesiones.delete(t);
+        const nuevo = `t${Date.now()}`;
+        sesiones.set(nuevo, email);
+        return responder({ cambiada: true }, 200, `pg_sesion=${nuevo}; Path=/`);
       }
       if (accion === "entrar") {
         const correo = (cuerpo.email ?? "").toLowerCase();
@@ -75,12 +88,41 @@ function armarApi(page) {
         }
         const nuevo = `t${sesiones.size + 1}`;
         sesiones.set(nuevo, correo);
-        return responder({ usuario: { email: correo, nombre: cuenta.nombre } }, 200, `pg_sesion=${nuevo}; Path=/`);
+        return responder({ usuario: cuenta }, 200, `pg_sesion=${nuevo}; Path=/`);
       }
       return responder({ error: "accion_desconocida" }, 404);
     }
 
     if (!email) return responder({ error: "sin_sesion" }, 401);
+
+    // --- Administración ---
+    if (ruta.startsWith("/api/admin/")) {
+      if (!usuarios.get(email)?.admin) return responder({ error: "requiere_admin" }, 403);
+
+      if (ruta === "/api/admin/usuarios" && req.method() === "GET") {
+        return responder({
+          usuarios: [...usuarios.values()].map((u) => ({
+            email: u.email, nombre: u.nombre, admin: !!u.admin, creadoEn: "2026-08-21T00:00:00.000Z",
+          })),
+        });
+      }
+      if (ruta === "/api/admin/restablecer") {
+        const cuerpo = JSON.parse(req.postData());
+        const cuenta = usuarios.get(cuerpo.email);
+        if (!cuenta) return responder({ error: "usuario_no_existe" }, 404);
+        cuenta.clave = cuerpo.contrasena;
+        for (const [t, c] of [...sesiones]) if (c === cuerpo.email) sesiones.delete(t);
+        return responder({ restablecido: cuerpo.email });
+      }
+      if (ruta.startsWith("/api/admin/usuarios/") && req.method() === "DELETE") {
+        const correo = decodeURIComponent(ruta.replace("/api/admin/usuarios/", ""));
+        if (correo === email) return responder({ error: "no_puede_eliminarse" }, 400);
+        usuarios.delete(correo);
+        return responder({ eliminado: correo });
+      }
+      return responder({ error: "ruta_desconocida" }, 404);
+    }
+
 
     const anio = String(new Date().getFullYear() % 100).padStart(2, "0");
     const formatear = (n) => `PG ${String(n).padStart(4, "0")}/${anio}`;
@@ -441,6 +483,87 @@ console.log("\n== Sesión vencida y cierre de sesión ==");
   await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
 }
 await page.screenshot({ path: `${OUT}/B4-codigo-invalido.png`, fullPage: true });
+
+console.log("\n== Administración de usuarios ==");
+{
+  comprobar("el admin ve la pestaña Usuarios", (await page.locator('button:has-text("Usuarios")').count()) > 0);
+
+  // Se suma otra persona al equipo.
+  usuarios.set("ana@positivogroup.com", { email: "ana@positivogroup.com", nombre: "Ana Gómez", clave: "claveDeAna2026", admin: false });
+
+  await page.click('button:has-text("Usuarios")');
+  await page.waitForSelector("th:has-text('Correo')");
+  const filas = await page.locator("tbody tr").count();
+  comprobar("lista las cuentas del equipo", filas === 2, `${filas} filas`);
+
+  const tabla = await page.locator("tbody").innerText();
+  comprobar("marca quién es admin", /admin/i.test(tabla), tabla.split("\n")[1]);
+  comprobar("muestra a la otra persona", tabla.includes("Ana Gómez"));
+
+  // Restablecerle la contraseña a Ana.
+  const filaAna = page.locator("tbody tr").filter({ hasText: "Ana Gómez" });
+  await filaAna.locator('button:has-text("Restablecer")').click();
+  await page.waitForSelector("text=Restablecer contraseña");
+  const temporal = await page.locator('[role="dialog"] input').inputValue();
+  comprobar("propone una contraseña temporal", temporal.length >= 8, `${temporal.length} caracteres`);
+
+  await page.click('[role="dialog"] button:has-text("Restablecer")');
+  await page.waitForSelector("text=Contraseña nueva para");
+  comprobar("muestra la contraseña para dictarla", (await page.locator(`text=${temporal}`).count()) > 0);
+  comprobar("la contraseña de Ana cambió en el servidor", usuarios.get("ana@positivogroup.com").clave === temporal);
+  await page.screenshot({ path: `${OUT}/B9-admin.png`, fullPage: true });
+
+  await page.click('button:has-text("Ya la anoté")');
+
+  // Quitarle el acceso.
+  await filaAna.locator('button:has-text("Quitar acceso")').click();
+  await page.waitForSelector("text=no podrá volver a entrar");
+  await page.click('div[role="dialog"] button:has-text("Quitar acceso")');
+  await page.waitForTimeout(500);
+  comprobar("quita el acceso en el servidor", !usuarios.has("ana@positivogroup.com"));
+
+  const soloYo = await page.locator("tbody tr").count();
+  comprobar("la tabla queda con una cuenta", soloYo === 1, `${soloYo} fila(s)`);
+
+  // El admin no puede quitarse a sí mismo: no debe salir el botón.
+  const miFila = page.locator("tbody tr").first();
+  comprobar("no ofrece quitarse a uno mismo", (await miFila.locator('button:has-text("Quitar acceso")').count()) === 0);
+}
+
+console.log("\n== Cambiar la propia contraseña ==");
+{
+  await page.click('button:has-text("Cambiar contraseña")');
+  await page.waitForSelector('[role="dialog"][aria-label="Cambiar contraseña"]');
+  const dlg = page.locator('[role="dialog"][aria-label="Cambiar contraseña"]');
+  const campos = dlg.locator('input[type="password"]');
+
+  await campos.nth(0).fill("equivocada");
+  await campos.nth(1).fill("nuevaClaveSegura9");
+  await campos.nth(2).fill("nuevaClaveSegura9");
+  await dlg.locator('button:has-text("Cambiar")').click();
+  await page.waitForSelector("text=La contraseña actual no es correcta");
+  comprobar("rechaza la contraseña actual equivocada", true);
+
+  await campos.nth(0).fill("claveLarga2026");
+  await campos.nth(1).fill("nuevaClaveSegura9");
+  await campos.nth(2).fill("noCoincide");
+  comprobar("avisa si las dos nuevas no coinciden", (await page.locator("text=no coinciden").count()) > 0);
+
+  await campos.nth(2).fill("nuevaClaveSegura9");
+  await dlg.locator('button:has-text("Cambiar")').click();
+  await page.waitForSelector("text=Contraseña cambiada");
+  comprobar("cambia la contraseña", usuarios.get("juan@positivogroup.com").clave === "nuevaClaveSegura9");
+  await page.click('button:has-text("Listo")');
+
+  // Y con la nueva se puede volver a entrar.
+  await page.click('button:has-text("Cerrar sesión")');
+  await page.waitForSelector('input[type="password"]');
+  await page.fill('input[type="email"]', "juan@positivogroup.com");
+  await page.locator('input[type="password"]').first().fill("nuevaClaveSegura9");
+  await page.click('button[type="submit"]');
+  await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
+  comprobar("entra con la contraseña nueva", true);
+}
 
 console.log("\n== Migración de datos del navegador ==");
 {

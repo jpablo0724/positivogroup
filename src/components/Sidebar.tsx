@@ -4,7 +4,8 @@ import PositivoLogo from "./PositivoLogo";
 export type View =
   | "crear-factura"
   | "listado-cotizaciones"
-  | "catalogo-productos";
+  | "catalogo-productos"
+  | "admin-usuarios";
 
 interface NavItem {
   id: View;
@@ -80,11 +81,34 @@ const navItems: NavItem[] = [
   },
 ];
 
+const itemUsuarios: NavItem = {
+  id: "admin-usuarios",
+  label: "Usuarios",
+  icon: (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+    >
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+};
+
 interface SidebarProps {
   activeView: View;
   onNavigate: (view: View) => void;
-  usuario: { nombre: string; email: string };
+  usuario: { nombre: string; email: string; admin: boolean };
   onSalir: () => void;
+  onCambiarContrasena: () => void;
 }
 
 export default function Sidebar({
@@ -92,7 +116,11 @@ export default function Sidebar({
   onNavigate,
   usuario,
   onSalir,
+  onCambiarContrasena,
 }: SidebarProps) {
+  // La pestaña de usuarios solo tiene sentido para quien puede administrarlos;
+  // de todos modos el backend rechaza a quien no sea administrador.
+  const items = usuario.admin ? [...navItems, itemUsuarios] : navItems;
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col bg-slate-900 text-slate-200">
       <div className="border-b border-slate-800 px-5 py-5">
@@ -101,7 +129,7 @@ export default function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const isActive = item.id === activeView;
           return (
             <button
@@ -126,6 +154,13 @@ export default function Sidebar({
           {usuario.nombre}
         </p>
         <p className="truncate text-xs text-slate-500">{usuario.email}</p>
+        <button
+          type="button"
+          onClick={onCambiarContrasena}
+          className="mt-2 block text-xs font-medium text-slate-400 transition-colors hover:text-slate-100"
+        >
+          Cambiar contraseña
+        </button>
         <button
           type="button"
           onClick={onSalir}

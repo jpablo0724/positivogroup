@@ -9,6 +9,11 @@ hashes distintos, que el mensaje de error no revele si un correo tiene cuenta,
 que la cookie sea HttpOnly/Secure/SameSite=Strict, y que el testigo de sesión
 se guarde como huella y no tal cual.
 
+También cubre la administración: que un usuario normal reciba 403, que la
+lista de cuentas no filtre hashes, y que restablecer una contraseña o quitarle
+el acceso a alguien corte sus sesiones abiertas — sin eso, cambiar la
+contraseña no sacaría a nadie del sistema.
+
 ## Backend — `npm run prueba:backend`
 
 Ejercita las funciones serverless (`netlify/functions/`) sin red ni cuenta de

@@ -9,10 +9,13 @@ import {
   contrasenaCoincide,
   cookieBorrada,
   cookieSesion,
+  cerrarSesionesDe,
   crearUsuario,
   derivarContrasena,
+  guardarUsuario,
   leerCookie,
   normalizarEmail,
+  reclamarPrimerUsuario,
   usuarioDeSesion,
 } from "../lib/auth.mts";
 
@@ -104,10 +107,14 @@ export default async (req: Request) => {
         return json({ error: "codigo_empresa_invalido" }, 403);
       }
 
+      // La primera cuenta que se registre queda como administradora.
+      const esPrimera = await reclamarPrimerUsuario(email);
+
       const { clave, sal } = await derivarContrasena(contrasena);
       const creado = await crearUsuario({
         email,
         nombre,
+        admin: esPrimera,
         clave,
         sal,
         creadoEn: new Date().toISOString(),
@@ -117,6 +124,32 @@ export default async (req: Request) => {
 
       const testigo = await abrirSesion(email);
       return conCookie({ usuario: comoPublico(creado) }, cookieSesion(testigo));
+    }
+
+    // --- Cambiar la propia contraseña ---
+    if (accion === "contrasena") {
+      const usuario = await usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
+      if (!usuario) return json({ error: "sin_sesion" }, 401);
+
+      const actual = texto((cuerpo as never)["actual"]);
+      const nueva = texto((cuerpo as never)["nueva"]);
+
+      if (!(await contrasenaCoincide(actual, usuario))) {
+        return json({ error: "contrasena_actual_incorrecta" }, 403);
+      }
+      if (nueva.length < MINIMO_CONTRASENA) {
+        return json({ error: "contrasena_corta", minimo: MINIMO_CONTRASENA }, 400);
+      }
+
+      const derivada = await derivarContrasena(nueva);
+      await guardarUsuario({ ...usuario, clave: derivada.clave, sal: derivada.sal });
+
+      // Se cierran todas las sesiones, incluida esta, y se abre una nueva: así
+      // cualquier sesión que hubiera quedado abierta en otro equipo se corta.
+      await cerrarSesionesDe(usuario.email);
+      const testigo = await abrirSesion(usuario.email);
+
+      return conCookie({ cambiada: true }, cookieSesion(testigo));
     }
 
     // --- Inicio de sesión ---

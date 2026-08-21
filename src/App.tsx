@@ -4,6 +4,8 @@ import InvoiceForm from "./components/InvoiceForm";
 import InvoicePreview from "./components/InvoicePreview";
 import ListadoCotizaciones from "./components/ListadoCotizaciones";
 import CatalogoProductos from "./components/CatalogoProductos";
+import AdminUsuarios from "./components/AdminUsuarios";
+import ModalContrasena from "./components/ModalContrasena";
 import PantallaAcceso from "./components/PantallaAcceso";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import {
@@ -46,6 +48,7 @@ function App() {
     undefined,
   );
   const [avisoAcceso, setAvisoAcceso] = useState<string | null>(null);
+  const [modalContrasena, setModalContrasena] = useState(false);
 
   const [activeView, setActiveView] = useState<View>("crear-factura");
   const [invoice, setInvoice] = useState<InvoiceData>(() =>
@@ -215,6 +218,7 @@ function App() {
           onNavigate={setActiveView}
           usuario={usuario}
           onSalir={handleSalir}
+          onCambiarContrasena={() => setModalContrasena(true)}
         />
       </div>
 
@@ -312,6 +316,26 @@ function App() {
         </main>
       )}
 
+      {activeView === "admin-usuarios" && usuario.admin && (
+        <main className="flex flex-1 flex-col overflow-hidden">
+          <header className="border-b border-slate-200 bg-white px-8 py-5">
+            <h1 className="text-xl font-semibold text-slate-900">Usuarios</h1>
+            <p className="text-sm text-slate-500">
+              Quién tiene acceso al sistema. Puedes restablecer contraseñas y
+              quitarle el acceso a quien ya no deba entrar.
+            </p>
+          </header>
+
+          {error && (
+            <p className="border-b border-red-200 bg-red-50 px-8 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
+          <AdminUsuarios yo={usuario} onError={manejarError} />
+        </main>
+      )}
+
       {activeView === "catalogo-productos" && (
         <main className="flex flex-1 flex-col overflow-hidden">
           <header className="border-b border-slate-200 bg-white px-8 py-5">
@@ -336,6 +360,10 @@ function App() {
             onError={manejarError}
           />
         </main>
+      )}
+
+      {modalContrasena && (
+        <ModalContrasena onCerrar={() => setModalContrasena(false)} />
       )}
     </div>
   );

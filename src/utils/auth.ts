@@ -3,6 +3,8 @@ import { pedir } from "./api";
 export interface UsuarioPublico {
   email: string;
   nombre: string;
+  admin: boolean;
+  creadoEn?: string;
 }
 
 export const MINIMO_CONTRASENA = 8;
@@ -42,6 +44,17 @@ export async function registrarse(datos: {
     { metodo: "POST", cuerpo: datos },
   );
   return usuario;
+}
+
+/** Cambia la contraseña propia. Cierra las sesiones abiertas en otros equipos. */
+export async function cambiarContrasena(
+  actual: string,
+  nueva: string,
+): Promise<void> {
+  await pedir("/api/auth/contrasena", {
+    metodo: "POST",
+    cuerpo: { actual, nueva },
+  });
 }
 
 export async function salir(): Promise<void> {
