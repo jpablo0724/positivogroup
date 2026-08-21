@@ -7,6 +7,7 @@ import CatalogoProductos from "./components/CatalogoProductos";
 import AdminUsuarios from "./components/AdminUsuarios";
 import ModalContrasena from "./components/ModalContrasena";
 import VistaImpresion from "./components/VistaImpresion";
+import ModalEnviarClientify from "./components/ModalEnviarClientify";
 import PantallaAcceso from "./components/PantallaAcceso";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import {
@@ -52,6 +53,8 @@ function App() {
   const [modalContrasena, setModalContrasena] = useState(false);
   // Cotización que se está viendo a página completa para guardarla en PDF.
   const [paraImprimir, setParaImprimir] = useState<InvoiceData | null>(null);
+  // Cotización que se va a anotar en la ficha de la empresa en Clientify.
+  const [paraClientify, setParaClientify] = useState<InvoiceData | null>(null);
 
   const [activeView, setActiveView] = useState<View>("crear-factura");
   const [invoice, setInvoice] = useState<InvoiceData>(() =>
@@ -315,6 +318,7 @@ function App() {
             cotizaciones={cotizaciones}
             onVer={handleVer}
             onVerPdf={(c) => setParaImprimir(c.data)}
+            onEnviarClientify={(c) => setParaClientify(c.data)}
             onEliminar={handleEliminar}
           />
         </main>
@@ -374,6 +378,13 @@ function App() {
         <VistaImpresion
           data={paraImprimir}
           onCerrar={() => setParaImprimir(null)}
+        />
+      )}
+
+      {paraClientify && (
+        <ModalEnviarClientify
+          data={paraClientify}
+          onCerrar={() => setParaClientify(null)}
         />
       )}
     </div>

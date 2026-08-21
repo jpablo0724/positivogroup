@@ -3,6 +3,11 @@ export interface ClientData {
   nit: string;
   email: string;
   contacto: string;
+  /**
+   * Empresa de Clientify de la que salieron estos datos. Se guarda para poder
+   * anotarle la cotización después; las escritas a mano no lo tienen.
+   */
+  clientifyId?: number;
 }
 
 export interface InvoiceItem {

@@ -176,7 +176,13 @@ export default function InvoiceForm({
       setContactosCliente([]);
       onChange({
         ...data,
-        cliente: { razonSocial: "", nit: "", email: "", contacto: "" },
+        cliente: {
+          razonSocial: "",
+          nit: "",
+          email: "",
+          contacto: "",
+          clientifyId: undefined,
+        },
       });
       return;
     }
@@ -337,6 +343,7 @@ export default function InvoiceForm({
                     ...(cliente.nit ? { nit: cliente.nit } : {}),
                     ...(cliente.contacto ? { contacto: cliente.contacto } : {}),
                     ...(cliente.email ? { email: cliente.email } : {}),
+                    clientifyId: cliente.clientifyId,
                   },
                 })
               }

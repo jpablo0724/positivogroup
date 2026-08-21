@@ -5,6 +5,7 @@ interface ListadoCotizacionesProps {
   cotizaciones: CotizacionGuardada[];
   onVer: (cotizacion: CotizacionGuardada) => void;
   onVerPdf: (cotizacion: CotizacionGuardada) => void;
+  onEnviarClientify: (cotizacion: CotizacionGuardada) => void;
   onEliminar: (numeroFactura: string) => void;
 }
 
@@ -12,6 +13,7 @@ export default function ListadoCotizaciones({
   cotizaciones,
   onVer,
   onVerPdf,
+  onEnviarClientify,
   onEliminar,
 }: ListadoCotizacionesProps) {
   if (cotizaciones.length === 0) {
@@ -89,6 +91,13 @@ export default function ListadoCotizaciones({
                         className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                       >
                         Ver en PDF
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onEnviarClientify(c)}
+                        className="rounded-md border border-emerald-300 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+                      >
+                        Enviar a Clientify
                       </button>
                       <button
                         type="button"

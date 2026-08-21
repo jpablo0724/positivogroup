@@ -12,6 +12,7 @@ interface ClienteSeleccionado {
   nit?: string;
   contacto?: string;
   email?: string;
+  clientifyId?: number;
 }
 
 interface BuscadorClienteProps {
@@ -118,6 +119,7 @@ export default function BuscadorCliente({
     onSeleccionar({
       razonSocial: empresa.razonSocial,
       nit: empresa.nit,
+      clientifyId: empresa.id,
       ...(unico ? { contacto: unico.nombre, email: unico.email } : {}),
     });
 

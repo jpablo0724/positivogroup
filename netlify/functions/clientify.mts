@@ -1,3 +1,5 @@
+import { revisarSesion } from "../lib/acceso.mts";
+
 /**
  * Proxy hacia la API de Clientify (v2).
  *
@@ -5,10 +7,14 @@
  * al navegador: vive solo aquí, como variable de entorno del sitio en Netlify
  * (Site configuration → Environment variables → CLIENTIFY_API_TOKEN).
  *
+ * Exige sesión abierta: sin eso, cualquiera con la dirección podría leerse el
+ * CRM completo a través de este proxy.
+ *
  * Rutas:
  *   /api/clientify/me                      -> valida el token y devuelve la cuenta
  *   /api/clientify/companies?buscar=texto  -> empresas cuyo nombre/NIT coincide
  *   /api/clientify/contacts?empresa=nombre -> contactos de esa empresa
+ *   /api/clientify/nota  (POST)            -> anota una cotización en la empresa
  *
  * Sin "buscar"/"empresa" la consulta se reenvía tal cual a Clientify, lo que
  * sirve para inspeccionar la API desde el navegador.
@@ -23,9 +29,36 @@ const CLIENTIFY_BASE = (
   process.env.CLIENTIFY_API_BASE ?? "https://api-plus.clientify.com/v2"
 ).replace(/\/+$/, "");
 
-// Solo recursos de lectura, para que el proxy no pueda usarse para modificar
-// ni borrar nada en el CRM.
-const RECURSOS_PERMITIDOS = new Set(["me", "companies", "contacts"]);
+// Lectura, más la anotación de cotizaciones. Nada más: el proxy no puede
+// usarse para modificar ni borrar lo que ya hay en el CRM.
+const RECURSOS_PERMITIDOS = new Set(["me", "companies", "contacts", "nota"]);
+
+/**
+ * Formas posibles del endpoint de notas en Clientify. No pude confirmarlas
+ * contra la API real, así que se prueban en orden y se usa la primera que
+ * responda bien; la respuesta dice cuál funcionó. Se detiene en el primer
+ * acierto para no crear la nota dos veces.
+ */
+function candidatosDeNota(empresaId: string) {
+  return [
+    {
+      url: `${CLIENTIFY_BASE}/companies/${empresaId}/note/`,
+      cuerpo: (titulo: string, texto: string) => ({ name: titulo, comment: texto }),
+    },
+    {
+      url: `${CLIENTIFY_BASE}/companies/${empresaId}/notes/`,
+      cuerpo: (titulo: string, texto: string) => ({ name: titulo, comment: texto }),
+    },
+    {
+      url: `${CLIENTIFY_BASE}/notes/`,
+      cuerpo: (titulo: string, texto: string) => ({
+        name: titulo,
+        comment: texto,
+        company: Number(empresaId),
+      }),
+    },
+  ];
+}
 
 // La v2 obliga a declarar qué campos se quieren.
 const CAMPOS_POR_DEFECTO: Record<string, string> = {
@@ -66,17 +99,32 @@ function normalizar(valor: unknown): string {
     .trim();
 }
 
-async function pedirAClientify(url: URL, token: string): Promise<Response> {
-  // La v1 autentica con "Token <clave>"; si la v2 esperara "Bearer", el primer
-  // intento devuelve 401 y se reintenta con el otro esquema.
-  let respuesta = await fetch(url, {
-    headers: { Authorization: `Token ${token}`, Accept: "application/json" },
+interface OpcionesClientify {
+  metodo?: "GET" | "POST";
+  cuerpo?: unknown;
+}
+
+async function pedirAClientify(
+  url: URL,
+  token: string,
+  { metodo = "GET", cuerpo }: OpcionesClientify = {},
+): Promise<Response> {
+  const opciones = (esquema: string): RequestInit => ({
+    method: metodo,
+    headers: {
+      Authorization: `${esquema} ${token}`,
+      Accept: "application/json",
+      ...(cuerpo === undefined ? {} : { "content-type": "application/json" }),
+    },
+    body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });
 
+  // La v1 autentica con "Token <clave>"; si la v2 esperara "Bearer", el primer
+  // intento devuelve 401 y se reintenta con el otro esquema.
+  let respuesta = await fetch(url, opciones("Token"));
+
   if (respuesta.status === 401 || respuesta.status === 403) {
-    respuesta = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
+    respuesta = await fetch(url, opciones("Bearer"));
   }
 
   return respuesta;
@@ -123,6 +171,9 @@ async function catalogoCompleto(
 }
 
 export default async (req: Request) => {
+  const sinSesion = await revisarSesion(req);
+  if (sinSesion) return sinSesion;
+
   const token = process.env.CLIENTIFY_API_TOKEN;
 
   if (!token) {
@@ -159,6 +210,79 @@ export default async (req: Request) => {
         ejemplo: "/api/clientify/companies?buscar=banco",
       },
       400,
+    );
+  }
+
+  // --- Anotar una cotización en la ficha de la empresa ---
+  if (recurso === "nota") {
+    if (req.method !== "POST") {
+      return json({ error: "metodo_no_permitido", metodo: req.method }, 405);
+    }
+
+    const cuerpo = (await req.json().catch(() => ({}))) as {
+      empresaId?: unknown;
+      titulo?: unknown;
+      texto?: unknown;
+    };
+
+    const empresaId = String(cuerpo.empresaId ?? "").trim();
+    const titulo = String(cuerpo.titulo ?? "").trim();
+    const texto = String(cuerpo.texto ?? "").trim();
+
+    if (!/^\d+$/.test(empresaId)) return json({ error: "empresa_invalida" }, 400);
+    if (titulo === "" || texto === "") return json({ error: "nota_vacia" }, 400);
+
+    const intentos: {
+      url: string;
+      status: number;
+      respuesta: string;
+    }[] = [];
+
+    for (const candidato of candidatosDeNota(empresaId)) {
+      const destino = new URL(candidato.url);
+      let respuesta: Response;
+      try {
+        respuesta = await pedirAClientify(destino, token, {
+          metodo: "POST",
+          cuerpo: candidato.cuerpo(titulo, texto),
+        });
+      } catch (err) {
+        intentos.push({
+          url: candidato.url,
+          status: 0,
+          respuesta: err instanceof Error ? err.message : String(err),
+        });
+        continue;
+      }
+
+      const cuerpoTexto = await respuesta.text();
+
+      if (respuesta.ok) {
+        return json({
+          enviada: true,
+          endpoint: candidato.url,
+          respuesta: cuerpoTexto.slice(0, 500),
+        });
+      }
+
+      intentos.push({
+        url: candidato.url,
+        status: respuesta.status,
+        respuesta: cuerpoTexto.slice(0, 400),
+      });
+    }
+
+    // Ninguna forma funcionó: se devuelve todo lo que dijo Clientify, que es
+    // lo que hace falta para corregir el endpoint.
+    return json(
+      {
+        error: "no_se_pudo_crear_la_nota",
+        mensaje:
+          "Clientify rechazó las tres formas conocidas de crear una nota. " +
+          "El detalle de abajo dice cuál es la correcta.",
+        intentos,
+      },
+      502,
     );
   }
 

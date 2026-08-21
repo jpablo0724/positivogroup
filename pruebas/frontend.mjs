@@ -20,6 +20,14 @@ const servidor = {
   ultimo: 0,
 };
 
+// CRM simulado.
+const clientify = {
+  empresas: [
+    { id: 501, name: "Redcol Holding S.A.S", business_name: "Redcol Holding S.A.S", taxpayer_identification_number: "901234567-1", employees: [] },
+  ],
+  notas: [],
+};
+
 // Cuentas y sesiones simuladas, con la misma forma que el backend real.
 const usuarios = new Map();
 const sesiones = new Map();
@@ -38,7 +46,17 @@ function armarApi(page) {
         body: JSON.stringify(cuerpo),
       });
 
-    if (ruta.startsWith("/api/clientify")) return responder({ results: [] });
+    if (ruta.startsWith("/api/clientify")) {
+      if (ruta.endsWith("/nota")) {
+        const cuerpo = JSON.parse(req.postData());
+        clientify.notas.push(cuerpo);
+        return responder({ enviada: true, endpoint: "companies/x/note/" });
+      }
+      const buscar = (url.searchParams.get("buscar") ?? "").toLowerCase();
+      const results = clientify.empresas.filter((e) =>
+        e.name.toLowerCase().includes(buscar) || e.business_name.toLowerCase().includes(buscar));
+      return responder({ count: results.length, results });
+    }
 
     const cookies = req.headers()["cookie"] ?? "";
     const testigo = /pg_sesion=([^;]+)/.exec(cookies)?.[1] ?? "";
@@ -538,6 +556,57 @@ console.log("\n== Ver en PDF ==");
   );
   comprobar("cerrada, imprimir no rompe el resto", appVisible !== "none", `#root display: ${appVisible}`);
   await page.emulateMedia({ media: "screen" });
+}
+
+console.log("\n== Enviar a Clientify ==");
+{
+  await page.click("text=Listado de Cotizaciones");
+  await page.waitForSelector("th:has-text('Total antes de IVA')");
+  comprobar("hay botón Enviar a Clientify", (await page.locator('button:has-text("Enviar a Clientify")').count()) > 0);
+
+  // 1. Cotización sin empresa vinculada: NO debe enviar nada.
+  await page.locator('tbody button:has-text("Enviar a Clientify")').first().click();
+  await page.waitForSelector("text=no está asociada a una empresa");
+  comprobar("avisa cuando no hay empresa vinculada", true);
+  comprobar("no ofrece el botón de enviar",
+    (await page.locator('[role="dialog"] button:has-text("Enviar a Clientify")').count()) === 0);
+  comprobar("NO escribió nada en el CRM", clientify.notas.length === 0, `${clientify.notas.length} notas`);
+  await page.screenshot({ path: `${OUT}/C3-sin-empresa.png`, fullPage: true });
+  await page.click('button:has-text("Cancelar")');
+
+  // 2. Cotización vinculada a una empresa de Clientify.
+  servidor.cotizaciones.set("PG 0500/26", {
+    guardadoEn: new Date().toISOString(),
+    data: {
+      numeroFactura: "PG 0500/26", fecha: "2026-08-20", validaHasta: "2026-09-20",
+      formaPago: "Contado", ivaPorcentaje: 19, observaciones: "",
+      items: [{ id: "a", nombreProducto: "P01 - Ascensores", descripcionProducto: "", cantidad: 4, precioUnitario: 250000 }],
+      cliente: { razonSocial: "Redcol Holding S.A.S", nit: "901234567-1", email: "ana@redcol.co", contacto: "Ana Gómez", clientifyId: 501 },
+    },
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.click("text=Listado de Cotizaciones");
+  await page.waitForSelector("th:has-text('Total antes de IVA')");
+
+  const fila = page.locator("tbody tr").filter({ hasText: "Redcol Holding" });
+  await fila.locator('button:has-text("Enviar a Clientify")').click();
+  await page.waitForSelector("text=Esto es lo que se va a guardar");
+  comprobar("muestra la nota antes de mandarla", true);
+
+  const vistaPrevia = await page.locator('[role="dialog"] pre').innerText();
+  comprobar("la nota lleva el número", vistaPrevia.includes("PG 0500/26"));
+  comprobar("la nota lleva el producto", vistaPrevia.includes("P01 - Ascensores"));
+  comprobar("la nota lleva el total", vistaPrevia.replace(/\u00a0/g, " ").includes("$ 1.190.000"),
+    vistaPrevia.replace(/\u00a0/g, " ").match(/TOTAL.*/)?.[0]);
+  await page.screenshot({ path: `${OUT}/C4-nota.png`, fullPage: true });
+
+  comprobar("todavía no ha escrito en el CRM", clientify.notas.length === 0);
+
+  await page.locator('[role="dialog"] button:has-text("Enviar a Clientify")').click();
+  await page.waitForSelector("text=quedó anotada");
+  comprobar("envía la nota", clientify.notas.length === 1, `${clientify.notas.length} notas`);
+  comprobar("va a la empresa correcta", clientify.notas[0].empresaId === 501, `empresa ${clientify.notas[0].empresaId}`);
+  comprobar("el título lleva el número", clientify.notas[0].titulo === "Cotización PG 0500/26", clientify.notas[0].titulo);
 }
 
 console.log("\n== Administración de usuarios ==");
