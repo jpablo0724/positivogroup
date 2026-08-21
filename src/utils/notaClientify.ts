@@ -1,11 +1,4 @@
 import type { InvoiceData } from "../types";
-import {
-  calcInvoiceTotals,
-  calcItemTotals,
-  formatCurrency,
-  formatDateLong,
-  formatNumber,
-} from "./calculations";
 import { pedir } from "./api";
 import { buscarEmpresas } from "./clientify";
 
@@ -29,61 +22,14 @@ export async function enlacePublico(numeroFactura: string): Promise<string> {
   return `${window.location.origin}/c/${testigo}`;
 }
 
+/**
+ * Cuerpo de la nota: el número de la cotización y el enlace, nada más. El
+ * detalle completo está a un clic en el enlace, así que repetirlo aquí solo
+ * llenaba el historial del CRM.
+ */
 export function textoDeNota(data: InvoiceData, enlace?: string): string {
-  const totales = calcInvoiceTotals(data.items, data.ivaPorcentaje);
-
-  const lineas = [
-    `COTIZACIÓN N.º ${data.numeroFactura}`,
-    `Fecha: ${formatDateLong(data.fecha) || "—"}`,
-    `Válida hasta: ${formatDateLong(data.validaHasta) || "—"}`,
-    `Forma de pago: ${data.formaPago || "—"}`,
-    "",
-    `Cliente: ${data.cliente.razonSocial || "—"}`,
-    `NIT: ${data.cliente.nit || "—"}`,
-    `Contacto: ${data.cliente.contacto || "—"}${
-      data.cliente.email ? ` (${data.cliente.email})` : ""
-    }`,
-    "",
-    "PRODUCTOS",
-  ];
-
-  if (data.items.length === 0) {
-    lineas.push("  (sin productos)");
-  }
-
-  for (const item of data.items) {
-    const t = calcItemTotals(item, data.ivaPorcentaje);
-    const detalle = [
-      item.cantidad > 0 ? `${formatNumber(item.cantidad)} und` : null,
-      item.precioUnitario > 0
-        ? `${formatCurrency(item.precioUnitario)} c/u`
-        : null,
-      t.inversionTotalAntesIva > 0
-        ? `= ${formatCurrency(t.inversionTotalAntesIva)}`
-        : "sin valor",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
-    lineas.push(`• ${item.nombreProducto}`);
-    lineas.push(`  ${detalle}`);
-  }
-
-  lineas.push(
-    "",
-    `Total antes de IVA: ${formatCurrency(totales.subtotal)}`,
-    `IVA ${data.ivaPorcentaje}%: ${formatCurrency(totales.iva)}`,
-    `TOTAL: ${formatCurrency(totales.total)}`,
-  );
-
-  if (enlace) {
-    lineas.push(
-      "",
-      "Ver la cotización y descargarla en PDF:",
-      enlace,
-    );
-  }
-
+  const lineas = [`COTIZACIÓN N° ${data.numeroFactura}`];
+  if (enlace) lineas.push(enlace);
   return lineas.join("\n");
 }
 

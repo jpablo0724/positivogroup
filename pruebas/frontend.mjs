@@ -621,10 +621,11 @@ console.log("\n== Enviar a Clientify ==");
   comprobar("muestra la nota antes de mandarla", true);
 
   const vistaPrevia = await page.locator('[role="dialog"] pre').innerText();
-  comprobar("la nota lleva el número", vistaPrevia.includes("PG 0500/26"));
-  comprobar("la nota lleva el producto", vistaPrevia.includes("P01 - Ascensores"));
-  comprobar("la nota lleva el total", vistaPrevia.replace(/\u00a0/g, " ").includes("$ 1.190.000"),
-    vistaPrevia.replace(/\u00a0/g, " ").match(/TOTAL.*/)?.[0]);
+  comprobar("la nota lleva el número", vistaPrevia.includes("COTIZACIÓN N° PG 0500/26"), vistaPrevia.split("\n")[0]);
+  comprobar("son solo dos líneas: número y enlace", vistaPrevia.trim().split("\n").length === 2,
+    JSON.stringify(vistaPrevia.trim()));
+  comprobar("NO manda el detalle de productos", !vistaPrevia.includes("P01 - Ascensores"));
+  comprobar("NO manda los totales", !vistaPrevia.includes("IVA"));
   await page.screenshot({ path: `${OUT}/C4-nota.png`, fullPage: true });
 
   comprobar("todavía no ha escrito en el CRM", clientify.notas.length === 0);
@@ -789,7 +790,8 @@ console.log("\n== Botones del listado y enlace público ==");
 
   const nota = await page.locator('[role="dialog"] pre').innerText();
   comprobar("la nota lleva el enlace", nota.includes(url));
-  comprobar("la nota lo explica", nota.includes("descargarla en PDF"));
+  comprobar("la nota es solo número y enlace", nota.trim() === `COTIZACIÓN N° PG 0500/26\n${url}`,
+    JSON.stringify(nota.trim()));
   await page.screenshot({ path: `${OUT}/D2-enlace.png`, fullPage: true });
   await page.click('button:has-text("Cancelar")');
 
