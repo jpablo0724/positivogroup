@@ -6,6 +6,7 @@ import ListadoCotizaciones from "./components/ListadoCotizaciones";
 import CatalogoProductos from "./components/CatalogoProductos";
 import AdminUsuarios from "./components/AdminUsuarios";
 import ModalContrasena from "./components/ModalContrasena";
+import VistaImpresion from "./components/VistaImpresion";
 import PantallaAcceso from "./components/PantallaAcceso";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import {
@@ -49,6 +50,8 @@ function App() {
   );
   const [avisoAcceso, setAvisoAcceso] = useState<string | null>(null);
   const [modalContrasena, setModalContrasena] = useState(false);
+  // Cotización que se está viendo a página completa para guardarla en PDF.
+  const [paraImprimir, setParaImprimir] = useState<InvoiceData | null>(null);
 
   const [activeView, setActiveView] = useState<View>("crear-factura");
   const [invoice, setInvoice] = useState<InvoiceData>(() =>
@@ -311,6 +314,7 @@ function App() {
           <ListadoCotizaciones
             cotizaciones={cotizaciones}
             onVer={handleVer}
+            onVerPdf={(c) => setParaImprimir(c.data)}
             onEliminar={handleEliminar}
           />
         </main>
@@ -364,6 +368,13 @@ function App() {
 
       {modalContrasena && (
         <ModalContrasena onCerrar={() => setModalContrasena(false)} />
+      )}
+
+      {paraImprimir && (
+        <VistaImpresion
+          data={paraImprimir}
+          onCerrar={() => setParaImprimir(null)}
+        />
       )}
     </div>
   );

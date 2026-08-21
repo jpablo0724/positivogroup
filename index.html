@@ -14,6 +14,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- La vista de impresión se monta aquí, fuera de #root, para que al
+         imprimir se pueda ocultar toda la aplicación y quede solo la
+         cotización. -->
+    <div id="impresion"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -18,4 +18,32 @@ body {
   @page {
     margin: 12mm;
   }
+
+  /* Con la vista de impresión abierta se esconde la aplicación entera y solo
+     sale la cotización, que vive fuera de #root. Sin la clase en el body,
+     imprimir desde cualquier otra pantalla sigue funcionando como siempre. */
+  body.imprimiendo #root {
+    display: none !important;
+  }
+
+  body.imprimiendo #impresion .solo-pantalla {
+    display: none !important;
+  }
+
+  /* El velo oscuro es solo para la pantalla: en papel iría como una mancha
+     gris si el navegador tuviera activado imprimir fondos. */
+  body.imprimiendo #impresion .capa-impresion {
+    position: static;
+    overflow: visible;
+    background: #fff;
+  }
+
+  body.imprimiendo #impresion .hoja {
+    position: static;
+    max-width: none;
+    padding: 0;
+    overflow: visible;
+    background: #fff;
+    box-shadow: none;
+  }
 }

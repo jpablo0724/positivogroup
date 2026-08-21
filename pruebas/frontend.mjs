@@ -484,6 +484,62 @@ console.log("\n== Sesión vencida y cierre de sesión ==");
 }
 await page.screenshot({ path: `${OUT}/B4-codigo-invalido.png`, fullPage: true });
 
+console.log("\n== Ver en PDF ==");
+{
+  await page.click("text=Listado de Cotizaciones");
+  await page.waitForSelector("th:has-text('Total antes de IVA')");
+
+  comprobar("hay botón Ver en PDF", (await page.locator('button:has-text("Ver en PDF")').count()) > 0);
+
+  await page.locator('button:has-text("Ver en PDF")').first().click();
+  await page.waitForSelector("text=Guardar como PDF");
+  comprobar("abre la hoja a página completa", true);
+
+  const hoja = await page.locator("#impresion").innerText();
+  comprobar("la hoja muestra la cotización", /COTIZACIÓN N.º PG/.test(hoja), hoja.split("\n")[0]);
+  comprobar("se monta fuera de #root", (await page.locator("#impresion #invoice-preview").count()) === 1);
+  comprobar("marca el body para imprimir",
+    await page.evaluate(() => document.body.classList.contains("imprimiendo")));
+
+  await page.screenshot({ path: `${OUT}/C1-pdf-pantalla.png`, fullPage: true });
+
+  // Lo que de verdad importa: qué sale al imprimir.
+  await page.emulateMedia({ media: "print" });
+  await page.waitForTimeout(200);
+
+  const appOculta = await page.evaluate(
+    () => getComputedStyle(document.getElementById("root")).display,
+  );
+  comprobar("al imprimir se esconde la aplicación", appOculta === "none", `#root display: ${appOculta}`);
+
+  const barraOculta = await page.evaluate(() => {
+    const barra = document.querySelector("#impresion .solo-pantalla");
+    return barra ? getComputedStyle(barra).display : "(sin barra)";
+  });
+  comprobar("los botones no salen en el PDF", barraOculta === "none", `barra display: ${barraOculta}`);
+
+  const previewVisible = await page.locator("#impresion #invoice-preview").isVisible();
+  comprobar("la cotización sí sale", previewVisible);
+
+  await page.screenshot({ path: `${OUT}/C2-pdf-impresion.png`, fullPage: true });
+  await page.emulateMedia({ media: "screen" });
+
+  // Cerrar con Escape y comprobar que el body queda limpio.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  comprobar("Escape cierra la vista", (await page.locator("text=Guardar como PDF").count()) === 0);
+  comprobar("quita la marca del body",
+    !(await page.evaluate(() => document.body.classList.contains("imprimiendo"))));
+
+  // Y sin la vista abierta, imprimir NO debe esconder la aplicación.
+  await page.emulateMedia({ media: "print" });
+  const appVisible = await page.evaluate(
+    () => getComputedStyle(document.getElementById("root")).display,
+  );
+  comprobar("cerrada, imprimir no rompe el resto", appVisible !== "none", `#root display: ${appVisible}`);
+  await page.emulateMedia({ media: "screen" });
+}
+
 console.log("\n== Administración de usuarios ==");
 {
   comprobar("el admin ve la pestaña Usuarios", (await page.locator('button:has-text("Usuarios")').count()) > 0);

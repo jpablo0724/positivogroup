@@ -4,12 +4,14 @@ import { calcInvoiceTotals, formatCurrency, formatDateLong } from "../utils/calc
 interface ListadoCotizacionesProps {
   cotizaciones: CotizacionGuardada[];
   onVer: (cotizacion: CotizacionGuardada) => void;
+  onVerPdf: (cotizacion: CotizacionGuardada) => void;
   onEliminar: (numeroFactura: string) => void;
 }
 
 export default function ListadoCotizaciones({
   cotizaciones,
   onVer,
+  onVerPdf,
   onEliminar,
 }: ListadoCotizacionesProps) {
   if (cotizaciones.length === 0) {
@@ -73,13 +75,20 @@ export default function ListadoCotizaciones({
                     {new Date(c.guardadoEn).toLocaleString("es-CO")}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => onVer(c)}
                         className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                       >
                         Ver
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onVerPdf(c)}
+                        className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                      >
+                        Ver en PDF
                       </button>
                       <button
                         type="button"
