@@ -1,6 +1,8 @@
 import { json, revisarSesion } from "../lib/acceso.mts";
+import { randomBytes } from "node:crypto";
 import {
   almacenCotizaciones,
+  almacenEnlaces,
   claveCotizacion,
   leerTodo,
 } from "../lib/almacen.mts";
@@ -10,6 +12,7 @@ import {
  *
  *   GET    /api/cotizaciones            -> listado completo
  *   POST   /api/cotizaciones            -> guarda o reemplaza una
+ *   POST   /api/cotizaciones/enlace     -> enlace público para el cliente
  *   DELETE /api/cotizaciones/PG 0001/26 -> elimina una
  */
 
@@ -48,6 +51,37 @@ export default async (req: Request) => {
       return json({ cotizaciones });
     }
 
+    // --- Enlace público para mandarle al cliente ---
+    if (req.method === "POST" && resto === "enlace") {
+      const cuerpo = (await req.json().catch(() => ({}))) as {
+        numeroFactura?: unknown;
+      };
+      const numero = String(cuerpo.numeroFactura ?? "").trim();
+      if (numero === "") return json({ error: "falta_numero" }, 400);
+
+      const guardada = (await almacen.get(claveCotizacion(numero), {
+        type: "json",
+      })) as (CotizacionGuardada & { enlace?: string }) | null;
+
+      if (!guardada) return json({ error: "cotizacion_no_existe" }, 404);
+
+      // El enlace se reutiliza: pedirlo dos veces no invalida el que ya se le
+      // mandó al cliente.
+      if (guardada.enlace) return json({ testigo: guardada.enlace });
+
+      const testigo = randomBytes(32).toString("base64url");
+      await almacenEnlaces().setJSON(testigo, {
+        numeroFactura: numero,
+        creadoEn: new Date().toISOString(),
+      });
+      await almacen.setJSON(claveCotizacion(numero), {
+        ...guardada,
+        enlace: testigo,
+      });
+
+      return json({ testigo });
+    }
+
     if (req.method === "POST") {
       const cuerpo = await req.json();
       if (!esCotizacion(cuerpo)) {
@@ -55,8 +89,16 @@ export default async (req: Request) => {
       }
 
       const numero = String(cuerpo.data.numeroFactura);
+
+      // Si ya tenía enlace público, se conserva: el cliente puede haberlo
+      // recibido y debe seguir viendo la versión al día.
+      const previa = (await almacen.get(claveCotizacion(numero), {
+        type: "json",
+      })) as { enlace?: string } | null;
+
       const registro: CotizacionGuardada = {
         ...cuerpo,
+        ...(previa?.enlace ? { enlace: previa.enlace } : {}),
         guardadoEn: new Date().toISOString(),
       };
 

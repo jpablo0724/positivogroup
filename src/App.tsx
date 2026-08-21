@@ -8,6 +8,7 @@ import AdminUsuarios from "./components/AdminUsuarios";
 import ModalContrasena from "./components/ModalContrasena";
 import VistaImpresion from "./components/VistaImpresion";
 import ModalEnviarClientify from "./components/ModalEnviarClientify";
+import CotizacionPublica from "./components/CotizacionPublica";
 import PantallaAcceso from "./components/PantallaAcceso";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import {
@@ -44,7 +45,16 @@ function cotizacionEnBlanco(numeroFactura: string): InvoiceData {
   };
 }
 
+/** Testigo del enlace público si la dirección es /c/<testigo>, o null. */
+function testigoPublico(): string | null {
+  const coincide = /^\/c\/([A-Za-z0-9_-]+)\/?$/.exec(window.location.pathname);
+  return coincide ? coincide[1] : null;
+}
+
 function App() {
+  // La cotización que ve el cliente no pasa por el login: quien recibe el
+  // enlace no tiene cuenta. Se resuelve antes que nada.
+  const [testigo] = useState<string | null>(testigoPublico);
   // undefined = todavía se está preguntando al servidor; null = sin sesión.
   const [usuario, setUsuario] = useState<UsuarioPublico | null | undefined>(
     undefined,
@@ -195,6 +205,8 @@ function App() {
       manejarError(err);
     }
   }
+
+  if (testigo) return <CotizacionPublica testigo={testigo} />;
 
   if (usuario === undefined) {
     return (
@@ -378,6 +390,7 @@ function App() {
         <VistaImpresion
           data={paraImprimir}
           onCerrar={() => setParaImprimir(null)}
+          imprimirAlAbrir
         />
       )}
 

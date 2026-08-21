@@ -6,6 +6,8 @@ import type { InvoiceData } from "../types";
 interface VistaImpresionProps {
   data: InvoiceData;
   onCerrar: () => void;
+  /** Abre el diálogo de impresión apenas se muestra, sin esperar el botón. */
+  imprimirAlAbrir?: boolean;
 }
 
 /**
@@ -19,13 +21,27 @@ interface VistaImpresionProps {
  * Se monta fuera de #root para que al imprimir se pueda esconder toda la
  * aplicación y quede solo la hoja.
  */
-export default function VistaImpresion({ data, onCerrar }: VistaImpresionProps) {
+export default function VistaImpresion({
+  data,
+  onCerrar,
+  imprimirAlAbrir = false,
+}: VistaImpresionProps) {
   const destino = document.getElementById("impresion");
 
   useEffect(() => {
     document.body.classList.add("imprimiendo");
     return () => document.body.classList.remove("imprimiendo");
   }, []);
+
+  useEffect(() => {
+    if (!imprimirAlAbrir) return;
+    // Un cuadro de animación de margen para que la hoja esté pintada y las
+    // fuentes cargadas antes de que el navegador tome la instantánea.
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => window.print());
+    });
+    return () => cancelAnimationFrame(id);
+  }, [imprimirAlAbrir]);
 
   useEffect(() => {
     function alPresionar(evento: KeyboardEvent) {

@@ -15,6 +15,7 @@ const CATALOGO_SEMILLA = [
   { nombre: "P03 - Marketing en Buzones", descripcion: "INSERTOS EN BUZONES", observaciones: "Obs de buzones", orden: 20 },
 ];
 const servidor = {
+  enlaces: new Map(),
   cotizaciones: new Map(),
   productos: new Map(CATALOGO_SEMILLA.map((p) => [p.nombre, p])),
   ultimo: 0,
@@ -56,6 +57,13 @@ function armarApi(page) {
       const results = clientify.empresas.filter((e) =>
         e.name.toLowerCase().includes(buscar) || e.business_name.toLowerCase().includes(buscar));
       return responder({ count: results.length, results });
+    }
+
+    if (ruta.startsWith("/api/publico/")) {
+      const t = ruta.replace("/api/publico/", "");
+      const numero = servidor.enlaces.get(t);
+      if (!numero) return responder({ error: "enlace_invalido" }, 404);
+      return responder({ cotizacion: servidor.cotizaciones.get(numero) });
     }
 
     const cookies = req.headers()["cookie"] ?? "";
@@ -151,6 +159,15 @@ function armarApi(page) {
     }
 
     if (ruta.startsWith("/api/cotizaciones")) {
+      if (ruta === "/api/cotizaciones/enlace") {
+        const { numeroFactura } = JSON.parse(req.postData());
+        const guardada = servidor.cotizaciones.get(numeroFactura);
+        if (!guardada) return responder({ error: "cotizacion_no_existe" }, 404);
+        // Un testigo distinto por cotización, con el mismo formato que el real.
+        guardada.enlace ??= numeroFactura.replace(/\W/g, "") + "k".repeat(36);
+        servidor.enlaces.set(guardada.enlace, numeroFactura);
+        return responder({ testigo: guardada.enlace });
+      }
       if (req.method() === "POST") {
         const cuerpo = JSON.parse(req.postData());
         servidor.cotizaciones.set(cuerpo.data.numeroFactura, cuerpo);
@@ -191,6 +208,16 @@ const page = await browser.newPage({ viewport: { width: 1700, height: 1050 } });
 const errores = [];
 page.on("pageerror", (e) => errores.push(String(e)));
 page.on("console", (m) => m.type() === "error" && errores.push(m.text()));
+
+// window.print abriría un diálogo del sistema; se sustituye por un contador
+// para poder comprobar que se llama sin quedarse esperando.
+await page.addInitScript(() => {
+  window.__impresiones = 0;
+  window.print = () => {
+    window.__impresiones++;
+  };
+});
+const impresiones = () => page.evaluate(() => window.__impresiones ?? 0);
 
 await armarApi(page);
 await page.goto("http://localhost:5173", { waitUntil: "networkidle" });
@@ -507,9 +534,9 @@ console.log("\n== Ver en PDF ==");
   await page.click("text=Listado de Cotizaciones");
   await page.waitForSelector("th:has-text('Total antes de IVA')");
 
-  comprobar("hay botón Ver en PDF", (await page.locator('button:has-text("Ver en PDF")').count()) > 0);
+  comprobar("hay icono de PDF", (await page.locator('button[aria-label="Guardar en PDF"]').count()) > 0);
 
-  await page.locator('button:has-text("Ver en PDF")').first().click();
+  await page.locator('button[aria-label="Guardar en PDF"]').first().click();
   await page.waitForSelector("text=Guardar como PDF");
   comprobar("abre la hoja a página completa", true);
 
@@ -562,10 +589,10 @@ console.log("\n== Enviar a Clientify ==");
 {
   await page.click("text=Listado de Cotizaciones");
   await page.waitForSelector("th:has-text('Total antes de IVA')");
-  comprobar("hay botón Enviar a Clientify", (await page.locator('button:has-text("Enviar a Clientify")').count()) > 0);
+  comprobar("hay icono de Clientify", (await page.locator('button[aria-label="Enviar a Clientify"]').count()) > 0);
 
   // 1. Cotización sin empresa vinculada: NO debe enviar nada.
-  await page.locator('tbody button:has-text("Enviar a Clientify")').first().click();
+  await page.locator('tbody button[aria-label="Enviar a Clientify"]').first().click();
   await page.waitForSelector("text=no está asociada a una empresa");
   comprobar("avisa cuando no hay empresa vinculada", true);
   comprobar("no ofrece el botón de enviar",
@@ -589,7 +616,7 @@ console.log("\n== Enviar a Clientify ==");
   await page.waitForSelector("th:has-text('Total antes de IVA')");
 
   const fila = page.locator("tbody tr").filter({ hasText: "Redcol Holding" });
-  await fila.locator('button:has-text("Enviar a Clientify")').click();
+  await fila.locator('button[aria-label="Enviar a Clientify"]').click();
   await page.waitForSelector("text=Esto es lo que se va a guardar");
   comprobar("muestra la nota antes de mandarla", true);
 
@@ -607,6 +634,9 @@ console.log("\n== Enviar a Clientify ==");
   comprobar("envía la nota", clientify.notas.length === 1, `${clientify.notas.length} notas`);
   comprobar("va a la empresa correcta", clientify.notas[0].empresaId === 501, `empresa ${clientify.notas[0].empresaId}`);
   comprobar("el título lleva el número", clientify.notas[0].titulo === "Cotización PG 0500/26", clientify.notas[0].titulo);
+
+  await page.click('[role="dialog"] button:has-text("Cerrar")');
+  await page.waitForTimeout(200);
 }
 
 console.log("\n== Administración de usuarios ==");
@@ -717,6 +747,80 @@ console.log("\n== Migración de datos del navegador ==");
   comprobar("no vuelve a ofrecerlo tras subir", (await page.locator("text=Subir al servidor").count()) === 0);
 }
 await page.screenshot({ path: `${OUT}/B5-migrado.png`, fullPage: true });
+
+
+console.log("\n== Botones del listado y enlace público ==");
+{
+  await page.click("text=Listado de Cotizaciones");
+  await page.waitForSelector("th:has-text('Acciones')");
+
+  // Los botones ahora son iconos, en una sola fila.
+  const fila = page.locator("tbody tr").first();
+  const iconos = fila.locator("td:last-child button");
+  comprobar("cuatro botones de icono por fila", (await iconos.count()) === 4, `${await iconos.count()}`);
+
+  const nombres = await iconos.evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label")));
+  comprobar("cada icono dice qué hace", nombres.every(Boolean), nombres.join(", "));
+  comprobar("incluye el de PDF", nombres.includes("Guardar en PDF"));
+  comprobar("incluye el de Clientify", nombres.includes("Enviar a Clientify"));
+
+  const caben = await fila.locator("td:last-child > div").evaluate(
+    (d) => d.scrollWidth <= d.clientWidth + 1,
+  );
+  comprobar("caben en una sola fila, sin desbordar", caben);
+  await page.screenshot({ path: `${OUT}/D1-iconos.png`, fullPage: true });
+
+  // El icono de PDF abre el diálogo de impresión solo.
+  const antes = await impresiones();
+  await page.locator('button[aria-label="Guardar en PDF"]').first().click();
+  await page.waitForTimeout(600);
+  comprobar("el icono de PDF abre el diálogo solo", (await impresiones()) > antes,
+    `${antes} -> ${await impresiones()}`);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+
+  // Enviar a Clientify ahora incluye el enlace público.
+  const filaRedcol = page.locator("tbody tr").filter({ hasText: "Redcol Holding" });
+  await filaRedcol.locator('button[aria-label="Enviar a Clientify"]').click();
+  await page.waitForSelector("text=Enlace para el cliente");
+
+  const url = await page.locator('[role="dialog"] input[readonly]').inputValue();
+  comprobar("genera el enlace público", /\/c\/[A-Za-z0-9_-]+$/.test(url), url);
+
+  const nota = await page.locator('[role="dialog"] pre').innerText();
+  comprobar("la nota lleva el enlace", nota.includes(url));
+  comprobar("la nota lo explica", nota.includes("descargarla en PDF"));
+  await page.screenshot({ path: `${OUT}/D2-enlace.png`, fullPage: true });
+  await page.click('button:has-text("Cancelar")');
+
+  // Y el enlace se abre sin sesión.
+  const ruta = new URL(url).pathname;
+  await page.evaluate(() => localStorage.clear());
+  await page.context().clearCookies();
+  await page.goto(`http://localhost:5173${ruta}`, { waitUntil: "networkidle" });
+  await page.waitForSelector("text=Descargar PDF", { timeout: 5000 });
+  comprobar("el cliente la ve sin iniciar sesión", true);
+
+  const contenido = await page.locator("#invoice-preview").innerText();
+  comprobar("muestra la cotización", contenido.includes("PG 0500/26"), contenido.split("\n")[0]);
+  comprobar("no pide contraseña", (await page.locator('input[type="password"]').count()) === 0);
+  await page.screenshot({ path: `${OUT}/D3-publica.png`, fullPage: true });
+
+  // Al imprimirla sale la hoja, no la barra.
+  await page.emulateMedia({ media: "print" });
+  const barra = await page.evaluate(() => {
+    const b = document.querySelector(".solo-pantalla");
+    return b ? getComputedStyle(b).display : "(sin barra)";
+  });
+  comprobar("la barra no sale en el PDF", barra === "none", `display: ${barra}`);
+  comprobar("la cotización sí sale", await page.locator("#invoice-preview").isVisible());
+  await page.emulateMedia({ media: "screen" });
+
+  // Un enlace inventado no muestra nada.
+  await page.goto("http://localhost:5173/c/" + "z".repeat(43), { waitUntil: "networkidle" });
+  await page.waitForSelector("text=no es válido", { timeout: 5000 });
+  comprobar("un enlace inventado no muestra nada", true);
+}
 
 console.log("\nERRORES DE CONSOLA:", JSON.stringify(errores.filter((e) => !e.includes("ERR_CONNECTION"))));
 console.log(fallos === 0 ? "\nTODO OK\n" : `\n${fallos} FALLA(S)\n`);

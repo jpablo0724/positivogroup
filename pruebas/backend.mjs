@@ -8,6 +8,7 @@ const { default: cotizaciones } = await import("../netlify/functions/cotizacione
 const { default: productos } = await import("../netlify/functions/productos.mts");
 const { default: numero } = await import("../netlify/functions/numero.mts");
 const { default: auth } = await import("../netlify/functions/auth.mts");
+const { default: publico } = await import("../netlify/functions/publico.mts");
 
 const BASE = "https://cotizador-positivo.netlify.app";
 
@@ -90,6 +91,56 @@ console.log("\n== Cotizaciones ==");
   const tras = await leer(await cotizaciones(req("/api/cotizaciones")));
   comprobar("queda 1 tras eliminar", tras.cuerpo.cotizaciones.length === 1, `${tras.cuerpo.cotizaciones.length}`);
   comprobar("la que queda es la correcta", tras.cuerpo.cotizaciones[0].data.numeroFactura === "PG 0002/26");
+}
+
+console.log("\n== Enlace público para el cliente ==");
+{
+  await cotizaciones(req("/api/cotizaciones", { metodo: "POST", cuerpo: cotizacionDe("PG 0777/26", "Cliente con enlace", [
+    { id: "a", nombreProducto: "P01", descripcionProducto: "", cantidad: 2, precioUnitario: 500000 },
+  ]) }));
+
+  const creado = await leer(await cotizaciones(req("/api/cotizaciones/enlace", { metodo: "POST", cuerpo: { numeroFactura: "PG 0777/26" } })));
+  comprobar("crea el enlace -> 200", creado.status === 200, `status ${creado.status}`);
+  const testigo = creado.cuerpo.testigo;
+  comprobar("el testigo es largo y al azar", /^[A-Za-z0-9_-]{43}$/.test(testigo), `${testigo?.length} caracteres`);
+
+  // Pedirlo de nuevo debe dar el mismo: si cambiara, el enlace que ya se le
+  // mandó al cliente dejaría de servir.
+  const otraVez = await leer(await cotizaciones(req("/api/cotizaciones/enlace", { metodo: "POST", cuerpo: { numeroFactura: "PG 0777/26" } })));
+  comprobar("pedirlo dos veces da el mismo enlace", otraVez.cuerpo.testigo === testigo);
+
+  // Lo esencial: se ve SIN sesión.
+  const sinSesion = await leer(await publico(req(`/api/publico/${testigo}`, { metodo: "GET", cookie: null })));
+  comprobar("el cliente lo ve sin cuenta -> 200", sinSesion.status === 200, `status ${sinSesion.status}`);
+  comprobar("trae la cotización correcta", sinSesion.cuerpo.cotizacion?.data?.numeroFactura === "PG 0777/26", sinSesion.cuerpo.cotizacion?.data?.numeroFactura);
+
+  // Y lo igual de esencial: no deja ver ninguna otra.
+  const inventado = await leer(await publico(req(`/api/publico/${"x".repeat(43)}`, { metodo: "GET", cookie: null })));
+  comprobar("un testigo inventado -> 404", inventado.status === 404, inventado.cuerpo.error);
+
+  const corto = await leer(await publico(req("/api/publico/abc", { metodo: "GET", cookie: null })));
+  comprobar("un testigo corto -> 404", corto.status === 404, corto.cuerpo.error);
+
+  const vacio = await leer(await publico(req("/api/publico/", { metodo: "GET", cookie: null })));
+  comprobar("sin testigo -> 404", vacio.status === 404, vacio.cuerpo.error);
+
+  const escribir = await leer(await publico(req(`/api/publico/${testigo}`, { metodo: "POST", cookie: null })));
+  comprobar("la ruta pública no acepta escribir -> 405", escribir.status === 405, escribir.cuerpo.error);
+
+  // Guardar de nuevo la cotización conserva el enlace.
+  await cotizaciones(req("/api/cotizaciones", { metodo: "POST", cuerpo: cotizacionDe("PG 0777/26", "Cliente con enlace (editada)") }));
+  const trasEditar = await leer(await publico(req(`/api/publico/${testigo}`, { metodo: "GET", cookie: null })));
+  comprobar("editar la cotización no rompe el enlace", trasEditar.status === 200, `status ${trasEditar.status}`);
+  comprobar("el enlace muestra la versión al día",
+    trasEditar.cuerpo.cotizacion?.data?.cliente?.razonSocial === "Cliente con enlace (editada)",
+    trasEditar.cuerpo.cotizacion?.data?.cliente?.razonSocial);
+
+  // Crear el enlace sí exige sesión.
+  const sinCuenta = await leer(await cotizaciones(req("/api/cotizaciones/enlace", { metodo: "POST", cookie: null, cuerpo: { numeroFactura: "PG 0777/26" } })));
+  comprobar("crear un enlace exige sesión -> 401", sinCuenta.status === 401, sinCuenta.cuerpo.error);
+
+  const noExiste = await leer(await cotizaciones(req("/api/cotizaciones/enlace", { metodo: "POST", cuerpo: { numeroFactura: "PG 9999/26" } })));
+  comprobar("enlace de una cotización que no existe -> 404", noExiste.status === 404, noExiste.cuerpo.error);
 }
 
 console.log("\n== Catálogo en la base de datos ==");

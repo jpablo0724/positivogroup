@@ -20,7 +20,16 @@ export function tituloDeNota(data: InvoiceData): string {
   return `Cotización ${data.numeroFactura}`;
 }
 
-export function textoDeNota(data: InvoiceData): string {
+/** Pide (o recupera) el enlace público de la cotización y arma la URL. */
+export async function enlacePublico(numeroFactura: string): Promise<string> {
+  const { testigo } = await pedir<{ testigo: string }>(
+    "/api/cotizaciones/enlace",
+    { metodo: "POST", cuerpo: { numeroFactura } },
+  );
+  return `${window.location.origin}/c/${testigo}`;
+}
+
+export function textoDeNota(data: InvoiceData, enlace?: string): string {
   const totales = calcInvoiceTotals(data.items, data.ivaPorcentaje);
 
   const lineas = [
@@ -66,6 +75,14 @@ export function textoDeNota(data: InvoiceData): string {
     `IVA ${data.ivaPorcentaje}%: ${formatCurrency(totales.iva)}`,
     `TOTAL: ${formatCurrency(totales.total)}`,
   );
+
+  if (enlace) {
+    lineas.push(
+      "",
+      "Ver la cotización y descargarla en PDF:",
+      enlace,
+    );
+  }
 
   return lineas.join("\n");
 }
@@ -121,13 +138,14 @@ export interface ResultadoNota {
 export async function enviarNota(
   empresaId: number,
   data: InvoiceData,
+  enlace: string,
 ): Promise<ResultadoNota> {
   return pedir<ResultadoNota>("/api/clientify/nota", {
     metodo: "POST",
     cuerpo: {
       empresaId,
       titulo: tituloDeNota(data),
-      texto: textoDeNota(data),
+      texto: textoDeNota(data, enlace),
     },
   });
 }

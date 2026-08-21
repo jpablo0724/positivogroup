@@ -3,6 +3,7 @@ import type { InvoiceData } from "../types";
 import { ErrorApi } from "../utils/api";
 import {
   empresaDeLaCotizacion,
+  enlacePublico,
   enviarNota,
   textoDeNota,
 } from "../utils/notaClientify";
@@ -31,13 +32,19 @@ export default function ModalEnviarClientify({
   onCerrar,
 }: ModalEnviarClientifyProps) {
   const [estado, setEstado] = useState<Estado>({ paso: "buscando" });
-  const nota = textoDeNota(data);
+  const [enlace, setEnlace] = useState("");
+  const [copiado, setCopiado] = useState(false);
+  const nota = textoDeNota(data, enlace || undefined);
 
   useEffect(() => {
     let cancelado = false;
-    empresaDeLaCotizacion(data)
-      .then((empresaId) => {
+
+    // El enlace público y la empresa se resuelven a la vez: los dos hacen
+    // falta antes de poder mandar la nota.
+    Promise.all([empresaDeLaCotizacion(data), enlacePublico(data.numeroFactura)])
+      .then(([empresaId, url]) => {
         if (cancelado) return;
+        setEnlace(url);
         setEstado(
           empresaId === null
             ? { paso: "sin-empresa" }
@@ -49,7 +56,7 @@ export default function ModalEnviarClientify({
           setEstado({
             paso: "error",
             detalle:
-              err instanceof Error ? err.message : "No se pudo consultar Clientify",
+              err instanceof Error ? err.message : "No se pudo preparar el envío",
           });
         }
       });
@@ -58,13 +65,24 @@ export default function ModalEnviarClientify({
     };
   }, [data]);
 
+  async function copiarEnlace() {
+    try {
+      await navigator.clipboard.writeText(enlace);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      // Sin permiso al portapapeles: el enlace se ve igual y se puede copiar
+      // a mano desde el campo.
+    }
+  }
+
   async function enviar() {
     if (estado.paso !== "listo") return;
     const { empresaId } = estado;
     setEstado({ paso: "enviando", empresaId });
 
     try {
-      await enviarNota(empresaId, data);
+      await enviarNota(empresaId, data, enlace);
       setEstado({ paso: "enviada" });
     } catch (err) {
       // El backend devuelve lo que respondió Clientify, que es lo que hace
@@ -99,7 +117,8 @@ export default function ModalEnviarClientify({
             Enviar a Clientify
           </h2>
           <p className="text-xs text-slate-500">
-            Se guarda como anotación en la ficha de la empresa.
+            Se guarda como anotación en la ficha de la empresa, con el enlace
+            para que el cliente la vea y la descargue.
           </p>
         </div>
 
@@ -133,6 +152,33 @@ export default function ModalEnviarClientify({
             <div className="rounded-md bg-red-50 px-3 py-3 text-sm text-red-800">
               <p className="font-medium">No se pudo enviar.</p>
               <p className="mt-1 break-words text-xs">{estado.detalle}</p>
+            </div>
+          )}
+
+          {enlace !== "" && (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                Enlace para el cliente
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={enlace}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                />
+                <button
+                  type="button"
+                  onClick={copiarEnlace}
+                  className="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  {copiado ? "Copiado" : "Copiar"}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Cualquiera con este enlace puede ver la cotización, sin
+                contraseña. No muestra ninguna otra.
+              </p>
             </div>
           )}
 

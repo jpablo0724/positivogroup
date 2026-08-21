@@ -42,6 +42,15 @@ export function almacenContadores() {
 export const CLAVE_CATALOGO_SEMBRADO = "catalogo_sembrado";
 
 /**
+ * Enlaces públicos: testigo al azar -> número de cotización. Es lo que permite
+ * que el cliente vea su cotización sin tener cuenta, y que un enlace no deje
+ * ver ninguna otra.
+ */
+export function almacenEnlaces() {
+  return getStore({ name: "enlaces", consistency: "strong" });
+}
+
+/**
  * Clave legible para un número de cotización: "PG 0001/26" → "pg-0001-26".
  * El formato lo genera el propio sistema, así que dos números distintos nunca
  * caen en la misma clave.
