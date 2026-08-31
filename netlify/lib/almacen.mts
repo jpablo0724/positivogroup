@@ -1,4 +1,4 @@
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./store.mts";
 
 /**
  * Almacenamiento compartido del sistema, sobre Netlify Blobs.

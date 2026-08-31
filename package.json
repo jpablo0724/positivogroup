@@ -8,12 +8,20 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "build:servidor": "npx --yes esbuild servidor/index.mts --bundle --platform=node --target=node18 --format=esm --outfile=servidor-dist/index.mjs --packages=external",
+    "build:todo": "npm run build && npm run build:servidor",
+    "servidor": "node --experimental-sqlite servidor/index.mts",
+    "servidor:compilado": "node servidor-dist/index.mjs",
+    "importar": "node --experimental-sqlite servidor/importar.mts",
+    "prueba:sql": "node --experimental-sqlite pruebas/sql.mjs",
+    "prueba:servidor": "node --experimental-sqlite pruebas/servidor.mjs",
     "prueba:auth": "node pruebas/auth.mjs",
     "prueba:backend": "node pruebas/backend.mjs",
     "prueba:ui": "node pruebas/frontend.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^11.0.1",
+    "mysql2": "^3.24.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

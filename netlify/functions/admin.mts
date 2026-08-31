@@ -1,5 +1,5 @@
 import { json } from "../lib/acceso.mts";
-import { getStore } from "@netlify/blobs";
+import { getStore } from "../lib/store.mts";
 import {
   MINIMO_CONTRASENA,
   NOMBRE_COOKIE,
