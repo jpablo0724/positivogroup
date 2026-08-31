@@ -1,4 +1,5 @@
 import { json } from "../lib/acceso.mts";
+import { getStore } from "@netlify/blobs";
 import {
   MINIMO_CONTRASENA,
   NOMBRE_COOKIE,
@@ -19,6 +20,7 @@ import {
  * Administración de cuentas. Solo para quien sea administrador.
  *
  *   GET    /api/admin/usuarios          -> lista las cuentas
+ *   GET    /api/admin/exportar          -> vuelca la base de datos completa
  *   POST   /api/admin/restablecer       -> pone una contraseña nueva a alguien
  *   DELETE /api/admin/usuarios/<correo> -> elimina una cuenta
  *
@@ -44,6 +46,52 @@ export default async (req: Request) => {
   const objetivo = decodeURIComponent(segmentos.slice(indiceAdmin + 2).join("/"));
 
   try {
+    // --- Volcado completo, para respaldo o para migrar a otro servidor ---
+    if (recurso === "exportar" && req.method === "GET") {
+      // Las sesiones no se exportan: son temporales y cada quien vuelve a
+      // entrar con su contraseña. Todo lo demás sí, incluidas las cuentas.
+      const nombres = [
+        "cotizaciones",
+        "productos",
+        "contadores",
+        "usuarios",
+        "enlaces",
+      ];
+
+      const almacenes: Record<string, Record<string, unknown>> = {};
+
+      for (const nombre of nombres) {
+        const store = getStore({ name: nombre, consistency: "strong" });
+        const { blobs } = await store.list();
+        const registros = await Promise.all(
+          blobs.map(async (blob) => [
+            blob.key,
+            await store.get(blob.key, { type: "json" }),
+          ]),
+        );
+        almacenes[nombre] = Object.fromEntries(registros);
+      }
+
+      const cuerpo = {
+        exportadoEn: new Date().toISOString(),
+        version: 1,
+        almacenes,
+      };
+
+      // Se entrega como descarga: el volcado trae los hash de las contraseñas
+      // y los datos de los clientes, así que no conviene dejarlo abierto en
+      // una pestaña del navegador.
+      return new Response(JSON.stringify(cuerpo, null, 2), {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
+          "content-disposition":
+            'attachment; filename="positivogroup-respaldo.json"',
+        },
+      });
+    }
+
     if (recurso === "usuarios" && req.method === "GET") {
       const cuentas = await listarUsuarios();
       return json({ usuarios: cuentas.map(comoPublico) });

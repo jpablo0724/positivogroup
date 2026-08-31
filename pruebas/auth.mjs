@@ -223,6 +223,37 @@ console.log("\n== Administración ==");
   comprobar("eliminar cierra su sesión abierta", sesionCortada.status === 401, sesionCortada.cuerpo.error);
 }
 
+console.log("\n== Exportar la base de datos ==");
+{
+  const entrarJuan = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CUENTA.contrasena } })));
+  const cookieAdmin = comoCookie(entrarJuan.cookie);
+
+  const respuesta = await admin(req("/api/admin/exportar", { metodo: "GET", cookie: cookieAdmin }));
+  comprobar("el admin exporta -> 200", respuesta.status === 200, `status ${respuesta.status}`);
+  comprobar("llega como descarga", /attachment/.test(respuesta.headers.get("content-disposition") ?? ""),
+    respuesta.headers.get("content-disposition"));
+
+  const volcado = await respuesta.json();
+  comprobar("trae todos los almacenes",
+    ["cotizaciones", "productos", "contadores", "usuarios", "enlaces"].every((n) => n in volcado.almacenes),
+    Object.keys(volcado.almacenes).join(", "));
+  comprobar("NO exporta las sesiones", !("sesiones" in volcado.almacenes));
+  comprobar("trae las cuentas con su hash, para no tener que registrarse de nuevo",
+    Object.values(volcado.almacenes.usuarios).every((u) => typeof u.clave === "string" && typeof u.sal === "string"),
+    `${Object.keys(volcado.almacenes.usuarios).length} cuenta(s)`);
+  comprobar("lleva fecha y versión", typeof volcado.exportadoEn === "string" && volcado.version === 1);
+
+  // Un usuario normal no puede llevarse la base de datos.
+  const otra = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "otra@positivogroup.com", contrasena: CUENTA.contrasena } })));
+  if (otra.status === 200) {
+    const prohibido = await leer(await admin(req("/api/admin/exportar", { metodo: "GET", cookie: comoCookie(otra.cookie) })));
+    comprobar("un usuario normal no puede exportar -> 403", prohibido.status === 403, prohibido.cuerpo.error);
+  }
+
+  const sinSesion = await leer(await admin(req("/api/admin/exportar", { metodo: "GET" })));
+  comprobar("sin sesión no se puede exportar -> 401", sinSesion.status === 401, sinSesion.cuerpo.error);
+}
+
 console.log("\n== Cambiar la propia contraseña ==");
 {
   const entrada = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CUENTA.contrasena } })));
