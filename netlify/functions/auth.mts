@@ -3,6 +3,7 @@ import {
   MINIMO_CONTRASENA,
   NOMBRE_COOKIE,
   abrirSesion,
+  asegurarPrimerAdmin,
   buscarUsuario,
   cerrarSesion,
   comoPublico,
@@ -59,7 +60,13 @@ export default async (req: Request) => {
     if (accion === "sesion") {
       const usuario = await usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
       if (!usuario) return json({ error: "sin_sesion" }, 401);
-      return json({ usuario: comoPublico(usuario) });
+
+      // Aquí, porque es lo que se consulta al abrir la página: si el sistema
+      // se quedó sin administrador, se repara antes de decir quién es quién.
+      await asegurarPrimerAdmin();
+
+      const alDia = (await buscarUsuario(usuario.email)) ?? usuario;
+      return json({ usuario: comoPublico(alDia) });
     }
 
     if (req.method !== "POST") {

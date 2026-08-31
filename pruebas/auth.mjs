@@ -223,6 +223,52 @@ console.log("\n== Administración ==");
   comprobar("eliminar cierra su sesión abierta", sesionCortada.status === 401, sesionCortada.cuerpo.error);
 }
 
+console.log("\n== Cuenta creada antes de que existiera la marca de admin ==");
+{
+  const { getStore } = await import("@netlify/blobs");
+  const usuarios = getStore({ name: "usuarios" });
+  const contadores = getStore({ name: "contadores" });
+
+  // Se reproduce el estado real: la cuenta existe sin el campo admin, y la
+  // marca de "primer usuario" nunca se escribió porque en ese momento no
+  // existía esa función.
+  const clave = Buffer.from(CUENTA.email.toLowerCase(), "utf8").toString("base64url");
+  const cuenta = await usuarios.get(clave, { type: "json" });
+  delete cuenta.admin;
+  await usuarios.setJSON(clave, cuenta);
+  await contadores.delete("primer_usuario_registrado");
+
+  const antes = await usuarios.get(clave, { type: "json" });
+  comprobar("la cuenta quedó sin marca de admin", antes.admin === undefined, `admin=${antes.admin}`);
+
+  // Al consultar la sesión, el sistema debe repararlo solo.
+  const entrada = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CUENTA.contrasena } })));
+  const cookie = comoCookie(entrada.cookie);
+  comprobar("antes de reparar, entrar no la reporta admin", entrada.cuerpo.usuario?.admin === false, `admin=${entrada.cuerpo.usuario?.admin}`);
+
+  const sesion = await leer(await auth(req("/api/auth/sesion", { metodo: "GET", cookie })));
+  comprobar("consultar la sesión la repara", sesion.cuerpo.usuario?.admin === true, `admin=${sesion.cuerpo.usuario?.admin}`);
+
+  const guardada = await usuarios.get(clave, { type: "json" });
+  comprobar("la reparación queda guardada", guardada.admin === true);
+
+  const puedeAdministrar = await leer(await admin(req("/api/admin/usuarios", { metodo: "GET", cookie })));
+  comprobar("y ya puede administrar -> 200", puedeAdministrar.status === 200, `status ${puedeAdministrar.status}`);
+
+  // No debe promover a nadie más en las siguientes consultas.
+  const otraCuenta = await usuarios.list();
+  const todas = await Promise.all(otraCuenta.blobs.map((b) => usuarios.get(b.key, { type: "json" })));
+  const admins = todas.filter((u) => u.admin === true);
+  comprobar("solo hay un administrador", admins.length === 1, `${admins.length} de ${todas.length} cuentas`);
+
+  await auth(req("/api/auth/sesion", { metodo: "GET", cookie }));
+  const trasSegunda = await Promise.all(
+    (await usuarios.list()).blobs.map((b) => usuarios.get(b.key, { type: "json" })),
+  );
+  comprobar("consultar de nuevo no promueve a otros",
+    trasSegunda.filter((u) => u.admin === true).length === 1);
+}
+
 console.log("\n== Exportar la base de datos ==");
 {
   const entrarJuan = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CUENTA.contrasena } })));

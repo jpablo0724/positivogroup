@@ -167,6 +167,40 @@ export async function reclamarPrimerUsuario(email: string): Promise<boolean> {
   return modified;
 }
 
+/**
+ * Deja administrador a la cuenta más antigua si el sistema no tiene ninguno.
+ *
+ * La marca de administrador se asigna al registrarse, pero las cuentas creadas
+ * antes de que esa función existiera quedaron sin ella y no había forma de
+ * obtenerla. Esto lo repara solo: si nadie es administrador, lo es quien
+ * abrió la primera cuenta.
+ *
+ * Corre una sola vez: después de reparar queda la misma marca que pone el
+ * registro, así que las siguientes llamadas salen con una sola lectura.
+ */
+export async function asegurarPrimerAdmin(): Promise<void> {
+  const estado = getStore({ name: "contadores", consistency: "strong" });
+
+  const marca = await estado.get(CLAVE_PRIMER_USUARIO, { type: "json" });
+  if (marca) return;
+
+  const cuentas = await listarUsuarios();
+  // Sin cuentas todavía no hay nada que reparar: el primer registro se
+  // encarga.
+  if (cuentas.length === 0) return;
+
+  const masAntigua = cuentas[0];
+  if (!cuentas.some((cuenta) => cuenta.admin === true)) {
+    await guardarUsuario({ ...masAntigua, admin: true });
+  }
+
+  await estado.setJSON(CLAVE_PRIMER_USUARIO, {
+    email: masAntigua.email,
+    fecha: new Date().toISOString(),
+    reparado: true,
+  });
+}
+
 /** Todas las cuentas, para la pantalla de administración. */
 export async function listarUsuarios(): Promise<Usuario[]> {
   const almacen = almacenUsuarios();
