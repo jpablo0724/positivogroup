@@ -332,5 +332,71 @@ console.log("\n== Cambiar la propia contraseña ==");
   comprobar("la sesión recién abierta sí sirve", nueva.status === 200, `status ${nueva.status}`);
 }
 
+console.log("\n== Respaldo: exportar e importar ==");
+{
+  // Se entra como el administrador, que a esta altura tiene la contraseña ya
+  // cambiada por el bloque anterior.
+  const entrada = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: "miClaveNuevaSegura7" } })));
+  const cookieAdmin = comoCookie(entrada.cookie);
+
+  const exportado = await leer(await admin(req("/api/admin/exportar", { metodo: "GET", cookie: cookieAdmin })));
+  comprobar("exportar -> 200", exportado.status === 200, `status ${exportado.status}`);
+
+  const almacenes = exportado.cuerpo.almacenes ?? {};
+  comprobar("el volcado trae las cotizaciones", "cotizaciones" in almacenes);
+  comprobar("el volcado trae las cuentas", "usuarios" in almacenes);
+  comprobar("el volcado NO trae las sesiones", !("sesiones" in almacenes),
+    Object.keys(almacenes).join(", "));
+
+  // Importar lo que ya está no debe cambiar nada: así, repetir la carga en un
+  // servidor nuevo es inofensivo.
+  const repetido = await leer(await admin(req("/api/admin/importar", { cookie: cookieAdmin, cuerpo: { almacenes } })));
+  comprobar("reimportar lo mismo -> 200", repetido.status === 200, `status ${repetido.status}`);
+  comprobar("reimportar no escribe nada", repetido.cuerpo.escritos === 0,
+    `escribió ${repetido.cuerpo.escritos}`);
+
+  // Un registro que no existía sí entra.
+  const nuevo = await leer(await admin(req("/api/admin/importar", {
+    cookie: cookieAdmin,
+    cuerpo: { almacenes: { productos: { prueba_respaldo: { nombre: "Traído del respaldo" } } } },
+  })));
+  comprobar("importa lo que falta", nuevo.cuerpo.escritos === 1, `escribió ${nuevo.cuerpo.escritos}`);
+
+  const { getStore } = await import("@netlify/blobs");
+  const traido = await getStore({ name: "productos" }).get("prueba_respaldo", { type: "json" });
+  comprobar("y queda guardado", traido?.nombre === "Traído del respaldo");
+
+  // Un archivo manipulado no puede colarse una sesión abierta.
+  const intruso = await leer(await admin(req("/api/admin/importar", {
+    cookie: cookieAdmin,
+    cuerpo: { almacenes: { sesiones: { colada: { email: CUENTA.email, expiraEn: "2099-01-01T00:00:00.000Z" } } } },
+  })));
+  comprobar("ignora almacenes que no son del respaldo",
+    intruso.cuerpo.escritos === 0 && intruso.cuerpo.ignorados?.includes("sesiones"),
+    JSON.stringify(intruso.cuerpo));
+
+  // Ni siquiera con --reemplazar debe pisar la cuenta de quien está importando:
+  // se quedaría fuera del sistema a mitad de la restauración.
+  const claveAdmin = Buffer.from(CUENTA.email.toLowerCase(), "utf8").toString("base64url");
+  const suplantacion = await leer(await admin(req("/api/admin/importar", {
+    cookie: cookieAdmin,
+    cuerpo: {
+      reemplazar: true,
+      almacenes: { usuarios: { [claveAdmin]: { email: CUENTA.email, nombre: "Pisado", clave: "00", sal: "00", creadoEn: "2020-01-01T00:00:00.000Z" } } },
+    },
+  })));
+  comprobar("no pisa la cuenta de quien importa", suplantacion.cuerpo.escritos === 0,
+    `escribió ${suplantacion.cuerpo.escritos}`);
+
+  const sigueDentro = await leer(await admin(req("/api/admin/usuarios", { metodo: "GET", cookie: cookieAdmin })));
+  comprobar("y sigue pudiendo administrar", sigueDentro.status === 200, `status ${sigueDentro.status}`);
+
+  const sinPermiso = await leer(await admin(req("/api/admin/importar", { cuerpo: { almacenes: {} } })));
+  comprobar("importar sin sesión -> 401", sinPermiso.status === 401, sinPermiso.cuerpo.error);
+
+  const basura = await leer(await admin(req("/api/admin/importar", { cookie: cookieAdmin, cuerpo: { nada: 1 } })));
+  comprobar("un archivo que no es respaldo -> 400", basura.status === 400, basura.cuerpo.error);
+}
+
 console.log(fallos === 0 ? "\nTODO OK\n" : `\n${fallos} FALLA(S)\n`);
 process.exit(fallos === 0 ? 0 : 1);

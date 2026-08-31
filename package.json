@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "build:servidor": "npx --yes esbuild servidor/index.mts --bundle --platform=node --target=node18 --format=esm --outfile=servidor-dist/index.mjs --packages=external",
+    "build:servidor": "npx --yes esbuild servidor/index.mts --bundle --platform=node --target=node18 --format=esm --outfile=servidor-dist/index.mjs",
     "build:todo": "npm run build && npm run build:servidor",
     "servidor": "node --experimental-sqlite servidor/index.mts",
     "servidor:compilado": "node servidor-dist/index.mjs",

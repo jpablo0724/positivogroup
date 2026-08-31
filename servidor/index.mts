@@ -155,9 +155,13 @@ const servidor = createServer(async (req, res) => {
 servidor.listen(PUERTO, () => {
   console.log(`Sistema de cotizaciones escuchando en el puerto ${PUERTO}`);
   console.log(`Frontend servido desde ${RAIZ_ESTATICOS}`);
-  console.log(
-    process.env.DB_HOST
-      ? `Base de datos MySQL en ${process.env.DB_HOST}`
-      : "AVISO: sin DB_HOST definido, intentará usar Netlify Blobs",
-  );
+  if (process.env.DB_HOST) {
+    console.log(`Base de datos MySQL en ${process.env.DB_HOST}`);
+  } else if (process.env.SQLITE_FILE) {
+    console.log(`Base de datos SQLite en ${process.env.SQLITE_FILE}`);
+  } else {
+    console.log(
+      "AVISO: sin DB_HOST ni SQLITE_FILE definidos, intentará usar Netlify Blobs",
+    );
+  }
 });

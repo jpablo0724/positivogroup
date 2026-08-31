@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   eliminarUsuario,
   generarContrasena,
   listarUsuarios,
   restablecerContrasena,
+  restaurarRespaldo,
+  type ResumenImportacion,
 } from "../utils/admin";
 import { MINIMO_CONTRASENA, type UsuarioPublico } from "../utils/auth";
 import { selectTriggerClass } from "./SearchableSelect";
@@ -31,6 +33,9 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
   );
   const [porEliminar, setPorEliminar] = useState<UsuarioPublico | null>(null);
   const [descargando, setDescargando] = useState(false);
+  const [restaurando, setRestaurando] = useState(false);
+  const [resumen, setResumen] = useState<ResumenImportacion | null>(null);
+  const archivo = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     listarUsuarios()
@@ -104,6 +109,39 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
     }
   }
 
+  /**
+   * Carga un respaldo en la base de datos que esté detrás en este momento.
+   *
+   * Es lo que permite mudar el sistema de servidor sin tocar una consola: se
+   * descarga el respaldo del servidor viejo y se sube aquí. No pisa lo que ya
+   * exista, así que subir el mismo archivo dos veces deja lo mismo.
+   */
+  async function restaurar(evento: React.ChangeEvent<HTMLInputElement>) {
+    const elegido = evento.target.files?.[0];
+    // Se limpia enseguida para poder volver a elegir el mismo archivo.
+    evento.target.value = "";
+    if (!elegido) return;
+
+    setRestaurando(true);
+    setResumen(null);
+    try {
+      const contenido = JSON.parse(await elegido.text());
+      if (!contenido?.almacenes) {
+        throw new Error(
+          "Ese archivo no es un respaldo del sistema: le falta la sección " +
+            '"almacenes".',
+        );
+      }
+
+      setResumen(await restaurarRespaldo(contenido.almacenes));
+      setUsuarios(await listarUsuarios());
+    } catch (err) {
+      onError(err);
+    } finally {
+      setRestaurando(false);
+    }
+  }
+
   async function confirmarEliminar() {
     if (!porEliminar) return;
     const email = porEliminar.email;
@@ -152,24 +190,72 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-800">
-            Respaldo de la base de datos
+      {resumen && (
+        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-4">
+          <p className="text-sm font-medium text-emerald-900">
+            Respaldo cargado: {resumen.escritos}{" "}
+            {resumen.escritos === 1 ? "registro" : "registros"}.
           </p>
-          <p className="text-xs text-slate-500">
-            Cotizaciones, catálogo, cuentas y enlaces en un archivo. Guárdalo en
-            un lugar seguro: incluye los datos de tus clientes.
-          </p>
+          <ul className="mt-2 space-y-0.5 text-xs text-emerald-800">
+            {Object.entries(resumen.detalle).map(([nombre, cuenta]) => (
+              <li key={nombre}>
+                {nombre}: {cuenta.escritos}
+                {cuenta.omitidos > 0 && ` (${cuenta.omitidos} ya estaban)`}
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => setResumen(null)}
+            className="mt-3 text-xs font-medium text-emerald-700 underline"
+          >
+            Entendido
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={descargarRespaldo}
-          disabled={descargando}
-          className="shrink-0 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
-        >
-          {descargando ? "Preparando…" : "Descargar respaldo"}
-        </button>
+      )}
+
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-800">
+              Respaldo de la base de datos
+            </p>
+            <p className="text-xs text-slate-500">
+              Cotizaciones, catálogo, cuentas y enlaces en un archivo. Guárdalo
+              en un lugar seguro: incluye los datos de tus clientes.
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={descargarRespaldo}
+              disabled={descargando}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              {descargando ? "Preparando…" : "Descargar respaldo"}
+            </button>
+            <button
+              type="button"
+              onClick={() => archivo.current?.click()}
+              disabled={restaurando}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+            >
+              {restaurando ? "Cargando…" : "Cargar respaldo"}
+            </button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Cargar un respaldo agrega lo que falte sin tocar lo que ya está, así
+          que es la forma de mudar el sistema a otro servidor.
+        </p>
+        <input
+          ref={archivo}
+          type="file"
+          accept="application/json,.json"
+          onChange={restaurar}
+          className="hidden"
+          aria-label="Archivo de respaldo"
+        />
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">

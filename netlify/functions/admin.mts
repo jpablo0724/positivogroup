@@ -21,6 +21,7 @@ import {
  *
  *   GET    /api/admin/usuarios          -> lista las cuentas
  *   GET    /api/admin/exportar          -> vuelca la base de datos completa
+ *   POST   /api/admin/importar          -> carga un volcado en la base de datos
  *   POST   /api/admin/restablecer       -> pone una contraseña nueva a alguien
  *   DELETE /api/admin/usuarios/<correo> -> elimina una cuenta
  *
@@ -32,6 +33,21 @@ import {
 function texto(valor: unknown): string {
   return typeof valor === "string" ? valor : "";
 }
+
+/**
+ * Los almacenes que entran y salen en un respaldo.
+ *
+ * Las sesiones quedan fuera a propósito: son temporales y cada quien vuelve a
+ * entrar con su contraseña. Que la lista sea fija también evita que un archivo
+ * manipulado escriba en un almacén que no le corresponde.
+ */
+const ALMACENES_EXPORTABLES = [
+  "cotizaciones",
+  "productos",
+  "contadores",
+  "usuarios",
+  "enlaces",
+];
 
 export default async (req: Request) => {
   const quien = await usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
@@ -48,19 +64,9 @@ export default async (req: Request) => {
   try {
     // --- Volcado completo, para respaldo o para migrar a otro servidor ---
     if (recurso === "exportar" && req.method === "GET") {
-      // Las sesiones no se exportan: son temporales y cada quien vuelve a
-      // entrar con su contraseña. Todo lo demás sí, incluidas las cuentas.
-      const nombres = [
-        "cotizaciones",
-        "productos",
-        "contadores",
-        "usuarios",
-        "enlaces",
-      ];
-
       const almacenes: Record<string, Record<string, unknown>> = {};
 
-      for (const nombre of nombres) {
+      for (const nombre of ALMACENES_EXPORTABLES) {
         const store = getStore({ name: nombre, consistency: "strong" });
         const { blobs } = await store.list();
         const registros = await Promise.all(
@@ -90,6 +96,63 @@ export default async (req: Request) => {
             'attachment; filename="positivogroup-respaldo.json"',
         },
       });
+    }
+
+    // --- Restauración de un volcado ---
+    if (recurso === "importar" && req.method === "POST") {
+      const cuerpo = (await req.json().catch(() => null)) as {
+        almacenes?: Record<string, Record<string, unknown>>;
+        reemplazar?: boolean;
+      } | null;
+
+      if (!cuerpo?.almacenes || typeof cuerpo.almacenes !== "object") {
+        return json({ error: "respaldo_invalido" }, 400);
+      }
+
+      const reemplazar = cuerpo.reemplazar === true;
+      const claveDeQuien = Buffer.from(quien.email, "utf8").toString(
+        "base64url",
+      );
+
+      const detalle: Record<string, { escritos: number; omitidos: number }> = {};
+      let escritos = 0;
+      let omitidos = 0;
+      const ignorados: string[] = [];
+
+      for (const [nombre, registros] of Object.entries(cuerpo.almacenes)) {
+        if (!ALMACENES_EXPORTABLES.includes(nombre)) {
+          ignorados.push(nombre);
+          continue;
+        }
+        if (!registros || typeof registros !== "object") continue;
+
+        const store = getStore({ name: nombre, consistency: "strong" });
+        const cuenta = { escritos: 0, omitidos: 0 };
+
+        for (const [clave, valor] of Object.entries(registros)) {
+          if (valor === null || valor === undefined) continue;
+
+          // La cuenta con la que se está importando nunca se pisa: si el
+          // respaldo trajera otra contraseña para ella, quien está haciendo
+          // la restauración quedaría fuera del sistema a mitad de camino.
+          const esLaPropia = nombre === "usuarios" && clave === claveDeQuien;
+
+          const { modified } = await store.setJSON(
+            clave,
+            valor,
+            reemplazar && !esLaPropia ? {} : { onlyIfNew: true },
+          );
+
+          if (modified) cuenta.escritos++;
+          else cuenta.omitidos++;
+        }
+
+        detalle[nombre] = cuenta;
+        escritos += cuenta.escritos;
+        omitidos += cuenta.omitidos;
+      }
+
+      return json({ escritos, omitidos, detalle, ignorados, reemplazar });
     }
 
     if (recurso === "usuarios" && req.method === "GET") {
