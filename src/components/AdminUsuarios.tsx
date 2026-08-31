@@ -30,6 +30,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
     null,
   );
   const [porEliminar, setPorEliminar] = useState<UsuarioPublico | null>(null);
+  const [descargando, setDescargando] = useState(false);
 
   useEffect(() => {
     listarUsuarios()
@@ -58,6 +59,48 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
       onError(err);
     } finally {
       setOcupado(false);
+    }
+  }
+
+  /**
+   * Descarga el respaldo desde dentro del sistema.
+   *
+   * Se hace así y no abriendo /api/admin/exportar en el navegador porque la
+   * cookie de sesión es SameSite=Strict: escribir la dirección a mano no
+   * siempre la envía y la respuesta sería "sin sesión". Desde aquí la petición
+   * sale de la propia página, con la sesión puesta.
+   */
+  async function descargarRespaldo() {
+    setDescargando(true);
+    try {
+      const respuesta = await fetch("/api/admin/exportar", {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!respuesta.ok) {
+        const detalle = await respuesta.json().catch(() => null);
+        throw new Error(
+          detalle?.error === "sin_sesion"
+            ? "Tu sesión venció. Vuelve a entrar e inténtalo de nuevo."
+            : (detalle?.mensaje ?? "No se pudo generar el respaldo."),
+        );
+      }
+
+      const contenido = await respuesta.blob();
+      const enlace = document.createElement("a");
+      enlace.href = URL.createObjectURL(contenido);
+      enlace.download = `positivogroup-respaldo-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json`;
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      URL.revokeObjectURL(enlace.href);
+    } catch (err) {
+      onError(err);
+    } finally {
+      setDescargando(false);
     }
   }
 
@@ -108,6 +151,26 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
           </button>
         </div>
       )}
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-800">
+            Respaldo de la base de datos
+          </p>
+          <p className="text-xs text-slate-500">
+            Cotizaciones, catálogo, cuentas y enlaces en un archivo. Guárdalo en
+            un lugar seguro: incluye los datos de tus clientes.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={descargarRespaldo}
+          disabled={descargando}
+          className="shrink-0 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+        >
+          {descargando ? "Preparando…" : "Descargar respaldo"}
+        </button>
+      </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[640px] text-left text-sm">

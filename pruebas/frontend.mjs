@@ -132,6 +132,13 @@ function armarApi(page) {
           })),
         });
       }
+      if (ruta === "/api/admin/exportar" && req.method() === "GET") {
+        return responder({
+          exportadoEn: new Date().toISOString(),
+          version: 1,
+          almacenes: { cotizaciones: {}, productos: {}, contadores: {}, usuarios: {}, enlaces: {} },
+        });
+      }
       if (ruta === "/api/admin/restablecer") {
         const cuerpo = JSON.parse(req.postData());
         const cuenta = usuarios.get(cuerpo.email);
@@ -204,7 +211,7 @@ function armarApi(page) {
 }
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--no-sandbox"] });
-const page = await browser.newPage({ viewport: { width: 1700, height: 1050 } });
+const page = await browser.newPage({ viewport: { width: 1700, height: 1050 }, acceptDownloads: true });
 const errores = [];
 page.on("pageerror", (e) => errores.push(String(e)));
 page.on("console", (m) => m.type() === "error" && errores.push(m.text()));
@@ -657,6 +664,16 @@ console.log("\n== Administración de usuarios ==");
   const tabla = await page.locator("tbody").innerText();
   comprobar("marca quién es admin", /admin/i.test(tabla), tabla.split("\n")[1]);
   comprobar("muestra a la otra persona", tabla.includes("Ana Gómez"));
+
+  // El respaldo se descarga desde dentro del sistema, no escribiendo la
+  // dirección: así la cookie de sesión siempre viaja.
+  const descarga = page.waitForEvent("download");
+  await page.click('button:has-text("Descargar respaldo")');
+  const archivo = await descarga;
+  comprobar("el botón descarga el respaldo", true, archivo.suggestedFilename());
+  comprobar("el archivo lleva fecha en el nombre",
+    /^positivogroup-respaldo-\d{4}-\d{2}-\d{2}\.json$/.test(archivo.suggestedFilename()),
+    archivo.suggestedFilename());
 
   // Restablecerle la contraseña a Ana.
   const filaAna = page.locator("tbody tr").filter({ hasText: "Ana Gómez" });
