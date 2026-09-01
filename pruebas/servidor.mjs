@@ -18,6 +18,9 @@ const dist = mkdtempSync(join(tmpdir(), "dist-"));
 mkdirSync(join(dist, "assets"));
 writeFileSync(join(dist, "index.html"), "<!doctype html><title>App</title>");
 writeFileSync(join(dist, "assets", "app-abc123.js"), "console.log(1)");
+// Un archivo con tilde en el nombre, como el logo de la cotización: el
+// navegador lo pide con %XX y el servidor tiene que deshacerlo.
+writeFileSync(join(dist, "Logo-Cotización.png"), "png-de-mentira");
 
 const PUERTO = 3311;
 const proceso = spawn(
@@ -159,6 +162,20 @@ console.log("\n== Numeración con varias personas a la vez, por HTTP ==");
   comprobar("20 peticiones simultáneas -> 20 números distintos", unicos.size === 20,
     unicos.size === 20 ? "sin repetidos" : `REPETIDOS: ${20 - unicos.size}`);
   comprobar("ninguna falló", respuestas.every((r) => r.status === 200));
+}
+
+console.log("\n== Archivos con tilde en el nombre ==");
+{
+  const codificado = await fetch(`${BASE}/Logo-Cotizaci%C3%B3n.png`);
+  comprobar("sirve el archivo pedido con %XX", codificado.status === 200,
+    `status ${codificado.status}`);
+  comprobar("y es el archivo correcto",
+    (await codificado.text()) === "png-de-mentira");
+
+  // El saneado del camino tiene que seguir en pie con la descodificación.
+  const escape = await fetch(`${BASE}/..%2f..%2fetc%2fpasswd`);
+  comprobar("no deja salir de dist/ con %2f", escape.status !== 200 ||
+    !(await escape.text()).includes("root:"), `status ${escape.status}`);
 }
 
 console.log("\n== Exportar ==");

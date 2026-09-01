@@ -102,10 +102,27 @@ async function responder(res: ServerResponse, respuesta: Response) {
   res.end(Buffer.from(await respuesta.arrayBuffer()));
 }
 
+/**
+ * Deshace el %XX de la dirección. Un archivo con tildes o espacios en el
+ * nombre llega pedido como "Logo-Cotizaci%C3%B3n.png", y sin esto se buscaría
+ * en el disco un archivo llamado literalmente así.
+ *
+ * Si viene mal formado se deja tal cual: no encontrará nada, que es lo
+ * correcto, en vez de reventar la petición.
+ */
+function decodificar(ruta: string): string {
+  try {
+    return decodeURIComponent(ruta);
+  } catch {
+    return ruta;
+  }
+}
+
 /** Sirve un archivo de dist/, o devuelve false si no existe. */
 function servirArchivo(ruta: string, res: ServerResponse): boolean {
-  // normalize + startsWith evita que "../../etc/passwd" salga de dist/.
-  const destino = join(RAIZ_ESTATICOS, normalize(ruta));
+  // normalize + startsWith evita que "../../etc/passwd" salga de dist/. Se
+  // descodifica antes de normalizar, para que un "..%2f" tampoco se escape.
+  const destino = join(RAIZ_ESTATICOS, normalize(decodificar(ruta)));
   if (!destino.startsWith(RAIZ_ESTATICOS)) return false;
   if (!existsSync(destino) || !statSync(destino).isFile()) return false;
 
