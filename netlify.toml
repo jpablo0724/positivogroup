@@ -7,22 +7,75 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# El sistema vive ahora en intranet.positivogroup.com, sobre servidor propio y
-# MySQL. Este sitio queda únicamente como reenvío.
-#
-# Existe por una razón concreta: las cotizaciones que ya se enviaron a clientes
-# llevan enlaces del tipo cotizador-positivo.netlify.app/c/<testigo>. Los
-# testigos viajaron en el respaldo y son los mismos en el dominio nuevo, así
-# que reenviar la dirección completa hace que esos enlaces sigan abriendo.
-#
-# El reenvío es de todo el sitio, no solo de /c/*, y eso es deliberado: si el
-# equipo pudiera seguir entrando por la dirección vieja, crearía cotizaciones
-# en la base anterior y los datos se separarían en dos sistemas.
-#
-# force = true es imprescindible. Sin él Netlify serviría el index.html
-# publicado —que existe— en vez de reenviar.
+# Las rutas /api/* van a la función serverless. Debe ir ANTES del catch-all
+# de la SPA, porque los redirects se evalúan en orden y si no, "/*" se las
+# tragaría y devolvería el index.html.
+[[redirects]]
+  from = "/api/clientify/*"
+  to = "/.netlify/functions/clientify/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth/*"
+  to = "/.netlify/functions/auth/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/admin/*"
+  to = "/.netlify/functions/admin/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/publico/*"
+  to = "/.netlify/functions/publico/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/cotizaciones"
+  to = "/.netlify/functions/cotizaciones"
+  status = 200
+
+[[redirects]]
+  from = "/api/cotizaciones/*"
+  to = "/.netlify/functions/cotizaciones/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/productos"
+  to = "/.netlify/functions/productos"
+  status = 200
+
+[[redirects]]
+  from = "/api/productos/*"
+  to = "/.netlify/functions/productos/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/numero"
+  to = "/.netlify/functions/numero"
+  status = 200
+
+# La app es una SPA: cualquier otra ruta debe servir index.html
 [[redirects]]
   from = "/*"
-  to = "https://intranet.positivogroup.com/:splat"
-  status = 301
-  force = true
+  to = "/index.html"
+  status = 200
+
+# El HTML no se cachea: así, apenas se publica una versión nueva, cualquier
+# dispositivo la ve al recargar en vez de quedarse con la copia anterior.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Los archivos de assets llevan un hash en el nombre y cambian de nombre en
+# cada build, así que se pueden cachear indefinidamente sin quedar obsoletos.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
