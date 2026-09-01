@@ -1,5 +1,10 @@
 import { useEffect, useRef } from "react";
-import { CLASES_CONTENIDO, aHtml, estaVacio } from "../utils/richText";
+import {
+  CLASES_CONTENIDO,
+  COLORES_TEXTO,
+  aHtml,
+  estaVacio,
+} from "../utils/richText";
 
 interface EditorObservacionesProps {
   value: string;
@@ -60,7 +65,7 @@ const BOTONES: Boton[] = [
 ];
 
 /**
- * Campo de observaciones con formato: negrilla, viñetas y alineación.
+ * Campo de observaciones con formato: negrilla, viñetas, alineación y color.
  *
  * Guarda HTML. Es un contentEditable no controlado (React no reescribe el
  * contenido en cada tecla, porque eso movería el cursor al final): solo se
@@ -93,15 +98,28 @@ export default function EditorObservaciones({
 
   function ejecutar(comando: string) {
     editorRef.current?.focus();
+    // Con styleWithCSS desactivado, negrilla y viñetas producen etiquetas
+    // semánticas (<b>, <ul>) en vez de <span style="font-weight: bold">. Es lo
+    // que conserva el saneado, así que el formato sobrevive al guardar.
+    document.execCommand("styleWithCSS", false, "false");
     // execCommand está marcado como obsoleto, pero sigue siendo la única forma
     // de dar formato en un contentEditable sin traer una librería completa.
     document.execCommand(comando);
     emitir();
   }
 
+  function aplicarColor(color: string) {
+    editorRef.current?.focus();
+    // Aquí sí se quiere CSS: sin esto el navegador escribe <font color="…">,
+    // una etiqueta que el saneado descarta, y el color se perdería al guardar.
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand("foreColor", false, color);
+    emitir();
+  }
+
   return (
     <div className="rounded-md border border-slate-300 bg-white shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
-      <div className="flex items-center gap-1 border-b border-slate-200 px-2 py-1.5">
+      <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 px-2 py-1.5">
         {BOTONES.map((boton) => (
           <button
             key={boton.comando}
@@ -115,6 +133,25 @@ export default function EditorObservaciones({
             className="flex h-7 w-7 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
           >
             {boton.icono}
+          </button>
+        ))}
+
+        <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
+
+        {COLORES_TEXTO.map((color) => (
+          <button
+            key={color.valor}
+            type="button"
+            title={`Texto en ${color.nombre.toLowerCase()}`}
+            aria-label={`Texto en ${color.nombre.toLowerCase()}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => aplicarColor(color.valor)}
+            className="flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-slate-100"
+          >
+            <span
+              className="h-3.5 w-3.5 rounded-full ring-1 ring-slate-300"
+              style={{ backgroundColor: color.valor }}
+            />
           </button>
         ))}
       </div>

@@ -24,7 +24,9 @@ body {
     display: none !important;
   }
 
-  /* La hoja se aplana: sin sombra, sin márgenes ni recortes. */
+  /* La hoja se aplana: sin sombra, sin márgenes ni recortes.
+     print-color-adjust evita que el navegador "ahorre tinta" convirtiendo a
+     gris los colores que se eligieron en las observaciones. */
   .hoja {
     position: static;
     max-width: none;
@@ -32,12 +34,16 @@ body {
     overflow: visible;
     background: #fff;
     box-shadow: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   .capa-impresion {
     position: static;
     overflow: visible;
     background: #fff;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
   /* La vista de impresión del sistema se monta fuera de #root, así que al

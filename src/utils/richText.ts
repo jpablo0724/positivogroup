@@ -1,15 +1,56 @@
 /**
- * Observaciones con formato (negrilla, alineación y viñetas).
+ * Observaciones con formato (negrilla, alineación, viñetas y color).
  *
  * El campo se guarda como HTML, pero el catálogo de productos y las
  * cotizaciones guardadas antes de este cambio traen texto plano, así que
  * `aHtml` acepta las dos formas y siempre devuelve HTML limpio.
  *
  * Todo lo que se va a pintar con dangerouslySetInnerHTML pasa antes por
- * `sanitizarHtml`: solo sobreviven las etiquetas de formato y el
- * `text-align`, de modo que un contenido manipulado en el almacenamiento del
- * navegador no pueda inyectar nada ejecutable en la cotización.
+ * `sanitizarHtml`: solo sobreviven las etiquetas de formato, el `text-align` y
+ * los colores de la lista, de modo que un contenido manipulado en el
+ * almacenamiento del navegador no pueda inyectar nada ejecutable en la
+ * cotización.
  */
+
+/**
+ * Colores que puede tomar el texto de las observaciones.
+ *
+ * Es una lista cerrada y no un selector libre a propósito. Por un lado, lo que
+ * se guarda aquí se vuelve a pintar con dangerouslySetInnerHTML, y cuanto más
+ * estrecho sea lo que se acepta, menos superficie hay que vigilar. Por otro,
+ * mantiene todas las cotizaciones dentro de una misma gama.
+ */
+export const COLORES_TEXTO = [
+  { nombre: "Negro", valor: "#0f172a" },
+  { nombre: "Rojo", valor: "#dc2626" },
+  { nombre: "Verde", valor: "#047857" },
+  { nombre: "Azul", valor: "#1d4ed8" },
+  { nombre: "Gris", valor: "#64748b" },
+] as const;
+
+const VALORES_COLOR: Set<string> = new Set(
+  COLORES_TEXTO.map((color) => color.valor),
+);
+
+/**
+ * Devuelve el color solo si está en la lista, y null si no.
+ *
+ * Hay que normalizar antes de comparar: al aplicar el formato se pide
+ * "#dc2626" pero el navegador lo guarda como "rgb(220, 38, 38)".
+ */
+function colorPermitido(valor: string): string | null {
+  const limpio = valor.trim().toLowerCase();
+  if (limpio === "") return null;
+
+  const rgb = limpio.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  const hex = rgb
+    ? `#${[rgb[1], rgb[2], rgb[3]]
+        .map((canal) => Number(canal).toString(16).padStart(2, "0"))
+        .join("")}`
+    : limpio;
+
+  return VALORES_COLOR.has(hex) ? hex : null;
+}
 
 const ETIQUETAS_PERMITIDAS = new Set([
   "B",
@@ -69,18 +110,27 @@ function limpiar(padre: Element) {
       continue;
     }
 
+    // Se leen antes de vaciar los atributos, que es lo que descarta todo lo
+    // demás.
     const alineacion = (
       elemento.style.textAlign ||
       elemento.getAttribute("align") ||
       ""
     ).toLowerCase();
+    const color = colorPermitido(
+      elemento.style.color || elemento.getAttribute("color") || "",
+    );
 
     for (const atributo of Array.from(elemento.attributes)) {
       elemento.removeAttribute(atributo.name);
     }
 
-    if (ALINEACIONES.has(alineacion)) {
-      elemento.setAttribute("style", `text-align: ${alineacion}`);
+    const estilos: string[] = [];
+    if (ALINEACIONES.has(alineacion)) estilos.push(`text-align: ${alineacion}`);
+    if (color) estilos.push(`color: ${color}`);
+
+    if (estilos.length > 0) {
+      elemento.setAttribute("style", estilos.join("; "));
     }
   }
 }

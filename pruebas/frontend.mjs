@@ -509,6 +509,43 @@ console.log("\n== Producto sin cantidad ni precio ==");
 }
 await page.screenshot({ path: `${OUT}/B7-sin-precio.png`, fullPage: true });
 
+console.log("\n== Color en las observaciones ==");
+{
+  await page.click("text=Crear Cotización");
+  await page.waitForSelector('[aria-label="Observaciones"]');
+
+  const editor = page.locator('[aria-label="Observaciones"]');
+  await editor.click();
+  await page.keyboard.type("Promoción válida hasta fin de mes");
+
+  const paleta = page.locator('button[aria-label^="Texto en"]');
+  comprobar("hay una paleta de colores", (await paleta.count()) === 5, `${await paleta.count()}`);
+
+  await page.keyboard.press("Control+A");
+  await page.locator('button[aria-label="Texto en rojo"]').click();
+  await page.waitForTimeout(300);
+
+  // Lo que importa no es cómo queda el editor, sino que el color sobreviva al
+  // saneado y llegue a la cotización que ve el cliente.
+  const coloreado = page.locator('#invoice-preview span[style*="color"]');
+  comprobar("el color llega a la cotización", (await coloreado.count()) > 0);
+  const color = await coloreado.first().evaluate((e) => getComputedStyle(e).color);
+  comprobar("y es el que se eligió", color === "rgb(220, 38, 38)", color);
+
+  // La negrilla usa etiquetas y el color usa CSS: conviven mal si el editor no
+  // conmuta styleWithCSS entre una cosa y la otra.
+  await page.keyboard.press("Control+A");
+  await page.locator('button[aria-label="Negrilla"]').click();
+  await page.waitForTimeout(300);
+
+  const negrita = await page.locator("#invoice-preview b, #invoice-preview strong").count();
+  comprobar("la negrilla sigue funcionando junto al color", negrita > 0, `${negrita}`);
+  comprobar("y el color no se pierde al aplicarla",
+    (await page.locator('#invoice-preview span[style*="color"]').count()) > 0);
+
+  await page.screenshot({ path: `${OUT}/E1-observaciones-color.png`, fullPage: true });
+}
+
 console.log("\n== Sesión vencida y cierre de sesión ==");
 {
   // El servidor invalida la sesión (equivale a que venza el testigo).
