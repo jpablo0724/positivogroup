@@ -57,17 +57,13 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
         </div>
         {/* El logo de la cotización es el archivo de la empresa, no el dibujo
             de PositivoLogo: es el que se imprime y el que ve el cliente, así
-            que va la imagen original tal cual. El descriptivo de debajo sigue
-            siendo texto, porque el archivo no lo incluye. */}
-        <div className="flex w-56 shrink-0 flex-col items-center justify-center px-4 py-3">
+            que va la imagen original tal cual y sin nada añadido. */}
+        <div className="flex w-56 shrink-0 items-center justify-center px-4 py-3">
           <img
             src="/Logo-Cotización.png"
             alt="Positivo Group"
             className="w-full max-w-[190px]"
           />
-          <p className="mt-1 font-[Poppins] text-[7px] font-medium tracking-[0.2em] text-slate-400">
-            PUBLICIDAD Y COMUNICACIÓN RESIDENCIAL
-          </p>
         </div>
       </div>
 
