@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- El ?v= no es decorativo: los navegadores guardan los favicons en un
+         almacén propio que ignora las cabeceras de caché, así que cambiar el
+         archivo no basta para que se vean el nuevo. Lo que sí funciona es que
+         cambie la dirección. Al reemplazar el icono, subir el número. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
