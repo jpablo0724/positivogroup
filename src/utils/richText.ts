@@ -12,44 +12,51 @@
  * cotización.
  */
 
-/**
- * Colores que puede tomar el texto de las observaciones.
- *
- * Es una lista cerrada y no un selector libre a propósito. Por un lado, lo que
- * se guarda aquí se vuelve a pintar con dangerouslySetInnerHTML, y cuanto más
- * estrecho sea lo que se acepta, menos superficie hay que vigilar. Por otro,
- * mantiene todas las cotizaciones dentro de una misma gama.
- */
-export const COLORES_TEXTO = [
+/** Colores que ofrece la paleta. Se puede escribir cualquier otro a mano. */
+export const COLORES_SUGERIDOS = [
   { nombre: "Negro", valor: "#0f172a" },
+  { nombre: "Gris", valor: "#475569" },
+  { nombre: "Gris claro", valor: "#94a3b8" },
   { nombre: "Rojo", valor: "#dc2626" },
-  { nombre: "Verde", valor: "#047857" },
+  { nombre: "Naranja", valor: "#ea580c" },
+  { nombre: "Ámbar", valor: "#ca8a04" },
+  { nombre: "Verde", valor: "#16a34a" },
+  { nombre: "Verde oscuro", valor: "#047857" },
+  { nombre: "Turquesa", valor: "#0891b2" },
   { nombre: "Azul", valor: "#1d4ed8" },
-  { nombre: "Gris", valor: "#64748b" },
+  { nombre: "Morado", valor: "#6d28d9" },
+  { nombre: "Fucsia", valor: "#be185d" },
 ] as const;
 
-const VALORES_COLOR: Set<string> = new Set(
-  COLORES_TEXTO.map((color) => color.valor),
-);
-
 /**
- * Devuelve el color solo si está en la lista, y null si no.
+ * Devuelve el color como `#rrggbb`, o null si no lo es.
  *
- * Hay que normalizar antes de comparar: al aplicar el formato se pide
- * "#dc2626" pero el navegador lo guarda como "rgb(220, 38, 38)".
+ * Se aceptan colores libres, pero solo en esta forma. Es lo que mantiene
+ * seguro el saneado: el valor que acaba en el atributo `style` son seis
+ * dígitos hexadecimales y nada más, de modo que no cabe una función de CSS
+ * como `url(...)` por mucho que se manipule el contenido guardado.
+ *
+ * Hay que normalizar además porque el navegador reescribe lo que se le pide:
+ * al aplicar "#dc2626" lo guarda como "rgb(220, 38, 38)".
  */
-function colorPermitido(valor: string): string | null {
+export function normalizarColor(valor: string): string | null {
   const limpio = valor.trim().toLowerCase();
   if (limpio === "") return null;
 
   const rgb = limpio.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  const hex = rgb
-    ? `#${[rgb[1], rgb[2], rgb[3]]
-        .map((canal) => Number(canal).toString(16).padStart(2, "0"))
-        .join("")}`
-    : limpio;
+  if (rgb) {
+    const canales = [rgb[1], rgb[2], rgb[3]].map(Number);
+    if (canales.some((canal) => canal > 255)) return null;
+    return `#${canales.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+  }
 
-  return VALORES_COLOR.has(hex) ? hex : null;
+  const corto = limpio.match(/^#?([0-9a-f]{3})$/);
+  if (corto) {
+    return `#${Array.from(corto[1], (digito) => digito + digito).join("")}`;
+  }
+
+  const largo = limpio.match(/^#?([0-9a-f]{6})$/);
+  return largo ? `#${largo[1]}` : null;
 }
 
 const ETIQUETAS_PERMITIDAS = new Set([
@@ -117,7 +124,7 @@ function limpiar(padre: Element) {
       elemento.getAttribute("align") ||
       ""
     ).toLowerCase();
-    const color = colorPermitido(
+    const color = normalizarColor(
       elemento.style.color || elemento.getAttribute("color") || "",
     );
 

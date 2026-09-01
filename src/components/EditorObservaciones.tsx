@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CLASES_CONTENIDO,
-  COLORES_TEXTO,
+  COLORES_SUGERIDOS,
   aHtml,
   estaVacio,
+  normalizarColor,
 } from "../utils/richText";
 
 interface EditorObservacionesProps {
@@ -80,6 +81,16 @@ export default function EditorObservaciones({
   const editorRef = useRef<HTMLDivElement>(null);
   const ultimoEmitido = useRef<string | null>(null);
 
+  const [paletaAbierta, setPaletaAbierta] = useState(false);
+  const [codigo, setCodigo] = useState("");
+  const [ultimoColor, setUltimoColor] = useState<string>(
+    COLORES_SUGERIDOS[0].valor,
+  );
+  const paletaRef = useRef<HTMLDivElement>(null);
+  // Escribir en la casilla del código saca el foco del editor y con él se
+  // pierde el texto seleccionado, así que se guarda para reponerlo al aplicar.
+  const seleccion = useRef<Range | null>(null);
+
   useEffect(() => {
     if (value === ultimoEmitido.current) return;
 
@@ -89,6 +100,26 @@ export default function EditorObservaciones({
     const deseado = aHtml(value);
     if (editor.innerHTML !== deseado) editor.innerHTML = deseado;
   }, [value]);
+
+  useEffect(() => {
+    if (!paletaAbierta) return;
+
+    function alPulsarFuera(evento: MouseEvent) {
+      if (!paletaRef.current?.contains(evento.target as Node)) {
+        setPaletaAbierta(false);
+      }
+    }
+    function alEscape(evento: KeyboardEvent) {
+      if (evento.key === "Escape") setPaletaAbierta(false);
+    }
+
+    document.addEventListener("mousedown", alPulsarFuera);
+    document.addEventListener("keydown", alEscape);
+    return () => {
+      document.removeEventListener("mousedown", alPulsarFuera);
+      document.removeEventListener("keydown", alEscape);
+    };
+  }, [paletaAbierta]);
 
   function emitir() {
     const html = editorRef.current?.innerHTML ?? "";
@@ -108,14 +139,39 @@ export default function EditorObservaciones({
     emitir();
   }
 
-  function aplicarColor(color: string) {
+  function alternarPaleta() {
+    const actual = window.getSelection();
+    if (actual && actual.rangeCount > 0) {
+      const rango = actual.getRangeAt(0);
+      if (editorRef.current?.contains(rango.commonAncestorContainer)) {
+        seleccion.current = rango.cloneRange();
+      }
+    }
+    setPaletaAbierta((abierta) => !abierta);
+  }
+
+  function aplicarColor(valor: string) {
+    const color = normalizarColor(valor);
+    if (!color) return;
+
     editorRef.current?.focus();
+    if (seleccion.current) {
+      const actual = window.getSelection();
+      actual?.removeAllRanges();
+      actual?.addRange(seleccion.current);
+    }
+
     // Aquí sí se quiere CSS: sin esto el navegador escribe <font color="…">,
     // una etiqueta que el saneado descarta, y el color se perdería al guardar.
     document.execCommand("styleWithCSS", false, "true");
     document.execCommand("foreColor", false, color);
+
     emitir();
+    setUltimoColor(color);
+    setPaletaAbierta(false);
   }
+
+  const codigoValido = normalizarColor(codigo);
 
   return (
     <div className="rounded-md border border-slate-300 bg-white shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
@@ -138,22 +194,71 @@ export default function EditorObservaciones({
 
         <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
 
-        {COLORES_TEXTO.map((color) => (
+        <div className="relative" ref={paletaRef}>
           <button
-            key={color.valor}
             type="button"
-            title={`Texto en ${color.nombre.toLowerCase()}`}
-            aria-label={`Texto en ${color.nombre.toLowerCase()}`}
+            title="Color del texto"
+            aria-label="Color del texto"
+            aria-expanded={paletaAbierta}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => aplicarColor(color.valor)}
-            className="flex h-7 w-7 items-center justify-center rounded transition-colors hover:bg-slate-100"
+            onClick={alternarPaleta}
+            className="flex h-7 items-center gap-1 rounded px-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
           >
-            <span
-              className="h-3.5 w-3.5 rounded-full ring-1 ring-slate-300"
-              style={{ backgroundColor: color.valor }}
-            />
+            <span className="flex flex-col items-center leading-none">
+              <span className="text-sm font-semibold">A</span>
+              <span
+                className="mt-0.5 h-1.5 w-4 rounded-sm"
+                style={{ backgroundColor: ultimoColor }}
+              />
+            </span>
+            <svg viewBox="0 0 20 20" {...trazo} className="h-3 w-3">
+              <path d="M6 8l4 4 4-4" />
+            </svg>
           </button>
-        ))}
+
+          {paletaAbierta && (
+            <div className="absolute left-0 top-9 z-20 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+              <div className="grid grid-cols-6 gap-1.5">
+                {COLORES_SUGERIDOS.map((color) => (
+                  <button
+                    key={color.valor}
+                    type="button"
+                    title={color.nombre}
+                    aria-label={color.nombre}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => aplicarColor(color.valor)}
+                    className="h-6 w-6 rounded ring-1 ring-slate-300 transition-transform hover:scale-110"
+                    style={{ backgroundColor: color.valor }}
+                  />
+                ))}
+              </div>
+
+              <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2">
+                <span className="text-sm text-slate-400">#</span>
+                <input
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    aplicarColor(codigo);
+                  }}
+                  placeholder="dc2626"
+                  aria-label="Color en código hexadecimal"
+                  className="w-full min-w-0 rounded border border-slate-300 px-2 py-1 font-mono text-xs text-slate-900 outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => aplicarColor(codigo)}
+                  disabled={!codigoValido}
+                  className="shrink-0 rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="relative">

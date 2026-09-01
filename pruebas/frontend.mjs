@@ -518,22 +518,55 @@ console.log("\n== Color en las observaciones ==");
   await editor.click();
   await page.keyboard.type("Promoción válida hasta fin de mes");
 
-  const paleta = page.locator('button[aria-label^="Texto en"]');
-  comprobar("hay una paleta de colores", (await paleta.count()) === 5, `${await paleta.count()}`);
+  // La paleta vive detrás de un botón: no debe haber colores sueltos en la
+  // barra hasta que se abra.
+  comprobar("la paleta empieza cerrada",
+    (await page.locator('button[aria-label="Rojo"]').count()) === 0);
 
   await page.keyboard.press("Control+A");
-  await page.locator('button[aria-label="Texto en rojo"]').click();
+  await page.locator('button[aria-label="Color del texto"]').click();
+  await page.waitForTimeout(200);
+
+  const muestras = page.locator('button[aria-label="Rojo"], button[aria-label="Azul"], button[aria-label="Verde"]');
+  comprobar("al abrirla salen los colores", (await muestras.count()) === 3, `${await muestras.count()}`);
+
+  await page.locator('button[aria-label="Rojo"]').click();
   await page.waitForTimeout(300);
+
+  comprobar("y se cierra al elegir",
+    (await page.locator('button[aria-label="Rojo"]').count()) === 0);
 
   // Lo que importa no es cómo queda el editor, sino que el color sobreviva al
   // saneado y llegue a la cotización que ve el cliente.
   const coloreado = page.locator('#invoice-preview span[style*="color"]');
   comprobar("el color llega a la cotización", (await coloreado.count()) > 0);
-  const color = await coloreado.first().evaluate((e) => getComputedStyle(e).color);
-  comprobar("y es el que se eligió", color === "rgb(220, 38, 38)", color);
+  comprobar("y es el que se eligió",
+    (await coloreado.first().evaluate((e) => getComputedStyle(e).color)) === "rgb(220, 38, 38)");
+
+  // Un color escrito a mano, que es el otro camino que pidió el usuario.
+  await editor.click();
+  await page.keyboard.press("Control+A");
+  await page.locator('button[aria-label="Color del texto"]').click();
+  await page.waitForTimeout(200);
+
+  await page.screenshot({ path: `${OUT}/E2-paleta-abierta.png` });
+
+  const casilla = page.locator('input[aria-label="Color en código hexadecimal"]');
+  await casilla.fill("zzz");
+  comprobar("un código inválido no se puede aplicar",
+    await page.locator('button:has-text("Aplicar")').isDisabled());
+
+  await casilla.fill("#7c3aed");
+  await page.locator('button:has-text("Aplicar")').click();
+  await page.waitForTimeout(300);
+
+  comprobar("aplica el color escrito a mano",
+    (await page.locator('#invoice-preview span[style*="color"]').first()
+      .evaluate((e) => getComputedStyle(e).color)) === "rgb(124, 58, 237)");
 
   // La negrilla usa etiquetas y el color usa CSS: conviven mal si el editor no
   // conmuta styleWithCSS entre una cosa y la otra.
+  await editor.click();
   await page.keyboard.press("Control+A");
   await page.locator('button[aria-label="Negrilla"]').click();
   await page.waitForTimeout(300);
