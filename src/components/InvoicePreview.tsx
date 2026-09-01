@@ -7,6 +7,7 @@ import {
   formatNumber,
 } from "../utils/calculations";
 import { CLASES_CONTENIDO, aHtml } from "../utils/richText";
+import LogoEmpresa from "./LogoEmpresa";
 
 interface InvoicePreviewProps {
   data: InvoiceData;
@@ -55,15 +56,8 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
             <p>{COMPANY.city}</p>
           </div>
         </div>
-        {/* El logo de la cotización es el archivo de la empresa, no el dibujo
-            de PositivoLogo: es el que se imprime y el que ve el cliente, así
-            que va la imagen original tal cual y sin nada añadido. */}
         <div className="flex w-56 shrink-0 items-center justify-center px-4 py-3">
-          <img
-            src="/Logo-Cotización.png"
-            alt="Positivo Group"
-            className="w-full max-w-[190px]"
-          />
+          <LogoEmpresa />
         </div>
       </div>
 

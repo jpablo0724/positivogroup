@@ -1,5 +1,5 @@
 import { useState } from "react";
-import PositivoLogo from "./PositivoLogo";
+import LogoEmpresa from "./LogoEmpresa";
 import { BackendNoDisponible, ErrorApi, SinSesion } from "../utils/api";
 import {
   MINIMO_CONTRASENA,
@@ -97,7 +97,7 @@ export default function PantallaAcceso({
         onSubmit={enviar}
         className="w-full max-w-sm rounded-xl bg-white p-8 shadow-xl"
       >
-        <PositivoLogo />
+        <LogoEmpresa />
         <h1 className="mt-6 text-lg font-semibold text-slate-900">
           Sistema de cotizaciones
         </h1>
