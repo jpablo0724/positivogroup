@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import PositivoLogo from "./PositivoLogo";
+import LogoEmpresa from "./LogoEmpresa";
 
 export type View =
   | "crear-factura"
@@ -124,7 +124,7 @@ export default function Sidebar({
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col bg-slate-900 text-slate-200">
       <div className="border-b border-slate-800 px-5 py-5">
-        <PositivoLogo variant="light" />
+        <LogoEmpresa fondo="oscuro" />
         <p className="mt-1 text-xs text-slate-400">Sistema de cotizaciones</p>
       </div>
 
