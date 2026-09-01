@@ -1,0 +1,92 @@
+name: Pruebas
+
+# Se ejecutan en cada subida a main y en cada pull request. Como Hostinger
+# despliega automáticamente al subir a main, esto no impide que un fallo llegue
+# al servidor, pero sí lo deja a la vista enseguida: el commit queda marcado
+# con una equis roja en GitHub y en la lista de despliegues.
+#
+# Para que además lo impida, hay que trabajar por pull request y proteger main
+# exigiendo que estas comprobaciones pasen antes de fusionar.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  revision:
+    name: Tipos, estilo y backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Tipos
+        run: npx tsc -b
+
+      - name: Estilo
+        run: npm run lint
+
+      - name: Almacén SQL
+        run: npm run prueba:sql
+
+      - name: Servidor HTTP
+        run: npm run prueba:servidor
+
+      - name: Autenticación
+        run: npm run prueba:auth
+
+      - name: Backend
+        run: npm run prueba:backend
+
+      # Las mismas suites contra SQL de verdad en vez del almacén en memoria.
+      # Es lo que comprueba que la capa de base de datos se comporta igual.
+      - name: Autenticación sobre SQL
+        run: npm run prueba:auth
+        env:
+          PRUEBA_ALMACEN: sqlite
+
+      - name: Backend sobre SQL
+        run: npm run prueba:backend
+        env:
+          PRUEBA_ALMACEN: sqlite
+
+      - name: Compilación completa
+        run: npm run build
+
+  navegador:
+    name: Interfaz en el navegador
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Playwright no está en package.json a propósito: solo hace falta aquí,
+      # y añadirlo obligaría a descargar un navegador en cada despliegue.
+      - name: Instalar el navegador de pruebas
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Interfaz
+        run: |
+          npm run dev &
+          for intento in $(seq 1 60); do
+            curl -sf http://localhost:5173 > /dev/null && break
+            sleep 1
+          done
+          npm run prueba:ui
