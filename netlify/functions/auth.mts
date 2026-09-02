@@ -15,6 +15,7 @@ import {
   derivarContrasena,
   guardarUsuario,
   leerCookie,
+  listarUsuarios,
   normalizarEmail,
   reclamarPrimerUsuario,
   usuarioDeSesion,
@@ -28,9 +29,10 @@ import {
  *   POST /api/auth/salir    -> cierra la sesión
  *   GET  /api/auth/sesion   -> quién está dentro
  *
- * El registro exige el código de la empresa (APP_ACCESS_CODE en Netlify). Sin
- * esa puerta, cualquiera que llegara a la dirección podría crearse una cuenta
- * y ver las cotizaciones y los datos de los clientes.
+ * El registro está cerrado: las cuentas las crea un administrador desde la
+ * sección de Usuarios. La única excepción es el arranque, cuando todavía no
+ * existe ninguna cuenta y hace falta crear la primera —que queda como
+ * administradora— con el código de la empresa (APP_ACCESS_CODE).
  */
 
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,7 +61,13 @@ export default async (req: Request) => {
     // --- Quién está dentro ---
     if (accion === "sesion") {
       const usuario = await usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
-      if (!usuario) return json({ error: "sin_sesion" }, 401);
+      if (!usuario) {
+        // La pantalla de acceso necesita saber si el sistema está recién
+        // instalado: en ese caso, y solo en ese, ofrece crear la primera
+        // cuenta en vez de únicamente iniciar sesión.
+        const cuentas = await listarUsuarios();
+        return json({ error: "sin_sesion", sinCuentas: cuentas.length === 0 }, 401);
+      }
 
       // Aquí, porque es lo que se consulta al abrir la página: si el sistema
       // se quedó sin administrador, se repara antes de decir quién es quién.
@@ -99,6 +107,21 @@ export default async (req: Request) => {
         );
       }
 
+      // El registro solo existe para crear la primera cuenta. A partir de ahí
+      // las crea un administrador desde Usuarios, con su rol y sus permisos.
+      const cuentas = await listarUsuarios();
+      if (cuentas.length > 0) {
+        return json(
+          {
+            error: "registro_cerrado",
+            mensaje:
+              "Las cuentas las crea un administrador desde la sección de " +
+              "Usuarios. Pídele que te cree la tuya.",
+          },
+          403,
+        );
+      }
+
       const nombre = texto((cuerpo as never)["nombre"]).trim();
       const codigo = texto((cuerpo as never)["codigo"]);
 
@@ -114,14 +137,18 @@ export default async (req: Request) => {
         return json({ error: "codigo_empresa_invalido" }, 403);
       }
 
-      // La primera cuenta que se registre queda como administradora.
+      // Reclamar el puesto de primera cuenta es lo que resuelve dos registros
+      // simultáneos: solo uno lo consigue.
       const esPrimera = await reclamarPrimerUsuario(email);
+      if (!esPrimera) return json({ error: "registro_cerrado" }, 403);
 
       const { clave, sal } = await derivarContrasena(contrasena);
       const creado = await crearUsuario({
         email,
         nombre,
-        admin: esPrimera,
+        apellidos: texto((cuerpo as never)["apellidos"]).trim(),
+        rol: "admin",
+        admin: true,
         clave,
         sal,
         creadoEn: new Date().toISOString(),

@@ -1,5 +1,6 @@
-import { json, revisarSesion } from "../lib/acceso.mts";
+import { json, quienPide } from "../lib/acceso.mts";
 import { randomBytes } from "node:crypto";
+import { esAdmin, normalizarEmail, type Usuario } from "../lib/auth.mts";
 import {
   almacenCotizaciones,
   almacenEnlaces,
@@ -8,16 +9,22 @@ import {
 } from "../lib/almacen.mts";
 
 /**
- * Cotizaciones guardadas, compartidas por todo el equipo.
+ * Cotizaciones guardadas.
  *
- *   GET    /api/cotizaciones            -> listado completo
+ *   GET    /api/cotizaciones            -> listado
  *   POST   /api/cotizaciones            -> guarda o reemplaza una
  *   POST   /api/cotizaciones/enlace     -> enlace público para el cliente
  *   DELETE /api/cotizaciones/PG 0001/26 -> elimina una
+ *
+ * Quién ve qué se decide aquí y no en el navegador: un administrador ve las de
+ * todo el equipo, y una cuenta básica solo las suyas. Cada cotización guarda
+ * quién la creó, y ese dato no se toma del cuerpo de la petición sino de la
+ * sesión, para que nadie pueda atribuirse las de otro.
  */
 
 interface CotizacionGuardada {
   guardadoEn: string;
+  creadoPor?: string;
   data: { numeroFactura?: unknown };
 }
 
@@ -32,9 +39,21 @@ function esCotizacion(valor: unknown): valor is CotizacionGuardada {
   );
 }
 
+/**
+ * ¿Puede esta persona ver o tocar esta cotización?
+ *
+ * Las cotizaciones guardadas antes de que existieran los roles no tienen autor.
+ * Se tratan como del administrador: nadie las pierde, pero tampoco aparecen en
+ * el listado de una cuenta básica que no las creó.
+ */
+function esSuya(cotizacion: CotizacionGuardada, quien: Usuario): boolean {
+  if (esAdmin(quien)) return true;
+  return normalizarEmail(cotizacion.creadoPor ?? "") === quien.email;
+}
+
 export default async (req: Request) => {
-  const sinSesion = await revisarSesion(req);
-  if (sinSesion) return sinSesion;
+  const quien = await quienPide(req);
+  if (!quien) return json({ error: "sin_sesion" }, 401);
 
   const almacen = almacenCotizaciones();
   const url = new URL(req.url);
@@ -46,7 +65,8 @@ export default async (req: Request) => {
 
   try {
     if (req.method === "GET") {
-      const cotizaciones = await leerTodo<CotizacionGuardada>(almacen);
+      const todas = await leerTodo<CotizacionGuardada>(almacen);
+      const cotizaciones = todas.filter((c) => esSuya(c, quien));
       cotizaciones.sort((a, b) => b.guardadoEn.localeCompare(a.guardadoEn));
       return json({ cotizaciones });
     }
@@ -64,6 +84,11 @@ export default async (req: Request) => {
       })) as (CotizacionGuardada & { enlace?: string }) | null;
 
       if (!guardada) return json({ error: "cotizacion_no_existe" }, 404);
+      // El mismo 404 que si no existiera: quien no la creó no tiene por qué
+      // saber siquiera que ese número está usado.
+      if (!esSuya(guardada, quien)) {
+        return json({ error: "cotizacion_no_existe" }, 404);
+      }
 
       // El enlace se reutiliza: pedirlo dos veces no invalida el que ya se le
       // mandó al cliente.
@@ -94,11 +119,18 @@ export default async (req: Request) => {
       // recibido y debe seguir viendo la versión al día.
       const previa = (await almacen.get(claveCotizacion(numero), {
         type: "json",
-      })) as { enlace?: string } | null;
+      })) as (CotizacionGuardada & { enlace?: string }) | null;
+
+      if (previa && !esSuya(previa, quien)) {
+        return json({ error: "cotizacion_de_otra_persona" }, 403);
+      }
 
       const registro: CotizacionGuardada = {
         ...cuerpo,
         ...(previa?.enlace ? { enlace: previa.enlace } : {}),
+        // El autor se conserva al reeditar y, si es nueva, es quien la guarda.
+        // Sale de la sesión y no del cuerpo, para que nadie firme por otro.
+        creadoPor: previa?.creadoPor ?? quien.email,
         guardadoEn: new Date().toISOString(),
       };
 
@@ -108,6 +140,15 @@ export default async (req: Request) => {
 
     if (req.method === "DELETE") {
       if (resto.trim() === "") return json({ error: "falta_numero" }, 400);
+
+      const guardada = (await almacen.get(claveCotizacion(resto), {
+        type: "json",
+      })) as CotizacionGuardada | null;
+
+      if (guardada && !esSuya(guardada, quien)) {
+        return json({ error: "cotizacion_de_otra_persona" }, 403);
+      }
+
       await almacen.delete(claveCotizacion(resto));
       return json({ eliminada: resto });
     }

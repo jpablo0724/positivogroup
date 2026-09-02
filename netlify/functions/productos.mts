@@ -1,4 +1,5 @@
-import { json, revisarSesion } from "../lib/acceso.mts";
+import { json, quienPide } from "../lib/acceso.mts";
+import { puede } from "../lib/auth.mts";
 import {
   CLAVE_CATALOGO_SEMBRADO,
   almacenContadores,
@@ -15,6 +16,10 @@ import { CATALOGO_INICIAL } from "../lib/catalogoInicial.mts";
  *   GET    /api/productos          -> listado, en orden
  *   POST   /api/productos          -> crea o edita uno
  *   DELETE /api/productos/<nombre> -> elimina uno
+ *
+ * Consultarlo puede cualquiera con sesión, tenga o no permiso de catálogo:
+ * hace falta para llenar el desplegable al armar una cotización, que es el
+ * trabajo de todo el mundo. Modificarlo sí exige el permiso.
  *
  * Los 21 servicios de Positivo Group ya no viven en el código: se copian a la
  * base de datos la primera vez que alguien consulta el catálogo, y desde ahí
@@ -62,8 +67,12 @@ function ordenSiguiente(productos: Producto[]): number {
 }
 
 export default async (req: Request) => {
-  const sinSesion = await revisarSesion(req);
-  if (sinSesion) return sinSesion;
+  const quien = await quienPide(req);
+  if (!quien) return json({ error: "sin_sesion" }, 401);
+
+  if (req.method !== "GET" && !puede(quien, "catalogo")) {
+    return json({ error: "requiere_permiso", permiso: "catalogo" }, 403);
+  }
 
   const almacen = almacenProductos();
   const url = new URL(req.url);

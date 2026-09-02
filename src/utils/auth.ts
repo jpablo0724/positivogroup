@@ -1,24 +1,53 @@
 import { pedir } from "./api";
 
+export type Rol = "admin" | "basico";
+
+/** Las secciones que se pueden habilitar por cuenta. Crear cotizaciones no
+ *  lleva permiso: es el trabajo de cualquiera que entre al sistema. */
+export interface Permisos {
+  cotizaciones: boolean;
+  catalogo: boolean;
+  usuarios: boolean;
+}
+
 export interface UsuarioPublico {
   email: string;
   nombre: string;
+  apellidos: string;
+  rol: Rol;
+  permisos: Permisos;
   admin: boolean;
   creadoEn?: string;
 }
 
 export const MINIMO_CONTRASENA = 8;
 
-/** Quién está dentro, o null si no hay sesión abierta. */
-export async function sesionActual(): Promise<UsuarioPublico | null> {
+/** Nombre completo para mostrar, con los apellidos si los hay. */
+export function nombreCompleto(usuario: {
+  nombre: string;
+  apellidos?: string;
+}): string {
+  return [usuario.nombre, usuario.apellidos].filter(Boolean).join(" ").trim();
+}
+
+export interface EstadoSesion {
+  usuario: UsuarioPublico | null;
+  /** El sistema no tiene ninguna cuenta todavía: hay que crear la primera. */
+  sinCuentas: boolean;
+}
+
+/** Quién está dentro, y si el sistema está recién instalado. */
+export async function sesionActual(): Promise<EstadoSesion> {
   try {
     const { usuario } = await pedir<{ usuario: UsuarioPublico }>(
       "/api/auth/sesion",
     );
-    return usuario;
-  } catch {
-    // Sin sesión, o backend caído: en ambos casos toca iniciar sesión.
-    return null;
+    return { usuario, sinCuentas: false };
+  } catch (err) {
+    // Sin sesión, o backend caído: en ambos casos toca iniciar sesión. El
+    // backend avisa en el mismo 401 si todavía no hay ninguna cuenta.
+    const datos = (err as { datos?: { sinCuentas?: boolean } }).datos;
+    return { usuario: null, sinCuentas: datos?.sinCuentas === true };
   }
 }
 

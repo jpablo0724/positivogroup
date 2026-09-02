@@ -33,6 +33,23 @@ const clientify = {
 const usuarios = new Map();
 const sesiones = new Map();
 
+/** Da a una cuenta simulada la misma forma que devuelve el backend real. */
+function cuenta(datos) {
+  const rol = datos.rol === "admin" ? "admin" : "basico";
+  return {
+    email: datos.email,
+    nombre: datos.nombre ?? "",
+    apellidos: datos.apellidos ?? "",
+    clave: datos.clave,
+    rol,
+    admin: rol === "admin",
+    permisos:
+      rol === "admin"
+        ? { cotizaciones: true, catalogo: true, usuarios: true }
+        : { cotizaciones: true, catalogo: false, usuarios: false, ...(datos.permisos ?? {}) },
+  };
+}
+
 function armarApi(page) {
   return page.route("**/api/**", async (route) => {
     const req = route.request();
@@ -76,8 +93,9 @@ function armarApi(page) {
       const cuerpo = req.postData() ? JSON.parse(req.postData()) : {};
 
       if (accion === "sesion") {
-        if (!email) return responder({ error: "sin_sesion" }, 401);
-
+        if (!email) {
+          return responder({ error: "sin_sesion", sinCuentas: usuarios.size === 0 }, 401);
+        }
         return responder({ usuario: usuarios.get(email) });
       }
       if (accion === "salir") {
@@ -86,10 +104,11 @@ function armarApi(page) {
       }
       if (accion === "registro") {
         const correo = (cuerpo.email ?? "").toLowerCase();
+        // Solo sirve para la primera cuenta; después lo hace un administrador.
+        if (usuarios.size > 0) return responder({ error: "registro_cerrado" }, 403);
         if (cuerpo.codigo !== CODIGO) return responder({ error: "codigo_empresa_invalido" }, 403);
         if ((cuerpo.contrasena ?? "").length < 8) return responder({ error: "contrasena_corta" }, 400);
-        if (usuarios.has(correo)) return responder({ error: "email_ya_registrado" }, 409);
-        usuarios.set(correo, { email: correo, nombre: cuerpo.nombre, clave: cuerpo.contrasena, admin: usuarios.size === 0 });
+        usuarios.set(correo, cuenta({ email: correo, nombre: cuerpo.nombre, clave: cuerpo.contrasena, rol: "admin" }));
         const nuevo = `t${sesiones.size + 1}`;
         sesiones.set(nuevo, correo);
         return responder({ usuario: usuarios.get(correo) }, 200, `pg_sesion=${nuevo}; Path=/`);
@@ -123,14 +142,26 @@ function armarApi(page) {
 
     // --- Administración ---
     if (ruta.startsWith("/api/admin/")) {
+      const cuerpo = req.postData() ? JSON.parse(req.postData()) : {};
       if (!usuarios.get(email)?.admin) return responder({ error: "requiere_admin" }, 403);
 
       if (ruta === "/api/admin/usuarios" && req.method() === "GET") {
         return responder({
-          usuarios: [...usuarios.values()].map((u) => ({
-            email: u.email, nombre: u.nombre, admin: !!u.admin, creadoEn: "2026-08-21T00:00:00.000Z",
-          })),
+          usuarios: [...usuarios.values()].map((u) => ({ ...u, clave: undefined, creadoEn: "2026-08-21T00:00:00.000Z" })),
         });
+      }
+      if (ruta === "/api/admin/usuarios" && req.method() === "POST") {
+        const correo = (cuerpo.email ?? "").toLowerCase();
+        if (usuarios.has(correo)) return responder({ error: "email_ya_registrado" }, 409);
+        usuarios.set(correo, cuenta({ ...cuerpo, email: correo, clave: cuerpo.contrasena }));
+        return responder({ usuario: usuarios.get(correo) }, 201);
+      }
+      if (ruta.startsWith("/api/admin/usuarios/") && req.method() === "PUT") {
+        const correo = decodeURIComponent(ruta.replace("/api/admin/usuarios/", ""));
+        const previa = usuarios.get(correo);
+        if (!previa) return responder({ error: "usuario_no_existe" }, 404);
+        usuarios.set(correo, cuenta({ ...previa, ...cuerpo, email: correo }));
+        return responder({ usuario: usuarios.get(correo) });
       }
       if (ruta === "/api/admin/exportar" && req.method() === "GET") {
         return responder({
@@ -233,20 +264,14 @@ console.log("\n== Registro e inicio de sesión ==");
 {
   comprobar("pide iniciar sesión al entrar", await page.locator('input[type="password"]').first().isVisible());
   comprobar("no muestra el sistema todavía", (await page.locator("text=Crear cotización").count()) === 0);
-  comprobar("ofrece las dos opciones",
-    (await page.locator('button:has-text("Iniciar sesión")').count()) > 0 &&
-    (await page.locator('button:has-text("Registrarse")').count()) > 0);
+  // Sin ninguna cuenta, la pantalla ofrece crear la primera. No hay pestañas:
+  // el registro público ya no existe.
+  comprobar("no hay pestaña de registro",
+    (await page.locator('button:has-text("Registrarse")').count()) === 0);
+  comprobar("avisa de que hay que crear la primera cuenta",
+    (await page.locator("text=No hay ninguna cuenta todavía").count()) > 0);
 
-  // Intentar entrar sin tener cuenta.
-  await page.fill('input[type="email"]', "juan@positivogroup.com");
-  await page.locator('input[type="password"]').first().fill("claveLarga2026");
-  await page.click('button[type="submit"]');
-  await page.waitForSelector("text=Correo o contraseña incorrectos");
-  comprobar("sin cuenta no deja entrar", true, "muestra el aviso");
-
-  // Registrarse con el código equivocado.
-  await page.click('button:has-text("Registrarse")');
-  await page.waitForTimeout(200);
+  // Crear la primera cuenta con el código equivocado.
   await page.fill('input[placeholder="Nombre y apellido"]', "Juan Pablo Moncada");
   await page.fill('input[type="email"]', "juan@positivogroup.com");
   const claves = page.locator('input[type="password"]');
@@ -271,6 +296,7 @@ console.log("\n== Registro e inicio de sesión ==");
   await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
   comprobar("el registro deja la sesión abierta", true);
   comprobar("la cuenta quedó creada", usuarios.has("juan@positivogroup.com"), [...usuarios.keys()].join(", "));
+  comprobar("y es administradora", usuarios.get("juan@positivogroup.com")?.rol === "admin");
 
   // El nombre y el correo salen en el menú.
   const menu = await page.locator("aside").innerText();
@@ -724,7 +750,7 @@ console.log("\n== Administración de usuarios ==");
   comprobar("el admin ve la pestaña Usuarios", (await page.locator('button:has-text("Usuarios")').count()) > 0);
 
   // Se suma otra persona al equipo.
-  usuarios.set("ana@positivogroup.com", { email: "ana@positivogroup.com", nombre: "Ana Gómez", clave: "claveDeAna2026", admin: false });
+  usuarios.set("ana@positivogroup.com", cuenta({ email: "ana@positivogroup.com", nombre: "Ana", apellidos: "Gómez", clave: "claveDeAna2026", rol: "basico" }));
 
   await page.click('button:has-text("Usuarios")');
   await page.waitForSelector("th:has-text('Correo')");
@@ -747,7 +773,7 @@ console.log("\n== Administración de usuarios ==");
 
   // Restablecerle la contraseña a Ana.
   const filaAna = page.locator("tbody tr").filter({ hasText: "Ana Gómez" });
-  await filaAna.locator('button:has-text("Restablecer")').click();
+  await filaAna.locator('button:has-text("Contraseña")').click();
   await page.waitForSelector("text=Restablecer contraseña");
   const temporal = await page.locator('[role="dialog"] input').inputValue();
   comprobar("propone una contraseña temporal", temporal.length >= 8, `${temporal.length} caracteres`);
@@ -761,7 +787,7 @@ console.log("\n== Administración de usuarios ==");
   await page.click('button:has-text("Ya la anoté")');
 
   // Quitarle el acceso.
-  await filaAna.locator('button:has-text("Quitar acceso")').click();
+  await filaAna.locator('button:has-text("Eliminar")').click();
   await page.waitForSelector("text=no podrá volver a entrar");
   await page.click('div[role="dialog"] button:has-text("Quitar acceso")');
   await page.waitForTimeout(500);
@@ -772,7 +798,99 @@ console.log("\n== Administración de usuarios ==");
 
   // El admin no puede quitarse a sí mismo: no debe salir el botón.
   const miFila = page.locator("tbody tr").first();
-  comprobar("no ofrece quitarse a uno mismo", (await miFila.locator('button:has-text("Quitar acceso")').count()) === 0);
+  comprobar("no ofrece quitarse a uno mismo", (await miFila.locator('button:has-text("Eliminar")').count()) === 0);
+}
+
+console.log("\n== Crear usuarios, roles y permisos ==");
+{
+  await page.click('button:has-text("Usuarios")');
+  await page.waitForSelector("th:has-text('Rol')");
+
+  comprobar("hay botón de crear usuario",
+    (await page.locator('button:has-text("Crear usuario")').count()) > 0);
+
+  await page.click('button:has-text("Crear usuario")');
+  await page.waitForSelector("text=Crear usuario");
+
+  const ventana = page.locator('[role="dialog"]');
+  comprobar("pide nombres, apellidos y correo",
+    (await ventana.locator('input').count()) >= 3);
+
+  await ventana.locator("input").nth(0).fill("Sofía");
+  await ventana.locator("input").nth(1).fill("Restrepo");
+  await ventana.locator('input[type="email"]').fill("sofia@positivogroup.com");
+
+  // Nace como básica y solo con el listado de cotizaciones.
+  comprobar("propone el rol básico",
+    (await ventana.locator('button:has-text("Básico")').getAttribute("class")).includes("emerald"));
+
+  await ventana.locator('button:has-text("Crear cuenta")').click();
+  await page.waitForSelector("text=Cuenta creada:");
+
+  const creada = usuarios.get("sofia@positivogroup.com");
+  comprobar("la cuenta queda creada en el servidor", Boolean(creada), [...usuarios.keys()].join(", "));
+  comprobar("con rol básico", creada?.rol === "basico", creada?.rol);
+  comprobar("y sin catálogo ni usuarios",
+    creada?.permisos.catalogo === false && creada?.permisos.usuarios === false,
+    JSON.stringify(creada?.permisos));
+  comprobar("muestra la contraseña una sola vez",
+    (await page.locator("text=no se vuelve a mostrar").count()) > 0);
+  await page.screenshot({ path: `${OUT}/F1-crear-usuario.png`, fullPage: true });
+  await page.click('button:has-text("Ya la anoté")');
+
+  // La casilla de la tabla cambia el permiso.
+  const filaSofia = page.locator("tbody tr").filter({ hasText: "Sofía" });
+  // Se pulsa y se espera: la casilla no se marca hasta que el servidor
+  // confirma el cambio, que es lo que queremos que refleje.
+  await filaSofia.locator('input[type="checkbox"]').nth(1).click();
+  await page.waitForTimeout(600);
+  comprobar("la casilla habilita el catálogo",
+    usuarios.get("sofia@positivogroup.com")?.permisos.catalogo === true,
+    JSON.stringify(usuarios.get("sofia@positivogroup.com")?.permisos));
+
+  // Un administrador no tiene nada que ajustar: sus casillas están bloqueadas.
+  const filaAdmin = page.locator("tbody tr").filter({ hasText: "juan@positivogroup.com" });
+  comprobar("las casillas del admin están bloqueadas",
+    await filaAdmin.locator('input[type="checkbox"]').first().isDisabled());
+}
+
+console.log("\n== Lo que ve una cuenta básica ==");
+{
+  // Se entra como Sofía, que es básica y solo tiene el listado.
+  await page.click("text=Cerrar sesión");
+  await page.waitForSelector('input[type="email"]', { timeout: 5000 });
+
+  usuarios.get("sofia@positivogroup.com").clave = "claveDeSofia2026";
+  usuarios.get("sofia@positivogroup.com").permisos.catalogo = false;
+
+  await page.fill('input[type="email"]', "sofia@positivogroup.com");
+  await page.locator('input[type="password"]').first().fill("claveDeSofia2026");
+  await page.click('button[type="submit"]');
+  await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
+
+  const menu = await page.locator("aside").innerText();
+  comprobar("ve crear cotización", menu.includes("Crear Cotización"));
+  comprobar("ve el listado", menu.includes("Listado de Cotizaciones"));
+  comprobar("NO ve el catálogo", !menu.includes("Catálogo"), menu.replace(/\n/g, " | "));
+  comprobar("NO ve usuarios", !menu.includes("Usuarios"), menu.replace(/\n/g, " | "));
+  await page.screenshot({ path: `${OUT}/F2-menu-basico.png`, fullPage: true });
+
+  // Y con el catálogo habilitado, aparece.
+  usuarios.get("sofia@positivogroup.com").permisos.catalogo = true;
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
+  const menu2 = await page.locator("aside").innerText();
+  comprobar("al habilitarle el catálogo, aparece", menu2.includes("Catálogo"));
+  comprobar("usuarios sigue oculto", !menu2.includes("Usuarios"));
+
+  // Se vuelve a la cuenta administradora: los bloques siguientes cuentan con
+  // ella y con todas las secciones a la vista.
+  await page.click("text=Cerrar sesión");
+  await page.waitForSelector('input[type="email"]', { timeout: 5000 });
+  await page.fill('input[type="email"]', "juan@positivogroup.com");
+  await page.locator('input[type="password"]').first().fill(usuarios.get("juan@positivogroup.com").clave);
+  await page.click('button[type="submit"]');
+  await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
 }
 
 console.log("\n== Cambiar la propia contraseña ==");

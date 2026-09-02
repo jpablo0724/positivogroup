@@ -1,4 +1,9 @@
-import { NOMBRE_COOKIE, leerCookie, usuarioDeSesion } from "./auth.mts";
+import {
+  NOMBRE_COOKIE,
+  leerCookie,
+  usuarioDeSesion,
+  type Usuario,
+} from "./auth.mts";
 
 /**
  * Control de acceso del backend.
@@ -24,6 +29,17 @@ export function json(body: unknown, status = 200) {
  * null si puede continuar.
  */
 export async function revisarSesion(req: Request): Promise<Response | null> {
-  const usuario = await usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
+  const usuario = await quienPide(req);
   return usuario ? null : json({ error: "sin_sesion" }, 401);
+}
+
+/**
+ * Quién hace la petición, o null si no hay sesión.
+ *
+ * Lo usan las funciones que además de exigir sesión necesitan saber de quién
+ * es: qué cotizaciones puede ver, si puede tocar el catálogo, etc. Sale de la
+ * cookie, nunca de nada que mande el navegador en el cuerpo.
+ */
+export async function quienPide(req: Request): Promise<Usuario | null> {
+  return usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
 }

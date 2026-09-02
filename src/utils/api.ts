@@ -6,14 +6,26 @@
  * es justamente lo que la protege.
  */
 
-/** No hay sesión válida: hay que iniciar sesión otra vez. */
-export class SinSesion extends Error {}
+/**
+ * No hay sesión válida: hay que iniciar sesión otra vez.
+ *
+ * Lleva el cuerpo de la respuesta porque el backend cuenta algo en ese mismo
+ * 401: si el sistema todavía no tiene ninguna cuenta.
+ */
+export class SinSesion extends Error {
+  datos: unknown;
+
+  constructor(mensaje: string, datos: unknown = null) {
+    super(mensaje);
+    this.datos = datos;
+  }
+}
 
 /** El backend no respondió o respondió mal. */
 export class BackendNoDisponible extends Error {}
 
 interface OpcionesPeticion {
-  metodo?: "GET" | "POST" | "DELETE";
+  metodo?: "GET" | "POST" | "PUT" | "DELETE";
   cuerpo?: unknown;
 }
 
@@ -48,7 +60,7 @@ export async function pedir<T>(
   }
 
   if (respuesta.status === 401) {
-    throw new SinSesion("Sesión no válida");
+    throw new SinSesion("Sesión no válida", datos);
   }
 
   if (!respuesta.ok) {

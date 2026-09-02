@@ -3,9 +3,11 @@ import { getStore } from "../lib/store.mts";
 import {
   MINIMO_CONTRASENA,
   NOMBRE_COOKIE,
+  PERMISOS_BASICO,
   buscarUsuario,
   cerrarSesionesDe,
   comoPublico,
+  crearUsuario,
   derivarContrasena,
   eliminarUsuario,
   esAdmin,
@@ -13,26 +15,53 @@ import {
   leerCookie,
   listarUsuarios,
   normalizarEmail,
+  puede,
   usuarioDeSesion,
+  type Permisos,
+  type Rol,
+  type Usuario,
 } from "../lib/auth.mts";
 
 /**
- * Administración de cuentas. Solo para quien sea administrador.
+ * Administración de cuentas.
  *
  *   GET    /api/admin/usuarios          -> lista las cuentas
+ *   POST   /api/admin/usuarios          -> crea una cuenta
+ *   PUT    /api/admin/usuarios/<correo> -> cambia nombre, rol y permisos
+ *   DELETE /api/admin/usuarios/<correo> -> elimina una cuenta
  *   GET    /api/admin/exportar          -> vuelca la base de datos completa
  *   POST   /api/admin/importar          -> carga un volcado en la base de datos
  *   POST   /api/admin/restablecer       -> pone una contraseña nueva a alguien
- *   DELETE /api/admin/usuarios/<correo> -> elimina una cuenta
+ *
+ * Ver la lista solo pide el permiso de usuarios; todo lo que la modifica exige
+ * ser administrador. Esa separación es deliberada: si bastara el permiso de
+ * ver para editar, una cuenta básica con acceso a la sección podría ascenderse
+ * a sí misma.
  *
  * Tanto restablecer como eliminar cierran las sesiones abiertas de esa
  * persona. Sin eso, cambiarle la contraseña no la sacaría del sistema: su
  * sesión seguiría viva en el equipo donde la dejó abierta.
  */
 
+function rolValido(valor: unknown): Rol {
+  return valor === "admin" ? "admin" : "basico";
+}
+
+/** Solo se aceptan los tres permisos conocidos, y solo como sí o no. */
+function permisosValidos(valor: unknown): Permisos {
+  const dado = (valor ?? {}) as Partial<Record<keyof Permisos, unknown>>;
+  return {
+    cotizaciones: dado.cotizaciones === true,
+    catalogo: dado.catalogo === true,
+    usuarios: dado.usuarios === true,
+  };
+}
+
 function texto(valor: unknown): string {
   return typeof valor === "string" ? valor : "";
 }
+
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Los almacenes que entran y salen en un respaldo.
@@ -52,7 +81,15 @@ const ALMACENES_EXPORTABLES = [
 export default async (req: Request) => {
   const quien = await usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
   if (!quien) return json({ error: "sin_sesion" }, 401);
-  if (!esAdmin(quien)) return json({ error: "requiere_admin" }, 403);
+
+  const administra = esAdmin(quien);
+  const soloLeeUsuarios =
+    req.method === "GET" && new URL(req.url).pathname.endsWith("/usuarios");
+
+  // Ver la lista basta con el permiso; cambiar cualquier cosa exige el rol.
+  if (!administra && !(soloLeeUsuarios && puede(quien, "usuarios"))) {
+    return json({ error: "requiere_admin" }, 403);
+  }
 
   const url = new URL(req.url);
   const segmentos = url.pathname.split("/").filter(Boolean);
@@ -158,6 +195,76 @@ export default async (req: Request) => {
     if (recurso === "usuarios" && req.method === "GET") {
       const cuentas = await listarUsuarios();
       return json({ usuarios: cuentas.map(comoPublico) });
+    }
+
+    // --- Crear una cuenta ---
+    if (recurso === "usuarios" && req.method === "POST") {
+      const cuerpo = await req.json().catch(() => ({}));
+      const correo = normalizarEmail(texto((cuerpo as never)["email"]));
+      const nombre = texto((cuerpo as never)["nombre"]).trim();
+      const contrasena = texto((cuerpo as never)["contrasena"]);
+
+      if (nombre === "") return json({ error: "falta_nombre" }, 400);
+      if (!EMAIL_VALIDO.test(correo)) return json({ error: "email_invalido" }, 400);
+      if (contrasena.length < MINIMO_CONTRASENA) {
+        return json({ error: "contrasena_corta", minimo: MINIMO_CONTRASENA }, 400);
+      }
+
+      const rol = rolValido((cuerpo as never)["rol"]);
+      const { clave, sal } = await derivarContrasena(contrasena);
+
+      const creado = await crearUsuario({
+        email: correo,
+        nombre,
+        apellidos: texto((cuerpo as never)["apellidos"]).trim(),
+        rol,
+        // A un administrador no se le guardan permisos: los tiene todos por su
+        // rol, y guardarlos solo crearía dos fuentes de verdad.
+        ...(rol === "basico"
+          ? {
+              permisos: (cuerpo as never)["permisos"]
+                ? permisosValidos((cuerpo as never)["permisos"])
+                : { ...PERMISOS_BASICO },
+            }
+          : {}),
+        clave,
+        sal,
+        creadoEn: new Date().toISOString(),
+      });
+
+      if (!creado) return json({ error: "email_ya_registrado" }, 409);
+      return json({ usuario: comoPublico(creado) }, 201);
+    }
+
+    // --- Cambiar nombre, rol y permisos ---
+    if (recurso === "usuarios" && req.method === "PUT") {
+      const correo = normalizarEmail(objetivo);
+      const cuenta = await buscarUsuario(correo);
+      if (!cuenta) return json({ error: "usuario_no_existe" }, 404);
+
+      const cuerpo = await req.json().catch(() => ({}));
+      const rol = rolValido((cuerpo as never)["rol"]);
+
+      // Quitarse a uno mismo el rol dejaría el sistema sin quien administre.
+      if (correo === quien.email && rol !== "admin") {
+        return json({ error: "no_puede_quitarse_admin" }, 400);
+      }
+
+      const nombre = texto((cuerpo as never)["nombre"]).trim();
+      const actualizado: Usuario = {
+        ...cuenta,
+        nombre: nombre === "" ? cuenta.nombre : nombre,
+        apellidos: texto((cuerpo as never)["apellidos"]).trim(),
+        rol,
+        admin: rol === "admin",
+        permisos:
+          rol === "basico"
+            ? permisosValidos((cuerpo as never)["permisos"])
+            : undefined,
+      };
+
+      await guardarUsuario(actualizado);
+      return json({ usuario: comoPublico(actualizado) });
     }
 
     if (recurso === "usuarios" && req.method === "DELETE") {

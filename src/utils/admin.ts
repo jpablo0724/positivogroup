@@ -1,13 +1,48 @@
 import { pedir } from "./api";
-import type { UsuarioPublico } from "./auth";
+import type { Permisos, Rol, UsuarioPublico } from "./auth";
 
-/** Administración de cuentas. Solo responde si quien pide es administrador. */
+/**
+ * Administración de cuentas.
+ *
+ * Ver la lista pide el permiso de usuarios; crear, editar y eliminar exigen
+ * ser administrador. Esa distinción la aplica el backend, no esta capa.
+ */
 
 export async function listarUsuarios(): Promise<UsuarioPublico[]> {
   const { usuarios } = await pedir<{ usuarios: UsuarioPublico[] }>(
     "/api/admin/usuarios",
   );
   return usuarios;
+}
+
+export interface DatosCuenta {
+  nombre: string;
+  apellidos: string;
+  email: string;
+  rol: Rol;
+  permisos: Permisos;
+}
+
+export async function crearUsuario(
+  datos: DatosCuenta & { contrasena: string },
+): Promise<UsuarioPublico> {
+  const { usuario } = await pedir<{ usuario: UsuarioPublico }>(
+    "/api/admin/usuarios",
+    { metodo: "POST", cuerpo: datos },
+  );
+  return usuario;
+}
+
+/** Cambia nombre, rol y permisos de una cuenta que ya existe. */
+export async function actualizarUsuario(
+  email: string,
+  datos: Omit<DatosCuenta, "email">,
+): Promise<UsuarioPublico> {
+  const { usuario } = await pedir<{ usuario: UsuarioPublico }>(
+    `/api/admin/usuarios/${encodeURIComponent(email)}`,
+    { metodo: "PUT", cuerpo: datos },
+  );
+  return usuario;
 }
 
 export async function restablecerContrasena(

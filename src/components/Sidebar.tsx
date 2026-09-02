@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import LogoEmpresa from "./LogoEmpresa";
+import { nombreCompleto, type Permisos } from "../utils/auth";
 
 export type View =
   | "crear-factura"
@@ -11,6 +12,8 @@ interface NavItem {
   id: View;
   label: string;
   icon: ReactNode;
+  /** Permiso que hace falta para verla. Sin él, la sección es de todos. */
+  permiso?: keyof Permisos;
 }
 
 const navItems: NavItem[] = [
@@ -39,6 +42,7 @@ const navItems: NavItem[] = [
   {
     id: "listado-cotizaciones",
     label: "Listado de Cotizaciones",
+    permiso: "cotizaciones",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -62,6 +66,7 @@ const navItems: NavItem[] = [
   {
     id: "catalogo-productos",
     label: "Catálogo de Productos",
+    permiso: "catalogo",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -84,6 +89,7 @@ const navItems: NavItem[] = [
 const itemUsuarios: NavItem = {
   id: "admin-usuarios",
   label: "Usuarios",
+  permiso: "usuarios",
   icon: (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -106,7 +112,12 @@ const itemUsuarios: NavItem = {
 interface SidebarProps {
   activeView: View;
   onNavigate: (view: View) => void;
-  usuario: { nombre: string; email: string; admin: boolean };
+  usuario: {
+    nombre: string;
+    apellidos?: string;
+    email: string;
+    permisos: Permisos;
+  };
   onSalir: () => void;
   onCambiarContrasena: () => void;
 }
@@ -118,9 +129,12 @@ export default function Sidebar({
   onSalir,
   onCambiarContrasena,
 }: SidebarProps) {
-  // La pestaña de usuarios solo tiene sentido para quien puede administrarlos;
-  // de todos modos el backend rechaza a quien no sea administrador.
-  const items = usuario.admin ? [...navItems, itemUsuarios] : navItems;
+  // El menú muestra solo lo que la cuenta puede ver. Es comodidad, no
+  // seguridad: quien escriba la dirección a mano se topa igualmente con el
+  // backend, que es quien de verdad decide.
+  const items = [...navItems, itemUsuarios].filter(
+    (item) => !item.permiso || usuario.permisos[item.permiso],
+  );
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col bg-slate-900 text-slate-200">
       <div className="border-b border-slate-800 px-5 py-5">
@@ -151,7 +165,7 @@ export default function Sidebar({
 
       <div className="border-t border-slate-800 px-5 py-4">
         <p className="truncate text-sm font-medium text-slate-200">
-          {usuario.nombre}
+          {nombreCompleto(usuario)}
         </p>
         <p className="truncate text-xs text-slate-500">{usuario.email}</p>
         <button

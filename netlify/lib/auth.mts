@@ -32,10 +32,43 @@ const VIGENCIA_SESION_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
 export const NOMBRE_COOKIE = "pg_sesion";
 export const MINIMO_CONTRASENA = 8;
 
+export type Rol = "admin" | "basico";
+
+/**
+ * Qué secciones puede ver una cuenta básica.
+ *
+ * Crear cotizaciones lo puede todo el mundo: es el trabajo de cualquiera que
+ * entre al sistema, así que no lleva permiso. Lo demás sí.
+ */
+export interface Permisos {
+  /** Ver el listado de cotizaciones (solo las suyas). */
+  cotizaciones: boolean;
+  /** Ver y editar el catálogo de productos. */
+  catalogo: boolean;
+  /** Ver la sección de usuarios. */
+  usuarios: boolean;
+}
+
+export const PERMISOS_BASICO: Permisos = {
+  cotizaciones: true,
+  catalogo: false,
+  usuarios: false,
+};
+
+const PERMISOS_TODOS: Permisos = {
+  cotizaciones: true,
+  catalogo: true,
+  usuarios: true,
+};
+
 export interface Usuario {
   email: string;
   nombre: string;
-  /** La primera cuenta registrada queda como administradora. */
+  apellidos?: string;
+  rol?: Rol;
+  /** Ajustes por cuenta sobre los permisos por defecto de su rol. */
+  permisos?: Partial<Permisos>;
+  /** Marca de administrador anterior a los roles. Se sigue respetando. */
   admin?: boolean;
   /** Derivación scrypt de la contraseña, en hexadecimal. */
   clave: string;
@@ -48,6 +81,10 @@ export interface Usuario {
 export interface UsuarioPublico {
   email: string;
   nombre: string;
+  apellidos: string;
+  rol: Rol;
+  permisos: Permisos;
+  /** Se mantiene por comodidad: equivale a rol === "admin". */
   admin: boolean;
   creadoEn?: string;
 }
@@ -127,26 +164,59 @@ export function comoPublico(usuario: Usuario): UsuarioPublico {
   return {
     email: usuario.email,
     nombre: usuario.nombre,
+    apellidos: usuario.apellidos ?? "",
+    rol: rolDe(usuario),
+    permisos: permisosDe(usuario),
     admin: esAdmin(usuario),
     creadoEn: usuario.creadoEn,
   };
 }
 
 /**
- * Es administrador quien registró la primera cuenta, o quien esté en la
- * variable ADMIN_EMAILS de Netlify (separada por comas).
+ * El rol de una cuenta.
  *
- * Las dos vías suman, no se excluyen: si la primera cuenta la creó otra
- * persona por error, basta con agregar el correo correcto a la variable, sin
- * tocar los datos.
+ * Las cuentas creadas antes de que existieran los roles no traen el campo: en
+ * ellas manda la marca `admin`, que es lo que se usaba entonces. Así nadie
+ * pierde ni gana permisos al desplegar esta versión.
+ */
+export function rolDe(usuario: Usuario): Rol {
+  if (usuario.rol === "admin" || usuario.rol === "basico") return usuario.rol;
+  return usuario.admin === true || estaDeclaradoAdmin(usuario.email)
+    ? "admin"
+    : "basico";
+}
+
+/**
+ * Es administrador quien lo tenga en su rol, o quien esté en la variable de
+ * entorno ADMIN_EMAILS (separada por comas).
+ *
+ * Las dos vías suman, no se excluyen: si por error nadie quedara como
+ * administrador, basta con agregar el correo correcto a la variable, sin tocar
+ * los datos.
  */
 export function esAdmin(usuario: Usuario): boolean {
-  const declarados = (process.env.ADMIN_EMAILS ?? "")
+  return rolDe(usuario) === "admin" || estaDeclaradoAdmin(usuario.email);
+}
+
+function estaDeclaradoAdmin(email: string): boolean {
+  return (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((correo) => normalizarEmail(correo))
-    .filter(Boolean);
+    .filter(Boolean)
+    .includes(normalizarEmail(email));
+}
 
-  return usuario.admin === true || declarados.includes(usuario.email);
+/**
+ * Los permisos efectivos de una cuenta. Un administrador lo puede todo; a una
+ * cuenta básica se le aplican sus ajustes sobre los permisos por defecto.
+ */
+export function permisosDe(usuario: Usuario): Permisos {
+  if (esAdmin(usuario)) return { ...PERMISOS_TODOS };
+  return { ...PERMISOS_BASICO, ...(usuario.permisos ?? {}) };
+}
+
+export function puede(usuario: Usuario, seccion: keyof Permisos): boolean {
+  return permisosDe(usuario)[seccion];
 }
 
 const CLAVE_PRIMER_USUARIO = "primer_usuario_registrado";
@@ -190,8 +260,8 @@ export async function asegurarPrimerAdmin(): Promise<void> {
   if (cuentas.length === 0) return;
 
   const masAntigua = cuentas[0];
-  if (!cuentas.some((cuenta) => cuenta.admin === true)) {
-    await guardarUsuario({ ...masAntigua, admin: true });
+  if (!cuentas.some((cuenta) => rolDe(cuenta) === "admin")) {
+    await guardarUsuario({ ...masAntigua, rol: "admin", admin: true });
   }
 
   await estado.setJSON(CLAVE_PRIMER_USUARIO, {

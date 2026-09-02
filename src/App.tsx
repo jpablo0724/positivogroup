@@ -56,6 +56,7 @@ function App() {
   // enlace no tiene cuenta. Se resuelve antes que nada.
   const [testigo] = useState<string | null>(testigoPublico);
   // undefined = todavía se está preguntando al servidor; null = sin sesión.
+  const [sinCuentas, setSinCuentas] = useState(false);
   const [usuario, setUsuario] = useState<UsuarioPublico | null | undefined>(
     undefined,
   );
@@ -122,8 +123,10 @@ function App() {
   // Al abrir la página se le pregunta al servidor si la cookie sigue valiendo.
   useEffect(() => {
     let cancelado = false;
-    sesionActual().then((quien) => {
-      if (!cancelado) setUsuario(quien);
+    sesionActual().then((estado) => {
+      if (cancelado) return;
+      setUsuario(estado.usuario);
+      setSinCuentas(estado.sinCuentas);
     });
     return () => {
       cancelado = true;
@@ -217,7 +220,13 @@ function App() {
   }
 
   if (usuario === null) {
-    return <PantallaAcceso onEntrar={entrar} aviso={avisoAcceso} />;
+    return (
+      <PantallaAcceso
+        onEntrar={entrar}
+        aviso={avisoAcceso}
+        sinCuentas={sinCuentas}
+      />
+    );
   }
 
   if (cargando) {
@@ -309,7 +318,7 @@ function App() {
         </main>
       )}
 
-      {activeView === "listado-cotizaciones" && (
+      {activeView === "listado-cotizaciones" && usuario.permisos.cotizaciones && (
         <main className="flex flex-1 flex-col overflow-hidden">
           <header className="border-b border-slate-200 bg-white px-8 py-5">
             <h1 className="text-xl font-semibold text-slate-900">
@@ -336,7 +345,7 @@ function App() {
         </main>
       )}
 
-      {activeView === "admin-usuarios" && usuario.admin && (
+      {activeView === "admin-usuarios" && usuario.permisos.usuarios && (
         <main className="flex flex-1 flex-col overflow-hidden">
           <header className="border-b border-slate-200 bg-white px-8 py-5">
             <h1 className="text-xl font-semibold text-slate-900">Usuarios</h1>
@@ -356,7 +365,7 @@ function App() {
         </main>
       )}
 
-      {activeView === "catalogo-productos" && (
+      {activeView === "catalogo-productos" && usuario.permisos.catalogo && (
         <main className="flex flex-1 flex-col overflow-hidden">
           <header className="border-b border-slate-200 bg-white px-8 py-5">
             <h1 className="text-xl font-semibold text-slate-900">

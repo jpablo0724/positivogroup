@@ -13,9 +13,13 @@ interface PantallaAccesoProps {
   onEntrar: (usuario: UsuarioPublico) => void;
   /** Mensaje de por qué se volvió a pedir el ingreso, si aplica. */
   aviso?: string | null;
+  /**
+   * El sistema no tiene ninguna cuenta todavía. Solo entonces se ofrece crear
+   * una: es la del primer administrador, que a partir de ahí crea las demás
+   * desde la sección de Usuarios.
+   */
+  sinCuentas?: boolean;
 }
-
-type Modo = "entrar" | "registro";
 
 const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 
@@ -33,6 +37,8 @@ function mensajeDeError(err: unknown): string {
         return "El código de la empresa no es correcto. Pídeselo al administrador.";
       case "email_ya_registrado":
         return "Ese correo ya tiene una cuenta. Inicia sesión.";
+      case "registro_cerrado":
+        return err.message;
       case "contrasena_corta":
         return `La contraseña debe tener al menos ${MINIMO_CONTRASENA} caracteres.`;
       case "email_invalido":
@@ -51,8 +57,8 @@ function mensajeDeError(err: unknown): string {
 export default function PantallaAcceso({
   onEntrar,
   aviso,
+  sinCuentas = false,
 }: PantallaAccesoProps) {
-  const [modo, setModo] = useState<Modo>("entrar");
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [contrasena, setContrasena] = useState("");
@@ -60,18 +66,14 @@ export default function PantallaAcceso({
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const registrando = modo === "registro";
+  // Ya no hay pestaña de registro: o el sistema está vacío y hay que crear la
+  // primera cuenta, o se inicia sesión con una que creó un administrador.
+  const registrando = sinCuentas;
 
   const completo =
     email.trim() !== "" &&
     contrasena !== "" &&
     (!registrando || (nombre.trim() !== "" && codigo !== ""));
-
-  function cambiarModo(nuevo: Modo) {
-    setModo(nuevo);
-    setError(null);
-    setContrasena("");
-  }
 
   async function enviar(evento: React.FormEvent) {
     evento.preventDefault();
@@ -102,27 +104,12 @@ export default function PantallaAcceso({
           Sistema de cotizaciones
         </h1>
 
-        <div className="mt-5 flex rounded-lg bg-slate-100 p-1">
-          {(
-            [
-              ["entrar", "Iniciar sesión"],
-              ["registro", "Registrarse"],
-            ] as const
-          ).map(([valor, etiqueta]) => (
-            <button
-              key={valor}
-              type="button"
-              onClick={() => cambiarModo(valor)}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                modo === valor
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {etiqueta}
-            </button>
-          ))}
-        </div>
+        {registrando && (
+          <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            No hay ninguna cuenta todavía. La que crees aquí queda como
+            administradora y desde ella se dan de alta las demás.
+          </p>
+        )}
 
         {aviso && (
           <p className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">

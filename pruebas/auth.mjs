@@ -75,12 +75,18 @@ let cookieJuan = "";
   comprobar("la cookie es SameSite=Strict", /SameSite=Strict/i.test(bien.cookie));
   cookieJuan = comoCookie(bien.cookie);
 
-  const repetido = await leer(await auth(req("/api/auth/registro", { cuerpo: CUENTA })));
-  comprobar("el mismo correo dos veces -> 409", repetido.status === 409, repetido.cuerpo.error);
+  comprobar("la primera cuenta queda como administradora",
+    bien.cuerpo.usuario?.rol === "admin", bien.cuerpo.usuario?.rol);
 
-  // Mismo correo con otras mayúsculas: debe seguir siendo el mismo.
-  const mayusculas = await leer(await auth(req("/api/auth/registro", { cuerpo: { ...CUENTA, email: "JUAN.PABLO@POSITIVOGROUP.COM" } })));
-  comprobar("mayúsculas distintas no crean otra cuenta", mayusculas.status === 409, mayusculas.cuerpo.error);
+  // A partir de la primera, el registro queda cerrado: las cuentas las crea un
+  // administrador desde Usuarios.
+  const repetido = await leer(await auth(req("/api/auth/registro", { cuerpo: CUENTA })));
+  comprobar("registrarse de nuevo -> 403", repetido.status === 403, repetido.cuerpo.error);
+  comprobar("y dice que el registro está cerrado",
+    repetido.cuerpo.error === "registro_cerrado", repetido.cuerpo.error);
+
+  const otro = await leer(await auth(req("/api/auth/registro", { cuerpo: { ...CUENTA, email: "colado@positivogroup.com" } })));
+  comprobar("ni siquiera con otro correo", otro.status === 403, otro.cuerpo.error);
 }
 
 console.log("\n== La contraseña nunca se guarda en claro ==");
@@ -97,7 +103,7 @@ console.log("\n== La contraseña nunca se guarda en claro ==");
     `clave de ${registro.clave?.length} caracteres`);
 
   // Dos cuentas con la MISMA contraseña deben tener hashes distintos (sal por usuario).
-  await auth(req("/api/auth/registro", { cuerpo: { nombre: "Otra Persona", email: "otra@positivogroup.com", contrasena: CUENTA.contrasena, codigo: CODIGO_EMPRESA } }));
+  await admin(req("/api/admin/usuarios", { cookie: cookieJuan, cuerpo: { nombre: "Otra", apellidos: "Persona", email: "otra@positivogroup.com", contrasena: CUENTA.contrasena, rol: "basico" } }));
   const todos = await usuarios.list();
   const registros = await Promise.all(todos.blobs.map((b) => usuarios.get(b.key, { type: "json" })));
   const claves = new Set(registros.map((r) => r.clave));
@@ -235,6 +241,7 @@ console.log("\n== Cuenta creada antes de que existiera la marca de admin ==");
   const clave = Buffer.from(CUENTA.email.toLowerCase(), "utf8").toString("base64url");
   const cuenta = await usuarios.get(clave, { type: "json" });
   delete cuenta.admin;
+  delete cuenta.rol;
   await usuarios.setJSON(clave, cuenta);
   await contadores.delete("primer_usuario_registrado");
 
@@ -258,7 +265,7 @@ console.log("\n== Cuenta creada antes de que existiera la marca de admin ==");
   // No debe promover a nadie más en las siguientes consultas.
   const otraCuenta = await usuarios.list();
   const todas = await Promise.all(otraCuenta.blobs.map((b) => usuarios.get(b.key, { type: "json" })));
-  const admins = todas.filter((u) => u.admin === true);
+  const admins = todas.filter((u) => u.rol === "admin" || u.admin === true);
   comprobar("solo hay un administrador", admins.length === 1, `${admins.length} de ${todas.length} cuentas`);
 
   await auth(req("/api/auth/sesion", { metodo: "GET", cookie }));
@@ -266,7 +273,7 @@ console.log("\n== Cuenta creada antes de que existiera la marca de admin ==");
     (await usuarios.list()).blobs.map((b) => usuarios.get(b.key, { type: "json" })),
   );
   comprobar("consultar de nuevo no promueve a otros",
-    trasSegunda.filter((u) => u.admin === true).length === 1);
+    trasSegunda.filter((u) => u.rol === "admin" || u.admin === true).length === 1);
 }
 
 console.log("\n== Exportar la base de datos ==");
@@ -330,6 +337,96 @@ console.log("\n== Cambiar la propia contraseña ==");
 
   const nueva = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: comoCookie(bien.cookie) })));
   comprobar("la sesión recién abierta sí sirve", nueva.status === 200, `status ${nueva.status}`);
+}
+
+console.log("\n== Roles y permisos ==");
+{
+  const { default: productos } = await import("../netlify/functions/productos.mts");
+
+  const entrarJuan = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: "miClaveNuevaSegura7" } })));
+  const cookieAdmin = comoCookie(entrarJuan.cookie);
+
+  const CLAVE_BASICA = "claveDelBasico9";
+  const creada = await leer(await admin(req("/api/admin/usuarios", {
+    cookie: cookieAdmin,
+    cuerpo: { nombre: "Ana", apellidos: "Ríos", email: "ana@positivogroup.com", contrasena: CLAVE_BASICA, rol: "basico" },
+  })));
+  comprobar("el admin crea una cuenta -> 201", creada.status === 201, `status ${creada.status}`);
+  comprobar("nace como básica", creada.cuerpo.usuario?.rol === "basico", creada.cuerpo.usuario?.rol);
+  comprobar("guarda los apellidos", creada.cuerpo.usuario?.apellidos === "Ríos", creada.cuerpo.usuario?.apellidos);
+  comprobar("por defecto ve sus cotizaciones y nada más",
+    JSON.stringify(creada.cuerpo.usuario?.permisos) === JSON.stringify({ cotizaciones: true, catalogo: false, usuarios: false }),
+    JSON.stringify(creada.cuerpo.usuario?.permisos));
+
+  const entrarAna = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "ana@positivogroup.com", contrasena: CLAVE_BASICA } })));
+  const cookieAna = comoCookie(entrarAna.cookie);
+  comprobar("la cuenta nueva puede entrar", entrarAna.status === 200, `status ${entrarAna.status}`);
+
+  // --- Cada quien ve sus cotizaciones ---
+  const delAdmin = { data: { numeroFactura: "PG 9001/26", cliente: "Del admin" } };
+  const deAna = { data: { numeroFactura: "PG 9002/26", cliente: "De Ana" } };
+  await cotizaciones(req("/api/cotizaciones", { cookie: cookieAdmin, cuerpo: delAdmin }));
+  await cotizaciones(req("/api/cotizaciones", { cookie: cookieAna, cuerpo: deAna }));
+
+  const listaAna = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieAna })));
+  const numerosAna = listaAna.cuerpo.cotizaciones.map((c) => c.data.numeroFactura);
+  comprobar("la básica ve la suya", numerosAna.includes("PG 9002/26"));
+  comprobar("y NO ve la del admin", !numerosAna.includes("PG 9001/26"), numerosAna.join(", "));
+
+  const listaAdmin = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieAdmin })));
+  const numerosAdmin = listaAdmin.cuerpo.cotizaciones.map((c) => c.data.numeroFactura);
+  comprobar("el admin ve las de todos",
+    numerosAdmin.includes("PG 9001/26") && numerosAdmin.includes("PG 9002/26"), numerosAdmin.join(", "));
+
+  // --- No puede tocar las ajenas por más que sepa el número ---
+  const pisar = await leer(await cotizaciones(req("/api/cotizaciones", { cookie: cookieAna, cuerpo: { data: { numeroFactura: "PG 9001/26", cliente: "Secuestrada" } } })));
+  comprobar("no puede sobrescribir la de otro -> 403", pisar.status === 403, pisar.cuerpo.error);
+
+  const borrar = await leer(await cotizaciones(req("/api/cotizaciones/PG 9001/26", { metodo: "DELETE", cookie: cookieAna })));
+  comprobar("no puede borrar la de otro -> 403", borrar.status === 403, borrar.cuerpo.error);
+
+  const enlaceAjeno = await leer(await cotizaciones(req("/api/cotizaciones/enlace", { cookie: cookieAna, cuerpo: { numeroFactura: "PG 9001/26" } })));
+  comprobar("ni sacarle enlace público -> 404", enlaceAjeno.status === 404, enlaceAjeno.cuerpo.error);
+
+  // --- El catálogo se consulta siempre, pero no se edita sin permiso ---
+  const verCatalogo = await leer(await productos(req("/api/productos", { metodo: "GET", cookie: cookieAna })));
+  comprobar("puede consultar el catálogo para cotizar", verCatalogo.status === 200, `status ${verCatalogo.status}`);
+
+  const editarCatalogo = await leer(await productos(req("/api/productos", { cookie: cookieAna, cuerpo: { nombre: "Producto colado" } })));
+  comprobar("pero no editarlo -> 403", editarCatalogo.status === 403, editarCatalogo.cuerpo.error);
+
+  // --- Usuarios: ni verlos ni ascenderse ---
+  const verUsuarios = await leer(await admin(req("/api/admin/usuarios", { metodo: "GET", cookie: cookieAna })));
+  comprobar("no ve la lista de usuarios -> 403", verUsuarios.status === 403, verUsuarios.cuerpo.error);
+
+  const ascenderse = await leer(await admin(req("/api/admin/usuarios/ana@positivogroup.com", { metodo: "PUT", cookie: cookieAna, cuerpo: { nombre: "Ana", rol: "admin" } })));
+  comprobar("no puede ascenderse -> 403", ascenderse.status === 403, ascenderse.cuerpo.error);
+
+  // --- El permiso de ver usuarios no da permiso de cambiarlos ---
+  await admin(req("/api/admin/usuarios/ana@positivogroup.com", {
+    metodo: "PUT", cookie: cookieAdmin,
+    cuerpo: { nombre: "Ana", apellidos: "Ríos", rol: "basico", permisos: { cotizaciones: true, catalogo: false, usuarios: true } },
+  }));
+  const ahoraVe = await leer(await admin(req("/api/admin/usuarios", { metodo: "GET", cookie: cookieAna })));
+  comprobar("con el permiso puesto sí ve la lista -> 200", ahoraVe.status === 200, `status ${ahoraVe.status}`);
+
+  const siguesinPoder = await leer(await admin(req("/api/admin/usuarios/ana@positivogroup.com", { metodo: "PUT", cookie: cookieAna, cuerpo: { nombre: "Ana", rol: "admin" } })));
+  comprobar("pero sigue sin poder editar -> 403", siguesinPoder.status === 403, siguesinPoder.cuerpo.error);
+
+  // --- El admin no puede dejarse sin rol ---
+  const suicidio = await leer(await admin(req(`/api/admin/usuarios/${encodeURIComponent(CUENTA.email.toLowerCase())}`, { metodo: "PUT", cookie: cookieAdmin, cuerpo: { nombre: "Juan", rol: "basico" } })));
+  comprobar("el admin no puede quitarse el rol -> 400", suicidio.status === 400, suicidio.cuerpo.error);
+
+  // --- Ascender a alguien le da acceso a todo ---
+  await admin(req("/api/admin/usuarios/ana@positivogroup.com", { metodo: "PUT", cookie: cookieAdmin, cuerpo: { nombre: "Ana", rol: "admin" } }));
+  const anaAdmin = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "ana@positivogroup.com", contrasena: CLAVE_BASICA } })));
+  comprobar("al ascender, lo puede todo",
+    JSON.stringify(anaAdmin.cuerpo.usuario?.permisos) === JSON.stringify({ cotizaciones: true, catalogo: true, usuarios: true }),
+    JSON.stringify(anaAdmin.cuerpo.usuario?.permisos));
+
+  const todasAhora = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: comoCookie(anaAdmin.cookie) })));
+  comprobar("y ve las cotizaciones de todos",
+    todasAhora.cuerpo.cotizaciones.some((c) => c.data.numeroFactura === "PG 9001/26"));
 }
 
 console.log("\n== Respaldo: exportar e importar ==");
