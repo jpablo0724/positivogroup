@@ -38,38 +38,52 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
   const observacionesHtml = aHtml(data.observaciones);
 
   return (
-    <div
+    <table
       id="invoice-preview"
-      className="mx-auto w-full max-w-[900px] bg-white text-[11px] leading-snug text-slate-900 shadow-lg"
+      // Todo el documento es una sola tabla, y no bloques sueltos, porque es
+      // lo único que garantiza que las líneas verticales de cada sección caigan
+      // exactamente en el mismo sitio. Cada fila ocupa las columnas que
+      // necesita con colSpan, y los cortes siempre coinciden.
+      className={`mx-auto w-full max-w-[900px] table-fixed border-collapse border ${border} bg-white text-[11px] leading-snug text-slate-900 shadow-lg print:shadow-none`}
     >
-      {/* Encabezado */}
-      <div className={`flex break-inside-avoid border ${border}`}>
-        <div className={`flex-1 border-r ${border} px-4 py-3 text-center`}>
-          <p className="text-base font-bold uppercase tracking-wide">
-            Cotización N.º {data.numeroFactura || "—"}
-          </p>
-          <div className="mt-2 space-y-0.5 text-slate-700">
-            <p>NIT: {COMPANY.nit}</p>
-            <p>Tel: {COMPANY.tel}</p>
-            <p>{COMPANY.address}</p>
-            <p>{COMPANY.addressDetail}</p>
-            <p>{COMPANY.city}</p>
-          </div>
-        </div>
-        <div className="flex w-56 shrink-0 items-center justify-center px-4 py-3">
-          <LogoEmpresa />
-        </div>
-      </div>
+      <colgroup>
+        <col style={{ width: "40%" }} />
+        <col style={{ width: "15%" }} />
+        <col style={{ width: "20%" }} />
+        <col style={{ width: "25%" }} />
+      </colgroup>
 
-      {/* Datos del cliente */}
-      <div className={`break-inside-avoid border border-t-0 ${border}`}>
-        <div
-          className={`border-b ${border} bg-slate-100 px-2 py-1 font-bold uppercase tracking-wide`}
-        >
-          Datos del cliente
-        </div>
-        <div className="flex">
-          <div className={`flex-1 space-y-1 border-r ${border} px-3 py-2`}>
+      <tbody>
+        {/* Encabezado */}
+        <tr className="break-inside-avoid">
+          <td colSpan={3} className={`${cell} px-4 py-3 text-center align-middle`}>
+            <p className="text-base font-bold uppercase tracking-wide">
+              Cotización N.º {data.numeroFactura || "—"}
+            </p>
+            <div className="mt-2 space-y-0.5 text-slate-700">
+              <p>NIT: {COMPANY.nit}</p>
+              <p>Tel: {COMPANY.tel}</p>
+              <p>{COMPANY.address}</p>
+              <p>{COMPANY.addressDetail}</p>
+              <p>{COMPANY.city}</p>
+            </div>
+          </td>
+          <td className={`${cell} px-4 py-3 text-center align-middle`}>
+            <LogoEmpresa className="mx-auto w-full max-w-[190px]" />
+          </td>
+        </tr>
+
+        {/* Datos del cliente */}
+        <tr className="break-inside-avoid">
+          <td
+            colSpan={4}
+            className={`${cell} bg-slate-100 font-bold uppercase tracking-wide`}
+          >
+            Datos del cliente
+          </td>
+        </tr>
+        <tr className="break-inside-avoid">
+          <td colSpan={2} className={`${cell} space-y-1 px-3 py-2 align-top`}>
             <p>
               <span className="font-semibold">Razón Social: </span>
               {data.cliente.razonSocial || "—"}
@@ -90,8 +104,8 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
                 "—"
               )}
             </p>
-          </div>
-          <div className="w-64 shrink-0 space-y-1 px-3 py-2">
+          </td>
+          <td colSpan={2} className={`${cell} space-y-1 px-3 py-2 align-top`}>
             <p className="flex justify-between gap-2">
               <span className="font-semibold">FECHA:</span>
               <span className="text-right">
@@ -108,133 +122,134 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
               <span className="font-semibold">Forma de Pago:</span>
               <span className="text-right">{data.formaPago || "—"}</span>
             </p>
-          </div>
-        </div>
-      </div>
+          </td>
+        </tr>
 
-      {/* Tabla de productos */}
-      <table className={`w-full border-collapse border border-t-0 ${border}`}>
-        <thead>
-          <tr className="bg-slate-100 text-center font-bold uppercase">
-            <th className={cell}>Nombre producto</th>
-            <th className={cell}>Cantidad</th>
-            <th className={cell}>Precio Unitario</th>
-            <th className={cell}>
-              Inversión Total
-              <br />
-              antes de IVA
-            </th>
+        {/* Productos */}
+        <tr className="break-inside-avoid bg-slate-100 text-center font-bold uppercase">
+          <td className={cell}>Nombre producto</td>
+          <td className={cell}>Cantidad</td>
+          <td className={cell}>Precio Unitario</td>
+          <td className={cell}>
+            Inversión Total
+            <br />
+            antes de IVA
+          </td>
+        </tr>
+
+        {hasItems ? (
+          data.items.map((item) => {
+            const t = calcItemTotals(item, data.ivaPorcentaje);
+            // El producto que se está capturando se ve igual, pero con un
+            // fondo tenue: así se nota que todavía falta agregarlo.
+            const enCaptura = item.id === ID_BORRADOR;
+            return (
+              <tr
+                key={item.id}
+                className={`break-inside-avoid ${enCaptura ? "bg-emerald-50/60" : ""}`}
+              >
+                <td className={`${cell} align-top`}>
+                  <div className="font-semibold">
+                    {item.nombreProducto || "—"}
+                  </div>
+                  {/* La descripción se edita con formato, igual que las
+                      observaciones, y `aHtml` acepta también el texto plano
+                      de los productos guardados antes. */}
+                  {item.descripcionProducto.trim() !== "" && (
+                    <div
+                      className={`mt-1 font-normal text-slate-600 ${CLASES_CONTENIDO}`}
+                      dangerouslySetInnerHTML={{
+                        __html: aHtml(item.descripcionProducto),
+                      }}
+                    />
+                  )}
+                </td>
+                {/* Un producto puede ir sin cantidad o sin precio (los
+                    bonificados, por ejemplo). En ese caso la celda va con
+                    raya en vez de un cero que parecería un error. */}
+                <td className={`${cell} text-center align-top`}>
+                  {item.cantidad > 0 ? formatNumber(item.cantidad) : "—"}
+                </td>
+                <td className={`${cell} text-right align-top`}>
+                  {item.precioUnitario > 0
+                    ? formatCurrency(item.precioUnitario)
+                    : "—"}
+                </td>
+                <td className={`${cell} text-right align-top`}>
+                  {t.inversionTotalAntesIva > 0
+                    ? formatCurrency(t.inversionTotalAntesIva)
+                    : "—"}
+                </td>
+              </tr>
+            );
+          })
+        ) : (
+          <tr>
+            <td colSpan={4} className={`${cell} py-6 text-center text-slate-400`}>
+              Agrega productos en el formulario para verlos aquí
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {hasItems ? (
-            data.items.map((item) => {
-              const t = calcItemTotals(item, data.ivaPorcentaje);
-              // El producto que se está capturando se ve igual, pero con un
-              // fondo tenue: así se nota que todavía falta agregarlo.
-              const enCaptura = item.id === ID_BORRADOR;
-              return (
-                <tr key={item.id} className={enCaptura ? "bg-emerald-50/60" : ""}>
-                  <td className={cell}>
-                    <div className="font-semibold">
-                      {item.nombreProducto || "—"}
-                    </div>
-                    {/* La descripción se edita con formato, igual que las
-                        observaciones, y `aHtml` acepta también el texto plano
-                        de los productos guardados antes. */}
-                    {item.descripcionProducto.trim() !== "" && (
-                      <div
-                        className={`mt-1 font-normal text-slate-600 ${CLASES_CONTENIDO}`}
-                        dangerouslySetInnerHTML={{
-                          __html: aHtml(item.descripcionProducto),
-                        }}
-                      />
-                    )}
-                  </td>
-                  {/* Un producto puede ir sin cantidad o sin precio (los
-                      bonificados, por ejemplo). En ese caso la celda va con
-                      raya en vez de un cero que parecería un error. */}
-                  <td className={`${cell} text-center`}>
-                    {item.cantidad > 0 ? formatNumber(item.cantidad) : "—"}
-                  </td>
-                  <td className={`${cell} text-right`}>
-                    {item.precioUnitario > 0
-                      ? formatCurrency(item.precioUnitario)
-                      : "—"}
-                  </td>
-                  <td className={`${cell} text-right`}>
-                    {t.inversionTotalAntesIva > 0
-                      ? formatCurrency(t.inversionTotalAntesIva)
-                      : "—"}
-                  </td>
-                </tr>
-              );
-            })
-          ) : (
-            <tr>
-              <td colSpan={4} className={`${cell} py-6 text-center text-slate-400`}>
-                Agrega productos en el formulario para verlos aquí
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        )}
 
-      {/* IVA / Total */}
-      <div className={`flex break-inside-avoid justify-end border border-t-0 ${border}`}>
-        <div className={`w-64 divide-y ${border} border-l`}>
-          <div className="flex justify-between px-3 py-1.5">
-            <span>IVA {data.ivaPorcentaje}%</span>
-            <span>{formatCurrency(totals.iva)}</span>
-          </div>
-          <div className="flex justify-between px-3 py-2 text-sm font-bold">
-            <span>TOTAL</span>
-            <span>{formatCurrency(totals.total)}</span>
-          </div>
-        </div>
-      </div>
+        {/* IVA y total, en las dos últimas columnas */}
+        <tr className="break-inside-avoid">
+          <td colSpan={2} className={`${cell} border-x-0`} />
+          <td className={`${cell} px-3 py-1.5`}>IVA {data.ivaPorcentaje}%</td>
+          <td className={`${cell} px-3 py-1.5 text-right`}>
+            {formatCurrency(totals.iva)}
+          </td>
+        </tr>
+        <tr className="break-inside-avoid text-sm font-bold">
+          <td colSpan={2} className={`${cell} border-x-0`} />
+          <td className={`${cell} px-3 py-2`}>TOTAL</td>
+          <td className={`${cell} px-3 py-2 text-right`}>
+            {formatCurrency(totals.total)}
+          </td>
+        </tr>
 
-      {/* Observaciones */}
-      <div className={`break-inside-avoid border border-t-0 ${border}`}>
-        <div
-          className={`border-b ${border} bg-slate-100 px-2 py-1 font-bold uppercase tracking-wide`}
-        >
-          Observaciones
-        </div>
-        <div className="px-3 py-2">
-          {observacionesHtml ? (
-            <div
-              className={`${CLASES_CONTENIDO} [&_hr]:my-3 [&_hr]:border-slate-900`}
-              dangerouslySetInnerHTML={{ __html: observacionesHtml }}
-            />
-          ) : (
-            <p className="text-slate-400">—</p>
-          )}
-        </div>
-      </div>
-
-      {/* Firma */}
-      <div
-        className={`flex break-inside-avoid justify-between gap-6 border border-t-0 ${border} px-4 py-4`}
-      >
-        <div className="space-y-0.5">
-          <p className="font-semibold">Positivo Group S.A.S.</p>
-          <p>Ejecutiva Comercial</p>
-          <p>Tel: {COMPANY.tel}</p>
-          <p>Email: {COMPANY.email}</p>
-        </div>
-        <div className={`w-64 shrink-0 border ${border}`}>
-          <div
-            className={`border-b ${border} px-2 py-1 text-center font-bold uppercase tracking-wide`}
+        {/* Observaciones */}
+        <tr className="break-inside-avoid">
+          <td
+            colSpan={4}
+            className={`${cell} bg-slate-100 font-bold uppercase tracking-wide`}
           >
-            Firma Aprobado
-          </div>
-          <div className="space-y-4 px-2 py-3 text-slate-500">
-            <p className="border-b border-slate-300 pb-1">Nombre</p>
-            <p className="border-b border-slate-300 pb-1">Cargo</p>
-          </div>
-        </div>
-      </div>
-    </div>
+            Observaciones
+          </td>
+        </tr>
+        <tr>
+          <td colSpan={4} className={`${cell} px-3 py-2`}>
+            {observacionesHtml ? (
+              <div
+                className={`${CLASES_CONTENIDO} [&_hr]:my-3 [&_hr]:border-slate-900`}
+                dangerouslySetInnerHTML={{ __html: observacionesHtml }}
+              />
+            ) : (
+              <p className="text-slate-400">—</p>
+            )}
+          </td>
+        </tr>
+
+        {/* Firma */}
+        <tr className="break-inside-avoid">
+          <td colSpan={2} className={`${cell} space-y-0.5 px-4 py-4 align-top`}>
+            <p className="font-semibold">Positivo Group S.A.S.</p>
+            <p>Ejecutiva Comercial</p>
+            <p>Tel: {COMPANY.tel}</p>
+            <p>Email: {COMPANY.email}</p>
+          </td>
+          <td colSpan={2} className={`${cell} p-0 align-top`}>
+            <div
+              className={`border-b ${border} px-2 py-1 text-center font-bold uppercase tracking-wide`}
+            >
+              Firma Aprobado
+            </div>
+            <div className="space-y-4 px-3 py-3 text-slate-500">
+              <p className="border-b border-slate-300 pb-1">Nombre</p>
+              <p className="border-b border-slate-300 pb-1">Cargo</p>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   );
 }

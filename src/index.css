@@ -15,8 +15,25 @@ body {
     background: #fff;
   }
 
+  /* Márgenes de la hoja. Los de abajo y arriba son más holgados para que el
+     documento no quede pegado al borde del papel ni al pie del PDF. */
   @page {
-    margin: 12mm;
+    size: A4;
+    margin: 16mm 14mm;
+  }
+
+  /* La cotización es una sola tabla: estas reglas evitan que una fila se parta
+     por la mitad al cambiar de página y que una cabecera quede huérfana al
+     final de una hoja. */
+  #invoice-preview tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #invoice-preview td {
+    /* Sin esto, un producto con descripción larga puede desbordar la celda al
+       repaginar en vez de partir la palabra. */
+    overflow-wrap: break-word;
   }
 
   /* Lo que nunca sale en papel: barras de botones y avisos de pantalla. */

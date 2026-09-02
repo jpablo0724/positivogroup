@@ -439,7 +439,7 @@ console.log("\n== Se ve al elegir el producto, sin agregarlo ==");
   await page.click("text=Crear Cotización");
   await page.waitForSelector('button:has-text("Selecciona un producto")');
 
-  const vacia = await page.locator("#invoice-preview table").innerText();
+  const vacia = await page.locator("#invoice-preview tbody").innerText();
   comprobar("arranca sin productos", vacia.includes("Agrega productos en el formulario"));
 
   // Solo elegir en el desplegable. Nada más.
@@ -447,7 +447,7 @@ console.log("\n== Se ve al elegir el producto, sin agregarlo ==");
   await page.click("text=X01 - Parqueaderos residenciales");
   await page.waitForTimeout(300);
 
-  const tabla = await page.locator("#invoice-preview table").innerText();
+  const tabla = await page.locator("#invoice-preview tbody").innerText();
   comprobar("el nombre aparece SIN dar Agregar", tabla.includes("X01 - Parqueaderos residenciales"), tabla.replace(/\n/g, " | ").slice(0, 90));
   comprobar("la descripción aparece también", tabla.includes("Carteleras en el acceso vehicular"));
   comprobar("ya no dice el mensaje de vacío", !tabla.includes("Agrega productos en el formulario"));
@@ -469,7 +469,7 @@ console.log("\n== Se ve al elegir el producto, sin agregarlo ==");
   // Al agregarlo deja de estar marcado y no se duplica.
   await card.locator('button:has-text("Agregar producto")').click();
   await page.waitForTimeout(300);
-  const trasAgregar = await page.locator("#invoice-preview table").innerText();
+  const trasAgregar = await page.locator("#invoice-preview tbody").innerText();
   const veces = trasAgregar.split("X01 - Parqueaderos residenciales").length - 1;
   comprobar("al agregarlo no se duplica", veces === 1, `${veces} vez/veces`);
   comprobar("ya no queda fila marcada", (await page.locator("#invoice-preview tr.bg-emerald-50\\/60").count()) === 0);
@@ -489,7 +489,7 @@ console.log("\n== Se ve al elegir el producto, sin agregarlo ==");
   comprobar("no se guardó con el id de borrador", ultima.data.items.every((i) => i.id !== "__borrador__"), ultima.data.items.map((i) => i.id.slice(0, 8)).join(", "));
 
   // Y el formulario queda limpio para la siguiente.
-  const limpia = await page.locator("#invoice-preview table").innerText();
+  const limpia = await page.locator("#invoice-preview tbody").innerText();
   comprobar("la cotización nueva arranca vacía", limpia.includes("Agrega productos en el formulario"));
 }
 
@@ -510,7 +510,7 @@ console.log("\n== Producto sin cantidad ni precio ==");
   await boton.click();
   await page.waitForTimeout(300);
 
-  const tabla = await page.locator("#invoice-preview table").innerText();
+  const tabla = await page.locator("#invoice-preview tbody").innerText();
   comprobar("el producto aparece en la cotización", tabla.includes("P01 - Publicidad en Ascensores"));
   comprobar("la descripción aparece debajo del nombre", tabla.includes("DESCRIPCION EDITADA") || tabla.includes("PUBLICIDAD EN ASCENSORES"), tabla.split("\n")[2]);
   comprobar("cantidad y precio salen con raya, no en cero", !tabla.includes("$ 0"), tabla.replace(/\n/g, " | ").slice(0, 160));
