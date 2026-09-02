@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import EditorObservaciones from "./EditorObservaciones";
 import { selectTriggerClass } from "./SearchableSelect";
 
 export interface DatosProducto {
@@ -140,22 +141,19 @@ export default function ModalProducto({
 
           <div>
             <label className={labelClass}>Descripción del producto</label>
-            <textarea
-              className={selectTriggerClass}
-              rows={6}
+            <EditorObservaciones
+              etiqueta="Descripción del producto"
               value={producto.descripcion}
-              onChange={(e) => actualizar("descripcion", e.target.value)}
+              onChange={(html) => actualizar("descripcion", html)}
               placeholder="Lo que se carga en la cotización al elegir el producto"
             />
           </div>
 
           <div>
             <label className={labelClass}>Observaciones</label>
-            <textarea
-              className={selectTriggerClass}
-              rows={6}
+            <EditorObservaciones
               value={producto.observaciones}
-              onChange={(e) => actualizar("observaciones", e.target.value)}
+              onChange={(html) => actualizar("observaciones", html)}
               placeholder="Condiciones del servicio, qué incluye y qué no incluye"
             />
           </div>

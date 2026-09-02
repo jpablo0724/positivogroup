@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import PaletaHexagonal from "./PaletaHexagonal";
 import {
   CLASES_CONTENIDO,
-  COLORES_SUGERIDOS,
   aHtml,
   estaVacio,
   normalizarColor,
@@ -11,6 +11,8 @@ interface EditorObservacionesProps {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
+  /** Cómo se llama el campo. Hay varios editores en pantalla a la vez. */
+  etiqueta?: string;
 }
 
 interface Boton {
@@ -77,15 +79,14 @@ export default function EditorObservaciones({
   value,
   onChange,
   placeholder = "Notas adicionales para el cliente",
+  etiqueta = "Observaciones",
 }: EditorObservacionesProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const ultimoEmitido = useRef<string | null>(null);
 
   const [paletaAbierta, setPaletaAbierta] = useState(false);
   const [codigo, setCodigo] = useState("");
-  const [ultimoColor, setUltimoColor] = useState<string>(
-    COLORES_SUGERIDOS[0].valor,
-  );
+  const [ultimoColor, setUltimoColor] = useState("#0f172a");
   const paletaRef = useRef<HTMLDivElement>(null);
   // Escribir en la casilla del código saca el foco del editor y con él se
   // pierde el texto seleccionado, así que se guarda para reponerlo al aplicar.
@@ -181,7 +182,9 @@ export default function EditorObservaciones({
             key={boton.comando}
             type="button"
             title={boton.titulo}
-            aria-label={boton.titulo}
+            // Hay varios editores en pantalla: la etiqueta lleva el campo para
+            // que cada botón se distinga del de al lado.
+            aria-label={`${boton.titulo} en ${etiqueta}`}
             // Sin esto el clic quita el foco del editor y se pierde la
             // selección antes de aplicar el formato.
             onMouseDown={(e) => e.preventDefault()}
@@ -198,7 +201,7 @@ export default function EditorObservaciones({
           <button
             type="button"
             title="Color del texto"
-            aria-label="Color del texto"
+            aria-label={`Color del texto en ${etiqueta}`}
             aria-expanded={paletaAbierta}
             onMouseDown={(e) => e.preventDefault()}
             onClick={alternarPaleta}
@@ -217,21 +220,9 @@ export default function EditorObservaciones({
           </button>
 
           {paletaAbierta && (
-            <div className="absolute left-0 top-9 z-20 w-56 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
-              <div className="grid grid-cols-6 gap-1.5">
-                {COLORES_SUGERIDOS.map((color) => (
-                  <button
-                    key={color.valor}
-                    type="button"
-                    title={color.nombre}
-                    aria-label={color.nombre}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => aplicarColor(color.valor)}
-                    className="h-6 w-6 rounded ring-1 ring-slate-300 transition-transform hover:scale-110"
-                    style={{ backgroundColor: color.valor }}
-                  />
-                ))}
-              </div>
+            <div className="absolute left-0 top-9 z-20 rounded-md border border-slate-200 bg-white p-3 shadow-lg">
+              <p className="mb-2 text-xs font-medium text-slate-600">Colores:</p>
+              <PaletaHexagonal onElegir={aplicarColor} />
 
               <div className="mt-2 flex items-center gap-1.5 border-t border-slate-200 pt-2">
                 <span className="text-sm text-slate-400">#</span>
@@ -273,7 +264,7 @@ export default function EditorObservaciones({
           suppressContentEditableWarning
           role="textbox"
           aria-multiline="true"
-          aria-label="Observaciones"
+          aria-label={etiqueta}
           onInput={emitir}
           onBlur={emitir}
           className={`max-h-72 min-h-24 overflow-auto px-3 py-2 text-sm text-slate-900 outline-none ${CLASES_CONTENIDO} [&_hr]:my-3 [&_hr]:border-slate-300`}

@@ -328,8 +328,9 @@ console.log("\n== Crear producto y guardar cotización ==");
   await page.waitForSelector('[role="dialog"]');
   const dialog = page.locator('[role="dialog"]');
   await dialog.locator("input").fill("X01 - Parqueaderos residenciales");
-  await dialog.locator("textarea").nth(0).fill("Carteleras en el acceso vehicular.");
-  await dialog.locator("textarea").nth(1).fill("La tarifa incluye impresión.");
+  // Ahora son editores con formato, no textareas.
+  await dialog.locator('[aria-label="Descripción del producto"]').fill("Carteleras en el acceso vehicular.");
+  await dialog.locator('[aria-label="Observaciones"]').fill("La tarifa incluye impresión.");
   await dialog.locator('button:has-text("Guardar producto")').click();
   await page.waitForTimeout(400);
   comprobar("el producto sube al servidor", servidor.productos.has("X01 - Parqueaderos residenciales"),
@@ -401,15 +402,15 @@ console.log("\n== Catálogo de productos ==");
   const dlg = page.locator('[role="dialog"]');
   comprobar("el modal dice Editar producto", (await dlg.locator("h2").innerText()).includes("Editar"));
 
-  const descActual = await dlg.locator("textarea").nth(0).inputValue();
+  const descActual = await dlg.locator('[aria-label="Descripción del producto"]').innerText();
   comprobar("precarga la descripción existente", descActual.includes("PUBLICIDAD EN ASCENSORES"), descActual.slice(0, 30));
 
-  await dlg.locator("textarea").nth(0).fill("DESCRIPCION EDITADA DESDE EL CATALOGO");
+  await dlg.locator('[aria-label="Descripción del producto"]').fill("DESCRIPCION EDITADA DESDE EL CATALOGO");
   await dlg.locator('button:has-text("Guardar cambios")').click();
   await page.waitForTimeout(500);
 
   const enServidor = servidor.productos.get("P01 - Publicidad en Ascensores x 15 días");
-  comprobar("la edición llega al servidor", enServidor.descripcion === "DESCRIPCION EDITADA DESDE EL CATALOGO", enServidor.descripcion.slice(0, 30));
+  comprobar("la edición llega al servidor", enServidor.descripcion.includes("DESCRIPCION EDITADA DESDE EL CATALOGO"), enServidor.descripcion.slice(0, 60));
 
   // El formulario de cotización debe usar ya la descripción editada.
   await page.click("text=Crear Cotización");
@@ -417,8 +418,8 @@ console.log("\n== Catálogo de productos ==");
   await page.click('button:has-text("Selecciona un producto")');
   await page.click("text=P01 - Publicidad en Ascensores");
   await page.waitForTimeout(300);
-  const desc = await page.locator("textarea").first().inputValue();
-  comprobar("la cotización usa la descripción editada", desc === "DESCRIPCION EDITADA DESDE EL CATALOGO", desc.slice(0, 30));
+  const desc = await page.locator('[aria-label="Descripción del producto"]').innerText();
+  comprobar("la cotización usa la descripción editada", desc.includes("DESCRIPCION EDITADA DESDE EL CATALOGO"), desc.slice(0, 40));
 
   // Eliminar un producto.
   await page.click("text=Catálogo de Productos");
@@ -547,32 +548,33 @@ console.log("\n== Color en las observaciones ==");
   // La paleta vive detrás de un botón: no debe haber colores sueltos en la
   // barra hasta que se abra.
   comprobar("la paleta empieza cerrada",
-    (await page.locator('button[aria-label="Rojo"]').count()) === 0);
+    (await page.locator('[aria-label="Paleta de colores"]').count()) === 0);
 
   await page.keyboard.press("Control+A");
-  await page.locator('button[aria-label="Color del texto"]').click();
+  await page.locator('button[aria-label="Color del texto en Observaciones"]').click();
   await page.waitForTimeout(200);
 
-  const muestras = page.locator('button[aria-label="Rojo"], button[aria-label="Azul"], button[aria-label="Verde"]');
-  comprobar("al abrirla salen los colores", (await muestras.count()) === 3, `${await muestras.count()}`);
+  const panal = page.locator('[aria-label="Paleta de colores"] button');
+  comprobar("al abrirla sale el panal completo", (await panal.count()) === 61, `${await panal.count()} celdas`);
 
-  await page.locator('button[aria-label="Rojo"]').click();
+  // Se elige por el código de la celda, que es su etiqueta.
+  await page.locator('button[aria-label="#808080"]').first().click();
   await page.waitForTimeout(300);
 
   comprobar("y se cierra al elegir",
-    (await page.locator('button[aria-label="Rojo"]').count()) === 0);
+    (await page.locator('[aria-label="Paleta de colores"]').count()) === 0);
 
   // Lo que importa no es cómo queda el editor, sino que el color sobreviva al
   // saneado y llegue a la cotización que ve el cliente.
   const coloreado = page.locator('#invoice-preview span[style*="color"]');
   comprobar("el color llega a la cotización", (await coloreado.count()) > 0);
   comprobar("y es el que se eligió",
-    (await coloreado.first().evaluate((e) => getComputedStyle(e).color)) === "rgb(220, 38, 38)");
+    (await coloreado.first().evaluate((e) => getComputedStyle(e).color)) === "rgb(128, 128, 128)");
 
   // Un color escrito a mano, que es el otro camino que pidió el usuario.
   await editor.click();
   await page.keyboard.press("Control+A");
-  await page.locator('button[aria-label="Color del texto"]').click();
+  await page.locator('button[aria-label="Color del texto en Observaciones"]').click();
   await page.waitForTimeout(200);
 
   await page.screenshot({ path: `${OUT}/E2-paleta-abierta.png` });
@@ -594,7 +596,7 @@ console.log("\n== Color en las observaciones ==");
   // conmuta styleWithCSS entre una cosa y la otra.
   await editor.click();
   await page.keyboard.press("Control+A");
-  await page.locator('button[aria-label="Negrilla"]').click();
+  await page.locator('button[aria-label="Negrilla en Observaciones"]').click();
   await page.waitForTimeout(300);
 
   const negrita = await page.locator("#invoice-preview b, #invoice-preview strong").count();

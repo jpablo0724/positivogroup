@@ -139,10 +139,16 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
                     <div className="font-semibold">
                       {item.nombreProducto || "—"}
                     </div>
+                    {/* La descripción se edita con formato, igual que las
+                        observaciones, y `aHtml` acepta también el texto plano
+                        de los productos guardados antes. */}
                     {item.descripcionProducto.trim() !== "" && (
-                      <div className="mt-1 whitespace-pre-wrap font-normal text-slate-600">
-                        {item.descripcionProducto}
-                      </div>
+                      <div
+                        className={`mt-1 font-normal text-slate-600 ${CLASES_CONTENIDO}`}
+                        dangerouslySetInnerHTML={{
+                          __html: aHtml(item.descripcionProducto),
+                        }}
+                      />
                     )}
                   </td>
                   {/* Un producto puede ir sin cantidad o sin precio (los

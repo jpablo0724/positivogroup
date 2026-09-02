@@ -11,7 +11,7 @@ import {
   guardarProducto as guardarEnCatalogo,
   type Producto,
 } from "../utils/catalogo";
-import { textoPlanoAHtml } from "../utils/richText";
+import { aHtml } from "../utils/richText";
 import BuscadorCliente from "./BuscadorCliente";
 import EditorObservaciones from "./EditorObservaciones";
 import ModalNuevoProducto from "./ModalNuevoProducto";
@@ -71,7 +71,7 @@ function observacionesDeProductos(
     const observaciones = catalogo[nombre]?.observaciones?.trim();
     if (observaciones && !vistas.has(observaciones)) {
       vistas.add(observaciones);
-      bloques.push(textoPlanoAHtml(observaciones));
+      bloques.push(aHtml(observaciones));
     }
   }
 
@@ -530,13 +530,10 @@ export default function InvoiceForm({
             </div>
             <div className="col-span-2">
               <label className={labelClass}>Descripción del producto</label>
-              <textarea
-                className={inputClass}
-                rows={4}
+              <EditorObservaciones
+                etiqueta="Descripción del producto"
                 value={draft.descripcionProducto}
-                onChange={(e) =>
-                  updateDraft("descripcionProducto", e.target.value)
-                }
+                onChange={(html) => updateDraft("descripcionProducto", html)}
                 placeholder="Se completa automáticamente al elegir el producto"
               />
             </div>

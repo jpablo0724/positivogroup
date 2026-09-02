@@ -5,6 +5,28 @@ import {
   type Producto,
 } from "../utils/catalogo";
 import ModalProducto, { type DatosProducto } from "./ModalNuevoProducto";
+import { CLASES_CONTENIDO, aHtml } from "../utils/richText";
+
+/** El texto sin etiquetas, para las líneas de resumen y la búsqueda. */
+function resumen(valor: string): string {
+  return valor
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Descripción u observaciones con su formato, o una raya si están vacías. */
+function TextoConFormato({ valor }: { valor: string }) {
+  const html = aHtml(valor);
+  if (html === "") return <p className="text-slate-700">—</p>;
+  return (
+    <div
+      className={`text-slate-700 ${CLASES_CONTENIDO}`}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
 interface CatalogoProductosProps {
   productos: Producto[];
@@ -34,7 +56,7 @@ export default function CatalogoProductos({
     ? productos.filter(
         (p) =>
           p.nombre.toLowerCase().includes(consulta) ||
-          p.descripcion.toLowerCase().includes(consulta),
+          resumen(p.descripcion).toLowerCase().includes(consulta),
       )
     : productos;
 
@@ -128,8 +150,7 @@ export default function CatalogoProductos({
                         {producto.nombre}
                       </p>
                       <p className="mt-0.5 truncate text-xs text-slate-500">
-                        {producto.descripcion.split("\n")[0] ||
-                          "Sin descripción"}
+                        {resumen(producto.descripcion) || "Sin descripción"}
                       </p>
                     </button>
 
@@ -159,17 +180,13 @@ export default function CatalogoProductos({
                         <p className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
                           Descripción
                         </p>
-                        <p className="whitespace-pre-wrap text-slate-700">
-                          {producto.descripcion || "—"}
-                        </p>
+                        <TextoConFormato valor={producto.descripcion} />
                       </div>
                       <div>
                         <p className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
                           Observaciones
                         </p>
-                        <p className="whitespace-pre-wrap text-slate-700">
-                          {producto.observaciones || "—"}
-                        </p>
+                        <TextoConFormato valor={producto.observaciones} />
                       </div>
                     </div>
                   )}
