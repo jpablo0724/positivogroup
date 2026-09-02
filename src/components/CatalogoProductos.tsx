@@ -117,7 +117,7 @@ export default function CatalogoProductos({
             type="button"
             onClick={abrirNuevo}
             disabled={ocupado}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:bg-slate-300"
+            className="rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors"
           >
             + Agregar producto
           </button>

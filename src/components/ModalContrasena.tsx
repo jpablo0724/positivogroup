@@ -144,7 +144,7 @@ export default function ModalContrasena({ onCerrar }: ModalContrasenaProps) {
               <button
                 type="submit"
                 disabled={!valido || ocupado}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-300"
+                className="rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm"
               >
                 {ocupado ? "Guardando…" : "Cambiar"}
               </button>

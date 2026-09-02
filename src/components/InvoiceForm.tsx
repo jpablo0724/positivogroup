@@ -445,7 +445,7 @@ export default function InvoiceForm({
           <button
             type="button"
             onClick={() => setModalProductoAbierto(true)}
-            className="flex items-center gap-1 text-xs font-semibold text-emerald-600 transition-colors hover:text-emerald-700"
+            className="flex items-center gap-1 text-xs font-semibold text-accion-fin transition-colors hover:text-accion"
           >
             <svg
               viewBox="0 0 20 20"
@@ -571,7 +571,7 @@ export default function InvoiceForm({
               type="button"
               onClick={guardarProducto}
               disabled={!draftValido}
-              className="w-full rounded-md bg-emerald-600 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="w-full rounded-md boton-accion py-2 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed"
             >
               {editandoId ? "Guardar cambios" : "Agregar producto"}
             </button>

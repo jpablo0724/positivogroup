@@ -395,7 +395,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
           <button
             type="button"
             onClick={abrirCrear}
-            className="shrink-0 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+            className="shrink-0 rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors"
           >
             + Crear usuario
           </button>
@@ -548,7 +548,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
             // El correo identifica la cuenta, así que al editar no se cambia:
             // sería crear otra distinta y perder lo que tenga asociado.
             disabled={formulario.editando !== null}
-            className={`${selectTriggerClass} disabled:bg-slate-50 disabled:text-slate-400`}
+            className={`${selectTriggerClass} disabled:bg-slate-50`}
             value={formulario.email}
             onChange={(e) =>
               setFormulario({ ...formulario, email: e.target.value })
@@ -644,7 +644,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
                 formulario.nombre.trim() === "" ||
                 formulario.email.trim() === ""
               }
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-300"
+              className="rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm"
             >
               {formulario.editando ? "Guardar" : "Crear cuenta"}
             </button>
@@ -691,7 +691,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
               type="button"
               onClick={confirmarRestablecer}
               disabled={nueva.length < MINIMO_CONTRASENA || ocupado}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-300"
+              className="rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm"
             >
               Restablecer
             </button>

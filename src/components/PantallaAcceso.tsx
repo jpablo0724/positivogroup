@@ -180,7 +180,7 @@ export default function PantallaAcceso({
         <button
           type="submit"
           disabled={!completo || ocupado}
-          className="mt-5 w-full rounded-md bg-emerald-600 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="mt-5 w-full rounded-md boton-accion py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed"
         >
           {ocupado
             ? "Un momento…"

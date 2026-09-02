@@ -6,6 +6,40 @@
 @theme {
   --color-marca: #141624;
   --color-marca-linea: #262a3d;
+  /* Los dos extremos del degradado de los llamados a acción. */
+  --color-accion: #ff0856;
+  --color-accion-fin: #c8007f;
+}
+
+/*
+ * Los llamados a acción llevan el degradado de la marca.
+ *
+ * Se define aquí y no en cada botón porque son una docena repartidos por toda
+ * la aplicación: así el estilo es uno solo y cambiarlo no obliga a buscarlos.
+ * El realce al pasar por encima se hace con brillo y no con otro color, para
+ * que el degradado se mantenga.
+ */
+.boton-accion {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-accion) 0%,
+    var(--color-accion-fin) 100%
+  );
+  color: #fff;
+  transition:
+    filter 150ms ease,
+    background-color 150ms ease;
+}
+
+.boton-accion:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.boton-accion:disabled {
+  background-image: none;
+  background-color: #cbd5e1;
+  color: #f1f5f9;
+  cursor: not-allowed;
 }
 
 :root {

@@ -213,7 +213,7 @@ export default function ModalEnviarClientify({
               type="button"
               onClick={enviar}
               disabled={estado.paso !== "listo" || enviando}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed"
             >
               {enviando ? "Enviando…" : "Enviar a Clientify"}
             </button>

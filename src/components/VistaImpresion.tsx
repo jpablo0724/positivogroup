@@ -68,7 +68,7 @@ export default function VistaImpresion({
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold shadow-sm transition-colors hover:bg-emerald-700"
+            className="rounded-md boton-accion px-4 py-2 text-sm font-semibold shadow-sm transition-colors"
           >
             Guardar como PDF
           </button>

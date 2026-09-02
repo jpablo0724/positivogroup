@@ -242,7 +242,7 @@ export default function EditorObservaciones({
                   type="button"
                   onClick={() => aplicarColor(codigo)}
                   disabled={!codigoValido}
-                  className="shrink-0 rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400"
+                  className="shrink-0 rounded boton-accion px-2 py-1 text-xs font-semibold text-white transition-colors"
                 >
                   Aplicar
                 </button>

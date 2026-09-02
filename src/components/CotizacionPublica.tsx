@@ -89,7 +89,7 @@ export default function CotizacionPublica({ testigo }: CotizacionPublicaProps) {
           <button
             type="button"
             onClick={() => window.print()}
-            className="flex shrink-0 items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+            className="flex shrink-0 items-center gap-2 rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors"
           >
             <svg
               viewBox="0 0 24 24"

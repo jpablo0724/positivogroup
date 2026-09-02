@@ -171,7 +171,7 @@ export default function ModalProducto({
             type="button"
             onClick={guardar}
             disabled={!valido}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed"
           >
             {editando ? "Guardar cambios" : "Guardar producto"}
           </button>

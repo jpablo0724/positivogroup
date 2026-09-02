@@ -272,7 +272,7 @@ function App() {
                 type="button"
                 onClick={handleGuardar}
                 disabled={guardando}
-                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="boton-accion rounded-md px-4 py-2 text-sm font-semibold shadow-sm"
               >
                 {guardando ? "Guardando…" : "Guardar cotización"}
               </button>
