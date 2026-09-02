@@ -94,7 +94,7 @@ export default function PantallaAcceso({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-marca p-4">
       <form
         onSubmit={enviar}
         className="w-full max-w-sm rounded-xl bg-white p-8 shadow-xl"

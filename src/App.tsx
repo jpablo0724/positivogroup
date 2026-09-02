@@ -213,7 +213,7 @@ function App() {
 
   if (usuario === undefined) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900">
+      <div className="flex min-h-screen items-center justify-center bg-marca">
         <p className="text-sm text-slate-400">Cargando…</p>
       </div>
     );

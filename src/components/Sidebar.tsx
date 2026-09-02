@@ -136,8 +136,8 @@ export default function Sidebar({
     (item) => !item.permiso || usuario.permisos[item.permiso],
   );
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col bg-slate-900 text-slate-200">
-      <div className="border-b border-slate-800 px-5 py-5">
+    <aside className="flex h-screen w-64 shrink-0 flex-col bg-marca text-slate-200">
+      <div className="border-b border-marca-linea px-5 py-5">
         <LogoEmpresa fondo="oscuro" />
         <p className="mt-1 text-xs text-slate-400">Sistema de cotizaciones</p>
       </div>
@@ -163,7 +163,7 @@ export default function Sidebar({
         })}
       </nav>
 
-      <div className="border-t border-slate-800 px-5 py-4">
+      <div className="border-t border-marca-linea px-5 py-4">
         <p className="truncate text-sm font-medium text-slate-200">
           {nombreCompleto(usuario)}
         </p>

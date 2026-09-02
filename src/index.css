@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* El azul oscuro de la marca: fondo del menú lateral y de la pantalla de
+   acceso. Se define aquí para que el color viva en un solo sitio y cambiarlo
+   sea tocar una línea, no buscarlo por todas las pantallas. */
+@theme {
+  --color-marca: #141624;
+  --color-marca-linea: #262a3d;
+}
+
 :root {
   color-scheme: light;
 }
