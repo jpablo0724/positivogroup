@@ -14,12 +14,12 @@ interface InvoicePreviewProps {
 }
 
 const COMPANY = {
+  nombre: "Positivo Group S.A.S",
   nit: "900.227.153 - 9",
   tel: "(4) 448 3427",
-  // La dirección se parte en dos líneas para que no se desborde en el
-  // encabezado ni al imprimir.
-  address: "Cr 34A Cl 30 · CC Premium Plaza",
-  addressDetail: "Piso 4, Of. La Lonja LC 4450",
+  // La dirección va en dos renglones: la calle y la oficina juntas en el
+  // primero, la ciudad sola en el segundo.
+  address: "Cr 34A Cl 30 · CC Premium Plaza, Piso 4, Of. La Lonja LC 4450",
   city: "Medellín - Colombia",
   email: "comercial.digital@positivogroup.com",
 };
@@ -61,10 +61,9 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
               Cotización N.º {data.numeroFactura || "—"}
             </p>
             <div className="mt-2 space-y-0.5 text-slate-700">
+              <p className="font-semibold">{COMPANY.nombre}</p>
               <p>NIT: {COMPANY.nit}</p>
-              <p>Tel: {COMPANY.tel}</p>
               <p>{COMPANY.address}</p>
-              <p>{COMPANY.addressDetail}</p>
               <p>{COMPANY.city}</p>
             </div>
           </td>
