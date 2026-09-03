@@ -605,6 +605,38 @@ console.log("\n== Color en las observaciones ==");
     (await page.locator('#invoice-preview span[style*="color"]').count()) > 0);
 
   await page.screenshot({ path: `${OUT}/E1-observaciones-color.png`, fullPage: true });
+
+  // --- Tipografía ---
+  await editor.click();
+  await page.keyboard.press("Control+A");
+
+  comprobar("el selector de tipografía empieza cerrado",
+    (await page.locator('button[aria-label="Display Bold"]').count()) === 0);
+
+  await page.locator('button[aria-label="Tipografía en Observaciones"]').click();
+  await page.waitForTimeout(200);
+  comprobar("ofrece las tres tipografías",
+    (await page.locator('button[aria-label^="Display"]').count()) === 3,
+    `${await page.locator('button[aria-label^="Display"]').count()}`);
+
+  await page.locator('button[aria-label="Display Bold"]').click();
+  await page.waitForTimeout(300);
+
+  const conFuente = page.locator('#invoice-preview span[style*="font-family"]');
+  comprobar("la tipografía llega a la cotización", (await conFuente.count()) > 0);
+  comprobar("y es la que se eligió",
+    (await conFuente.first().getAttribute("style")).includes("Canva Display Bold"),
+    await conFuente.first().getAttribute("style"));
+
+  // El saneado solo debe dejar pasar las tres de la lista.
+  const colada = await page.evaluate(() => {
+    const div = document.createElement("div");
+    div.innerHTML = '<span style="font-family: Comic Sans MS">x</span>';
+    return div.innerHTML;
+  });
+  comprobar("una tipografía de fuera no se guarda",
+    !(await page.locator("#invoice-preview").innerHTML()).includes("Comic Sans"),
+    colada.slice(0, 40));
 }
 
 console.log("\n== Sesión vencida y cierre de sesión ==");

@@ -1,5 +1,46 @@
 @import "tailwindcss";
 
+/*
+ * Tipografías de la marca.
+ *
+ * Los archivos van en public/fuentes/ y no vienen con el proyecto: Canva Sans
+ * y Canva Display son propietarias, así que los sube quien tenga la licencia.
+ * Mientras no estén, `font-display: swap` y las alternativas de la pila hacen
+ * que el texto se lea igual con la tipografía del sistema; en cuanto los
+ * archivos aparezcan, se usan sin tocar una línea de código.
+ *
+ * Las tres variantes de Display se declaran como familias distintas, no como
+ * grosores de una sola, para que elegir tipografía y poner negrilla sean cosas
+ * independientes y no se pisen entre ellas.
+ */
+@font-face {
+  font-family: "Canva Sans";
+  src: url("/fuentes/canva-sans-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Canva Display Regular";
+  src: url("/fuentes/canva-display-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Canva Display Medium";
+  src: url("/fuentes/canva-display-medium.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Canva Display Bold";
+  src: url("/fuentes/canva-display-bold.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
 /* El azul oscuro de la marca: fondo del menú lateral y de la pantalla de
    acceso. Se define aquí para que el color viva en un solo sitio y cambiarlo
    sea tocar una línea, no buscarlo por todas las pantallas. */
@@ -48,7 +89,7 @@
 
 body {
   margin: 0;
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  font-family: "Canva Sans", system-ui, "Segoe UI", Roboto, sans-serif;
   background-color: #f1f5f9;
 }
 

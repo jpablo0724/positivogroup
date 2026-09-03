@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import PaletaHexagonal from "./PaletaHexagonal";
 import {
   CLASES_CONTENIDO,
+  FUENTES,
   aHtml,
   estaVacio,
   normalizarColor,
+  normalizarFuente,
 } from "../utils/richText";
 
 interface EditorObservacionesProps {
@@ -85,6 +87,8 @@ export default function EditorObservaciones({
   const ultimoEmitido = useRef<string | null>(null);
 
   const [paletaAbierta, setPaletaAbierta] = useState(false);
+  const [fuentesAbiertas, setFuentesAbiertas] = useState(false);
+  const fuentesRef = useRef<HTMLDivElement>(null);
   const [codigo, setCodigo] = useState("");
   const [ultimoColor, setUltimoColor] = useState("#0f172a");
   const paletaRef = useRef<HTMLDivElement>(null);
@@ -122,6 +126,26 @@ export default function EditorObservaciones({
     };
   }, [paletaAbierta]);
 
+  useEffect(() => {
+    if (!fuentesAbiertas) return;
+
+    function alPulsarFuera(evento: MouseEvent) {
+      if (!fuentesRef.current?.contains(evento.target as Node)) {
+        setFuentesAbiertas(false);
+      }
+    }
+    function alEscape(evento: KeyboardEvent) {
+      if (evento.key === "Escape") setFuentesAbiertas(false);
+    }
+
+    document.addEventListener("mousedown", alPulsarFuera);
+    document.addEventListener("keydown", alEscape);
+    return () => {
+      document.removeEventListener("mousedown", alPulsarFuera);
+      document.removeEventListener("keydown", alEscape);
+    };
+  }, [fuentesAbiertas]);
+
   function emitir() {
     const html = editorRef.current?.innerHTML ?? "";
     ultimoEmitido.current = html;
@@ -140,7 +164,8 @@ export default function EditorObservaciones({
     emitir();
   }
 
-  function alternarPaleta() {
+  /** Guarda el texto seleccionado antes de abrir un desplegable. */
+  function recordarSeleccion() {
     const actual = window.getSelection();
     if (actual && actual.rangeCount > 0) {
       const rango = actual.getRangeAt(0);
@@ -148,19 +173,45 @@ export default function EditorObservaciones({
         seleccion.current = rango.cloneRange();
       }
     }
+  }
+
+  /** Devuelve el cursor a donde estaba, para aplicarle el formato. */
+  function reponerSeleccion() {
+    editorRef.current?.focus();
+    if (!seleccion.current) return;
+    const actual = window.getSelection();
+    actual?.removeAllRanges();
+    actual?.addRange(seleccion.current);
+  }
+
+  function alternarPaleta() {
+    recordarSeleccion();
     setPaletaAbierta((abierta) => !abierta);
+  }
+
+  function alternarFuentes() {
+    recordarSeleccion();
+    setFuentesAbiertas((abiertas) => !abiertas);
+  }
+
+  function aplicarFuente(familia: string) {
+    if (!normalizarFuente(familia)) return;
+
+    reponerSeleccion();
+    // Igual que con el color: sin styleWithCSS el navegador escribe
+    // <font face="…">, que el saneado descarta y la fuente se perdería.
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand("fontName", false, familia);
+
+    emitir();
+    setFuentesAbiertas(false);
   }
 
   function aplicarColor(valor: string) {
     const color = normalizarColor(valor);
     if (!color) return;
 
-    editorRef.current?.focus();
-    if (seleccion.current) {
-      const actual = window.getSelection();
-      actual?.removeAllRanges();
-      actual?.addRange(seleccion.current);
-    }
+    reponerSeleccion();
 
     // Aquí sí se quiere CSS: sin esto el navegador escribe <font color="…">,
     // una etiqueta que el saneado descarta, y el color se perdería al guardar.
@@ -196,6 +247,43 @@ export default function EditorObservaciones({
         ))}
 
         <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
+
+        <div className="relative" ref={fuentesRef}>
+          <button
+            type="button"
+            title="Tipografía"
+            aria-label={`Tipografía en ${etiqueta}`}
+            aria-expanded={fuentesAbiertas}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={alternarFuentes}
+            className="flex h-7 items-center gap-1 rounded px-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+          >
+            <span className="text-sm font-semibold leading-none">Aa</span>
+            <svg viewBox="0 0 20 20" {...trazo} className="h-3 w-3">
+              <path d="M6 8l4 4 4-4" />
+            </svg>
+          </button>
+
+          {fuentesAbiertas && (
+            <div className="absolute left-0 top-9 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 shadow-lg">
+              {FUENTES.map((fuente) => (
+                <button
+                  key={fuente.familia}
+                  type="button"
+                  aria-label={fuente.nombre}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => aplicarFuente(fuente.familia)}
+                  // Cada opción se muestra con su propia tipografía, que es la
+                  // única forma de elegir mirando en vez de adivinando.
+                  style={{ fontFamily: `"${fuente.familia}", inherit` }}
+                  className="block w-full rounded px-2 py-1.5 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100"
+                >
+                  {fuente.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="relative" ref={paletaRef}>
           <button

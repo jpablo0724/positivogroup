@@ -12,6 +12,43 @@
  * cotización.
  */
 
+/**
+ * Tipografías que se pueden aplicar al texto.
+ *
+ * Cada una es una familia propia y no un grosor de la misma, a propósito: así
+ * elegir tipografía y poner negrilla son cosas independientes y no se pisan.
+ * Los archivos se declaran en index.css; mientras no estén, el navegador cae
+ * en la tipografía base y el texto se sigue leyendo.
+ */
+export const FUENTES = [
+  { nombre: "Display Regular", familia: "Canva Display Regular" },
+  { nombre: "Display Medium", familia: "Canva Display Medium" },
+  { nombre: "Display Bold", familia: "Canva Display Bold" },
+] as const;
+
+const FAMILIAS: Set<string> = new Set(FUENTES.map((f) => f.familia));
+
+/**
+ * Devuelve la familia solo si es una de las tres, y null si no.
+ *
+ * Es una lista cerrada, no un valor libre: lo que salga de aquí acaba en el
+ * atributo `style` del HTML guardado, y aceptar cualquier texto abriría la
+ * puerta a colar otras declaraciones de CSS.
+ *
+ * Hay que limpiar antes de comparar porque el navegador guarda la familia
+ * entrecomillada: pide "Canva Display Bold" y devuelve `"Canva Display Bold"`.
+ */
+export function normalizarFuente(valor: string): string | null {
+  const limpio = valor
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .split(",")[0]
+    .trim()
+    .replace(/^["']|["']$/g, "");
+
+  return FAMILIAS.has(limpio) ? limpio : null;
+}
+
 /** Colores que ofrece la paleta. Se puede escribir cualquier otro a mano. */
 export const COLORES_SUGERIDOS = [
   { nombre: "Negro", valor: "#0f172a" },
@@ -127,6 +164,9 @@ function limpiar(padre: Element) {
     const color = normalizarColor(
       elemento.style.color || elemento.getAttribute("color") || "",
     );
+    const fuente = normalizarFuente(
+      elemento.style.fontFamily || elemento.getAttribute("face") || "",
+    );
 
     for (const atributo of Array.from(elemento.attributes)) {
       elemento.removeAttribute(atributo.name);
@@ -135,6 +175,8 @@ function limpiar(padre: Element) {
     const estilos: string[] = [];
     if (ALINEACIONES.has(alineacion)) estilos.push(`text-align: ${alineacion}`);
     if (color) estilos.push(`color: ${color}`);
+    // Va entrecomillada porque los nombres llevan espacios.
+    if (fuente) estilos.push(`font-family: "${fuente}"`);
 
     if (estilos.length > 0) {
       elemento.setAttribute("style", estilos.join("; "));
