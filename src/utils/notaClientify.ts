@@ -40,11 +40,23 @@ function escaparHtml(valor: string): string {
  * copiarla.
  */
 export function textoDeNota(data: InvoiceData, enlace?: string): string {
-  const numero = escaparHtml(`COTIZACIÓN N° ${data.numeroFactura}`);
-  if (!enlace) return numero;
+  const lineas: string[] = [];
 
-  const url = escaparHtml(enlace);
-  return `${numero}<br><a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+  // La marca es opcional y encabeza la nota solo si el comercial la escribió.
+  // Sin ella no se deja una línea vacía ni un rótulo suelto en la ficha.
+  const marca = (data.cliente.marca ?? "").trim();
+  if (marca !== "") lineas.push(escaparHtml(marca));
+
+  lineas.push(escaparHtml(`COTIZACIÓN N° ${data.numeroFactura}`));
+
+  if (enlace) {
+    const url = escaparHtml(enlace);
+    lineas.push(
+      `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`,
+    );
+  }
+
+  return lineas.join("<br>");
 }
 
 /** Quita acentos y mayúsculas, para comparar nombres de empresa. */

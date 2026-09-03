@@ -745,6 +745,60 @@ console.log("\n== Enviar a Clientify ==");
 
   await page.click('[role="dialog"] button:has-text("Cerrar")');
   await page.waitForTimeout(200);
+
+  // 3. La misma cotización, ahora con marca: debe encabezar la nota. Se
+  // reutiliza en vez de crear otra para no dejar dos filas de la misma empresa,
+  // que confundiría a los bloques siguientes.
+  servidor.cotizaciones.get("PG 0500/26").data.cliente.marca = "Aromas del Valle";
+  await page.reload({ waitUntil: "networkidle" });
+  await page.click("text=Listado de Cotizaciones");
+  await page.waitForSelector("th:has-text('Total antes de IVA')");
+
+  await page.locator("tbody tr").filter({ hasText: "PG 0500/26" })
+    .locator('button[aria-label="Enviar a Clientify"]').click();
+  await page.waitForSelector("text=Así se verá en la ficha");
+
+  const conMarca = (await page.locator('[role="dialog"] div[class*="[&_a]"]').innerText()).trim().split("\n");
+  comprobar("la marca encabeza la nota", conMarca[0] === "Aromas del Valle", conMarca[0]);
+  comprobar("y el número va debajo", conMarca[1] === "COTIZACIÓN N° PG 0500/26", conMarca[1]);
+  comprobar("son tres líneas con marca", conMarca.length === 3, JSON.stringify(conMarca));
+  await page.screenshot({ path: `${OUT}/C5-nota-con-marca.png`, fullPage: true });
+
+  await page.click('button:has-text("Cancelar")');
+  await page.waitForTimeout(200);
+
+  // Se deja como estaba, sin marca, para los bloques que vienen después.
+  delete servidor.cotizaciones.get("PG 0500/26").data.cliente.marca;
+}
+
+console.log("\n== La marca es opcional ==");
+{
+  await page.click("text=Crear Cotización");
+  await page.waitForSelector('input[placeholder="Marca del cliente"]');
+
+  const campo = page.locator('input[placeholder="Marca del cliente"]');
+  comprobar("el campo de marca está bajo el correo", await campo.isVisible());
+  comprobar("empieza vacío", (await campo.inputValue()) === "");
+
+  // Sin marca, la cotización no muestra esa línea.
+  comprobar("sin marca no aparece la línea en la cotización",
+    !(await page.locator("#invoice-preview").innerText()).includes("Marca:"));
+
+  await campo.fill("Aromas del Valle");
+  await page.waitForTimeout(300);
+  const conMarca = await page.locator("#invoice-preview").innerText();
+  comprobar("al escribirla, aparece en la cotización",
+    conMarca.includes("Marca:") && conMarca.includes("Aromas del Valle"));
+
+  // Y vuelve a desaparecer si se borra: es opcional de verdad.
+  await campo.fill("");
+  await page.waitForTimeout(300);
+  comprobar("al borrarla, desaparece",
+    !(await page.locator("#invoice-preview").innerText()).includes("Marca:"));
+
+  // No debe impedir guardar: se guarda sin marca.
+  comprobar("no bloquea el guardado",
+    !(await page.locator('button:has-text("Guardar cotización")').isDisabled()));
 }
 
 console.log("\n== Administración de usuarios ==");

@@ -181,6 +181,7 @@ export default function InvoiceForm({
           nit: "",
           email: "",
           contacto: "",
+          marca: "",
           clientifyId: undefined,
         },
       });
@@ -366,6 +367,17 @@ export default function InvoiceForm({
               value={data.cliente.email}
               onChange={(e) => updateCliente("email", e.target.value)}
               placeholder="contacto@positivogroup.com"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Marca <span className="text-slate-400">(opcional)</span>
+            </label>
+            <input
+              className={inputClass}
+              value={data.cliente.marca ?? ""}
+              onChange={(e) => updateCliente("marca", e.target.value)}
+              placeholder="Marca del cliente"
             />
           </div>
           <div className="relative">

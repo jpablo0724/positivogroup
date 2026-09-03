@@ -4,6 +4,12 @@ export interface ClientData {
   email: string;
   contacto: string;
   /**
+   * Marca del cliente. Es opcional: la escribe el comercial cuando la
+   * cotización es para una marca concreta de la empresa. Las cotizaciones
+   * guardadas antes de que existiera este campo no lo traen.
+   */
+  marca?: string;
+  /**
    * Empresa de Clientify de la que salieron estos datos. Se guarda para poder
    * anotarle la cotización después; las escritas a mano no lo tienen.
    */
