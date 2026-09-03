@@ -104,14 +104,6 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
                 "—"
               )}
             </p>
-            {/* La marca es opcional: si no se diligenció no se muestra la
-                línea, en vez de dejar un "Marca: —" que solo estorba. */}
-            {(data.cliente.marca ?? "").trim() !== "" && (
-              <p>
-                <span className="font-semibold">Marca: </span>
-                {data.cliente.marca}
-              </p>
-            )}
           </td>
           <td colSpan={2} className={`${cell} space-y-1 px-3 py-2 align-top`}>
             <p className="flex justify-between gap-2">

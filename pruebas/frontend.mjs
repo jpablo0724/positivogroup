@@ -777,24 +777,28 @@ console.log("\n== La marca es opcional ==");
   await page.waitForSelector('input[placeholder="Marca del cliente"]');
 
   const campo = page.locator('input[placeholder="Marca del cliente"]');
-  comprobar("el campo de marca está bajo el correo", await campo.isVisible());
+  comprobar("el campo de marca existe", await campo.isVisible());
+
+  // El orden pedido: razón social, NIT, contacto, email, marca.
+  const etiquetas = await page.locator("section").first()
+    .locator("label").allInnerTexts();
+  comprobar("los campos van en el orden pedido",
+    etiquetas.slice(0, 5).map((e) => e.split(" ")[0]).join(",") ===
+      "Razón,NIT,Contacto,Email,Marca",
+    etiquetas.slice(0, 5).join(" | "));
   comprobar("empieza vacío", (await campo.inputValue()) === "");
 
-  // Sin marca, la cotización no muestra esa línea.
-  comprobar("sin marca no aparece la línea en la cotización",
-    !(await page.locator("#invoice-preview").innerText()).includes("Marca:"));
-
+  // La marca es para el formulario y la nota de Clientify: no debe salir en el
+  // documento que se imprime ni en el que ve el cliente.
   await campo.fill("Aromas del Valle");
   await page.waitForTimeout(300);
-  const conMarca = await page.locator("#invoice-preview").innerText();
-  comprobar("al escribirla, aparece en la cotización",
-    conMarca.includes("Marca:") && conMarca.includes("Aromas del Valle"));
+  const documento = await page.locator("#invoice-preview").innerText();
+  comprobar("la marca NO sale en la cotización",
+    !documento.includes("Marca") && !documento.includes("Aromas del Valle"),
+    documento.slice(0, 60).replace(/\n/g, " | "));
 
-  // Y vuelve a desaparecer si se borra: es opcional de verdad.
   await campo.fill("");
-  await page.waitForTimeout(300);
-  comprobar("al borrarla, desaparece",
-    !(await page.locator("#invoice-preview").innerText()).includes("Marca:"));
+  await page.waitForTimeout(200);
 
   // No debe impedir guardar: se guarda sin marca.
   comprobar("no bloquea el guardado",

@@ -359,6 +359,24 @@ export default function InvoiceForm({
               placeholder="900.000.000-1"
             />
           </div>
+          <div className="relative">
+            <label className={labelClass}>Contacto</label>
+            <input
+              className={inputClass}
+              value={data.cliente.contacto}
+              onChange={(e) => updateCliente("contacto", e.target.value)}
+              placeholder={
+                contactosCliente.length > 0
+                  ? "Elige el contacto abajo"
+                  : "Nombre del contacto"
+              }
+            />
+            <SelectorContacto
+              contactos={contactosCliente}
+              onElegir={elegirContacto}
+              onOmitir={() => setContactosCliente([])}
+            />
+          </div>
           <div>
             <label className={labelClass}>Email</label>
             <input
@@ -378,24 +396,6 @@ export default function InvoiceForm({
               value={data.cliente.marca ?? ""}
               onChange={(e) => updateCliente("marca", e.target.value)}
               placeholder="Marca del cliente"
-            />
-          </div>
-          <div className="relative">
-            <label className={labelClass}>Contacto</label>
-            <input
-              className={inputClass}
-              value={data.cliente.contacto}
-              onChange={(e) => updateCliente("contacto", e.target.value)}
-              placeholder={
-                contactosCliente.length > 0
-                  ? "Elige el contacto abajo"
-                  : "Nombre del contacto"
-              }
-            />
-            <SelectorContacto
-              contactos={contactosCliente}
-              onElegir={elegirContacto}
-              onOmitir={() => setContactosCliente([])}
             />
           </div>
         </div>
