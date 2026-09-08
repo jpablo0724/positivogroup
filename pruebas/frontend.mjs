@@ -820,14 +820,20 @@ console.log("\n== La marca es opcional ==");
     etiquetas.slice(0, 5).join(" | "));
   comprobar("empieza vacío", (await campo.inputValue()) === "");
 
-  // La marca es para el formulario y la nota de Clientify: no debe salir en el
-  // documento que se imprime ni en el que ve el cliente.
+  // Vacía, se muestra con raya, igual que los demás campos del cliente.
+  const sinMarca = await page.locator("#invoice-preview").innerText();
+  comprobar("sin marca se ve con raya en la cotización",
+    sinMarca.includes("Marca: —"), sinMarca.split("\n").find((l) => l.includes("Marca")));
+
+  // Al escribirla, sale en el documento al frente de Razón Social.
   await campo.fill("Aromas del Valle");
   await page.waitForTimeout(300);
   const documento = await page.locator("#invoice-preview").innerText();
-  comprobar("la marca NO sale en la cotización",
-    !documento.includes("Marca") && !documento.includes("Aromas del Valle"),
-    documento.slice(0, 60).replace(/\n/g, " | "));
+  comprobar("la marca sale en la cotización",
+    documento.includes("Marca: Aromas del Valle"),
+    documento.slice(0, 80).replace(/\n/g, " | "));
+  comprobar("va antes que Razón Social",
+    documento.indexOf("Marca:") < documento.indexOf("Razón Social:"));
 
   await campo.fill("");
   await page.waitForTimeout(200);
