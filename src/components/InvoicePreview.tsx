@@ -84,12 +84,10 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
         <tr className="break-inside-avoid">
           <td colSpan={2} className={`${cell} space-y-1 px-3 py-2 align-top`}>
             <p>
-              <span className="font-semibold">Marca: </span>
-              {data.cliente.marca || "—"}
-            </p>
-            <p>
               <span className="font-semibold">Razón Social: </span>
               {data.cliente.razonSocial || "—"}
+              <span className="ml-6 font-semibold">Marca: </span>
+              {data.cliente.marca || "—"}
             </p>
             <p>
               <span className="font-semibold">NIT: </span>

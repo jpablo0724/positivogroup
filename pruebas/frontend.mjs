@@ -825,15 +825,15 @@ console.log("\n== La marca es opcional ==");
   comprobar("sin marca se ve con raya en la cotización",
     sinMarca.includes("Marca: —"), sinMarca.split("\n").find((l) => l.includes("Marca")));
 
-  // Al escribirla, sale en el documento al frente de Razón Social.
+  // Al escribirla, sale al frente de Razón Social, en la misma línea.
   await campo.fill("Aromas del Valle");
   await page.waitForTimeout(300);
   const documento = await page.locator("#invoice-preview").innerText();
+  const lineaRazonSocial = documento.split("\n").find((l) => l.includes("Razón Social"));
   comprobar("la marca sale en la cotización",
-    documento.includes("Marca: Aromas del Valle"),
-    documento.slice(0, 80).replace(/\n/g, " | "));
-  comprobar("va antes que Razón Social",
-    documento.indexOf("Marca:") < documento.indexOf("Razón Social:"));
+    lineaRazonSocial?.includes("Marca: Aromas del Valle"), lineaRazonSocial);
+  comprobar("va después de Razón Social, en la misma línea",
+    lineaRazonSocial?.indexOf("Marca:") > lineaRazonSocial?.indexOf("Razón Social:"));
 
   await campo.fill("");
   await page.waitForTimeout(200);
