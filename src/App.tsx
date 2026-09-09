@@ -142,9 +142,29 @@ function App() {
     void cargar();
   }, [usuario, cargar]);
 
+  // Red de seguridad además del reinicio en entrar(): si la cuenta pierde el
+  // permiso de la vista en la que está (por ejemplo, otro administrador se lo
+  // quita mientras la tiene abierta), no debe quedar viendo una pantalla en
+  // blanco. Crear cotización no pide permiso, así que siempre es válida.
+  useEffect(() => {
+    if (!usuario) return;
+    const permiso: Partial<Record<View, boolean>> = {
+      "listado-cotizaciones": usuario.permisos.cotizaciones,
+      "catalogo-productos": usuario.permisos.catalogo,
+      "admin-usuarios": usuario.permisos.usuarios,
+    };
+    if (permiso[activeView] === false) setActiveView("crear-factura");
+  }, [usuario, activeView]);
+
   function entrar(quien: UsuarioPublico) {
     setAvisoAcceso(null);
     setUsuario(quien);
+    // Crear cotización no pide permiso, así que siempre es una vista válida.
+    // Sin este reinicio, si la sesión anterior se quedó en una pantalla que la
+    // cuenta que entra ahora no tiene permitida (Usuarios, Catálogo), el
+    // contenido queda en blanco: el "activeView" no cambia solo al cambiar de
+    // usuario, y ninguno de los bloques de más abajo tiene por qué renderizar.
+    setActiveView("crear-factura");
   }
 
   async function handleSalir() {
@@ -308,6 +328,7 @@ function App() {
                 onProductosChange={setProductos}
                 onVistaPreviaChange={setItemsVistaPrevia}
                 onError={manejarError}
+                puedeCrearProducto={usuario.rol === "admin"}
               />
             </div>
 

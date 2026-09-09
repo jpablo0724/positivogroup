@@ -324,7 +324,10 @@ console.log("\n== Numeración contra el servidor ==");
 
 console.log("\n== Crear producto y guardar cotización ==");
 {
-  await page.click('button:has-text("Agregar producto")');
+  // El botón de arriba, junto al título "Productos", abre el modal; el de
+  // abajo agrega a la cotización el producto ya elegido. Se distingue por su
+  // texto ahora que dejaron de ser iguales.
+  await page.click('button:has-text("Crear producto")');
   await page.waitForSelector('[role="dialog"]');
   const dialog = page.locator('[role="dialog"]');
   await dialog.locator("input").fill("X01 - Parqueaderos residenciales");
@@ -811,12 +814,12 @@ console.log("\n== La marca es opcional ==");
   const campo = page.locator('input[placeholder="Marca del cliente"]');
   comprobar("el campo de marca existe", await campo.isVisible());
 
-  // El orden pedido: razón social, NIT, contacto, email, marca.
+  // El orden pedido: razón social, NIT, marca, contacto, email.
   const etiquetas = await page.locator("section").first()
     .locator("label").allInnerTexts();
   comprobar("los campos van en el orden pedido",
     etiquetas.slice(0, 5).map((e) => e.split(" ")[0]).join(",") ===
-      "Razón,NIT,Contacto,Email,Marca",
+      "Razón,NIT,Marca,Contacto,Email",
     etiquetas.slice(0, 5).join(" | "));
   comprobar("empieza vacío", (await campo.inputValue()) === "");
 
@@ -971,6 +974,19 @@ console.log("\n== Lo que ve una cuenta básica ==");
   comprobar("ve el listado", menu.includes("Listado de Cotizaciones"));
   comprobar("NO ve el catálogo", !menu.includes("Catálogo"), menu.replace(/\n/g, " | "));
   comprobar("NO ve usuarios", !menu.includes("Usuarios"), menu.replace(/\n/g, " | "));
+
+  // "Crear producto" es solo para administradores, aunque la cuenta básica
+  // esté ya en la pantalla de cotizar.
+  comprobar("una cuenta básica no ve Crear producto",
+    (await page.locator('button:has-text("Crear producto")').count()) === 0);
+
+  await page.click('button:has-text("Selecciona un producto")');
+  await page.waitForTimeout(150);
+  comprobar("ni la opción de crearlo desde el desplegable",
+    (await page.locator("text=+ Agregar producto nuevo").count()) === 0);
+  // Se cierra con un clic fuera: el componente no atiende Escape.
+  await page.locator("aside").click();
+
   await page.screenshot({ path: `${OUT}/F2-menu-basico.png`, fullPage: true });
 
   // Y con el catálogo habilitado, aparece.

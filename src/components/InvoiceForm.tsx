@@ -30,6 +30,8 @@ interface InvoiceFormProps {
    */
   onVistaPreviaChange: (items: InvoiceItem[]) => void;
   onError: (err: unknown) => void;
+  /** Crear productos nuevos desde aquí es solo para administradores. */
+  puedeCrearProducto: boolean;
 }
 
 const inputClass = selectTriggerClass;
@@ -85,6 +87,7 @@ export default function InvoiceForm({
   onProductosChange,
   onVistaPreviaChange,
   onError,
+  puedeCrearProducto,
 }: InvoiceFormProps) {
   const [draft, setDraft] = useState<Draft>(draftVacio);
   // id del producto que se está editando; null mientras se captura uno nuevo.
@@ -359,6 +362,17 @@ export default function InvoiceForm({
               placeholder="900.000.000-1"
             />
           </div>
+          <div>
+            <label className={labelClass}>
+              Marca <span className="text-slate-400">(opcional)</span>
+            </label>
+            <input
+              className={inputClass}
+              value={data.cliente.marca ?? ""}
+              onChange={(e) => updateCliente("marca", e.target.value)}
+              placeholder="Marca del cliente"
+            />
+          </div>
           <div className="relative">
             <label className={labelClass}>Contacto</label>
             <input
@@ -385,17 +399,6 @@ export default function InvoiceForm({
               value={data.cliente.email}
               onChange={(e) => updateCliente("email", e.target.value)}
               placeholder="contacto@positivogroup.com"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>
-              Marca <span className="text-slate-400">(opcional)</span>
-            </label>
-            <input
-              className={inputClass}
-              value={data.cliente.marca ?? ""}
-              onChange={(e) => updateCliente("marca", e.target.value)}
-              placeholder="Marca del cliente"
             />
           </div>
         </div>
@@ -454,23 +457,27 @@ export default function InvoiceForm({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Productos
           </h2>
-          <button
-            type="button"
-            onClick={() => setModalProductoAbierto(true)}
-            className="flex items-center gap-1 text-xs font-semibold text-accion-fin transition-colors hover:text-accion"
-          >
-            <svg
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              className="h-3.5 w-3.5"
+          {/* Crear productos nuevos en el catálogo es cosa de administradores;
+              una cuenta básica solo elige entre los que ya existen. */}
+          {puedeCrearProducto && (
+            <button
+              type="button"
+              onClick={() => setModalProductoAbierto(true)}
+              className="flex items-center gap-1 text-xs font-semibold text-accion-fin transition-colors hover:text-accion"
             >
-              <path d="M10 4v12M4 10h12" />
-            </svg>
-            Agregar producto
-          </button>
+              <svg
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                className="h-3.5 w-3.5"
+              >
+                <path d="M10 4v12M4 10h12" />
+              </svg>
+              Crear producto
+            </button>
+          )}
         </div>
 
         {data.items.length > 0 && (
@@ -536,8 +543,17 @@ export default function InvoiceForm({
                 onChange={(nombre) => selectProducto(nombre)}
                 options={opcionesProducto}
                 placeholder="Selecciona un producto"
-                extraOptionLabel="+ Agregar producto nuevo"
-                onExtraOption={() => setModalProductoAbierto(true)}
+                // Es la misma acción que el botón "Crear producto" de arriba,
+                // así que lleva la misma restricción: sin ella, una cuenta
+                // básica podría crear productos igual, por esta otra puerta.
+                extraOptionLabel={
+                  puedeCrearProducto ? "+ Agregar producto nuevo" : undefined
+                }
+                onExtraOption={
+                  puedeCrearProducto
+                    ? () => setModalProductoAbierto(true)
+                    : undefined
+                }
               />
             </div>
             <div className="col-span-2">
