@@ -77,6 +77,10 @@ function App() {
   >(undefined);
   // Cotización que se va a anotar en la ficha de la empresa en Clientify.
   const [paraClientify, setParaClientify] = useState<InvoiceData | null>(null);
+  // Quién la creó, para que la nota en Clientify quede a su nombre.
+  const [paraClientifyCreadoPor, setParaClientifyCreadoPor] = useState<
+    string | undefined
+  >(undefined);
 
   const [activeView, setActiveView] = useState<View>("crear-factura");
   const [invoice, setInvoice] = useState<InvoiceData>(() =>
@@ -429,7 +433,10 @@ function App() {
               setParaImprimir(c.data);
               setParaImprimirCreadoPor(c.creadoPor);
             }}
-            onEnviarClientify={(c) => setParaClientify(c.data)}
+            onEnviarClientify={(c) => {
+              setParaClientify(c.data);
+              setParaClientifyCreadoPor(c.creadoPor);
+            }}
             onEliminar={handleEliminar}
             onReasignar={handleReasignar}
           />
@@ -513,7 +520,11 @@ function App() {
       {paraClientify && (
         <ModalEnviarClientify
           data={paraClientify}
-          onCerrar={() => setParaClientify(null)}
+          creador={resolverCreador(paraClientifyCreadoPor)}
+          onCerrar={() => {
+            setParaClientify(null);
+            setParaClientifyCreadoPor(undefined);
+          }}
         />
       )}
     </div>

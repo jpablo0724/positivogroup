@@ -878,6 +878,11 @@ console.log("\n== Enviar a Clientify ==");
   comprobar("envía la nota", clientify.notas.length === 1, `${clientify.notas.length} notas`);
   comprobar("va a la empresa correcta", clientify.notas[0].empresaId === 501, `empresa ${clientify.notas[0].empresaId}`);
   comprobar("el título lleva el número", clientify.notas[0].titulo === "Cotización PG 0500/26", clientify.notas[0].titulo);
+  comprobar("manda el correo de quien creó la cotización, para el dueño en Clientify",
+    clientify.notas[0].creadorEmail === "juan@positivogroup.com", clientify.notas[0].creadorEmail);
+  comprobar("y su nombre, por si el correo no coincide en Clientify",
+    clientify.notas[0].creadorNombre === usuarios.get("juan@positivogroup.com").nombre,
+    clientify.notas[0].creadorNombre);
 
   await page.click('[role="dialog"] button:has-text("Cerrar")');
   await page.waitForTimeout(200);

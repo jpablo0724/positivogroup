@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { InvoiceData } from "../types";
+import type { CreadorFirma, InvoiceData } from "../types";
 import { ErrorApi } from "../utils/api";
 import {
   empresaDeLaCotizacion,
@@ -10,6 +10,8 @@ import {
 
 interface ModalEnviarClientifyProps {
   data: InvoiceData;
+  /** Quien creó la cotización, para que la nota quede a su nombre en Clientify. */
+  creador?: CreadorFirma | null;
   onCerrar: () => void;
 }
 
@@ -29,6 +31,7 @@ type Estado =
  */
 export default function ModalEnviarClientify({
   data,
+  creador,
   onCerrar,
 }: ModalEnviarClientifyProps) {
   const [estado, setEstado] = useState<Estado>({ paso: "buscando" });
@@ -82,7 +85,7 @@ export default function ModalEnviarClientify({
     setEstado({ paso: "enviando", empresaId });
 
     try {
-      await enviarNota(empresaId, data, enlace);
+      await enviarNota(empresaId, data, enlace, creador);
       setEstado({ paso: "enviada" });
     } catch (err) {
       // El backend devuelve lo que respondió Clientify, que es lo que hace

@@ -1,6 +1,7 @@
 import {
   contactosDeEmpresa,
   contactosPorNombreDeEmpresa,
+  resolverDuenioDeNota,
 } from "../netlify/functions/clientify.mts";
 
 /**
@@ -67,6 +68,29 @@ console.log("\n== Enlaza por nombre comercial o por razón social ==");
   const mismoNombreYRazonSocial = { name: "Redcol", business_name: "Redcol" };
   comprobar("cuando nombre y razón social son iguales, no busca dos veces",
     contactosDeEmpresa(mismoNombreYRazonSocial, porNombre).length === 1);
+}
+
+console.log("\n== A quién le queda la nota (dueño), para el cruce con Clientify ==");
+{
+  const usuarios = [
+    { id: 10, email: "juan@positivogroup.com", full_name: "Juan Pablo Moncada" },
+    { id: 11, email: "otra@positivogroup.com", full_name: "María Ríos" },
+  ];
+
+  comprobar("encuentra por correo, sin importar mayúsculas",
+    resolverDuenioDeNota(usuarios, "Juan@PositivoGroup.com", "") === 10);
+
+  comprobar("si el correo no aparece, busca por nombre completo",
+    resolverDuenioDeNota(usuarios, "otro-correo@positivogroup.com", "María Ríos") === 11);
+
+  comprobar("el correo manda sobre el nombre cuando los dos podrían servir",
+    resolverDuenioDeNota(usuarios, "juan@positivogroup.com", "María Ríos") === 10);
+
+  comprobar("sin coincidencia por ninguno de los dos, no asigna a nadie",
+    resolverDuenioDeNota(usuarios, "nadie@positivogroup.com", "Nadie Conocido") === null);
+
+  comprobar("sin correo ni nombre, tampoco",
+    resolverDuenioDeNota(usuarios, "", "") === null);
 }
 
 console.log(fallos === 0 ? "\nTODO OK" : `\n${fallos} FALLA(S)`);

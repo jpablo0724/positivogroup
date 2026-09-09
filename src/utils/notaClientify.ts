@@ -104,6 +104,7 @@ export async function empresaDeLaCotizacion(
 export interface ResultadoNota {
   enviada: boolean;
   endpoint?: string;
+  duenioAsignado?: boolean;
   intentos?: { url: string; status: number; respuesta: string }[];
 }
 
@@ -111,6 +112,8 @@ export async function enviarNota(
   empresaId: number,
   data: InvoiceData,
   enlace: string,
+  /** Quien creó la cotización, para que la nota quede a su nombre en Clientify. */
+  creador?: { nombre: string; correo: string } | null,
 ): Promise<ResultadoNota> {
   return pedir<ResultadoNota>("/api/clientify/nota", {
     metodo: "POST",
@@ -118,6 +121,8 @@ export async function enviarNota(
       empresaId,
       titulo: tituloDeNota(data),
       texto: textoDeNota(data, enlace),
+      creadorEmail: creador?.correo ?? "",
+      creadorNombre: creador?.nombre ?? "",
     },
   });
 }
