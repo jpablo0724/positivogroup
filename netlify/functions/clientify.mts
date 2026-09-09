@@ -400,25 +400,42 @@ export default async (req: Request) => {
 
       if (respuesta.ok) {
         // La respuesta de creación es mínima y no dice si "owner" quedó
-        // puesto. Se vuelve a pedir la nota por su id para ver su forma
-        // real: así se sabe con qué campo Clientify guarda el dueño, en
-        // vez de seguir adivinando.
+        // puesto. Se prueba a volver a consultar la nota por varias rutas
+        // posibles, hasta encontrar una que responda: así se sabe con qué
+        // campo real Clientify guarda el dueño, en vez de seguir adivinando.
         let notaCompleta: unknown = null;
         const noteId = extraerIdDeNota(cuerpoTexto);
         if (noteId !== null) {
-          try {
-            const consulta = await pedirAClientify(
-              new URL(`${CLIENTIFY_BASE}/notes/${noteId}/`),
-              token,
-            );
-            const textoConsulta = await consulta.text();
-            notaCompleta = consulta.ok
-              ? JSON.parse(textoConsulta)
-              : { error: `consulta respondió ${consulta.status}`, detalle: textoConsulta.slice(0, 300) };
-          } catch (err) {
+          const rutasDeConsulta = [
+            `${CLIENTIFY_BASE}/notes/${noteId}/`,
+            `${CLIENTIFY_BASE}/companies/${empresaId}/notes/${noteId}/`,
+            `${CLIENTIFY_BASE}/companies/${empresaId}/note/${noteId}/`,
+            `${CLIENTIFY_BASE}/companies/${empresaId}/notes/`,
+            `${CLIENTIFY_BASE}/activities/${noteId}/`,
+            `${CLIENTIFY_BASE}/interactions/${noteId}/`,
+          ];
+          const intentosConsulta: { url: string; status: number }[] = [];
+
+          for (const ruta of rutasDeConsulta) {
+            try {
+              const consulta = await pedirAClientify(new URL(ruta), token);
+              intentosConsulta.push({ url: ruta, status: consulta.status });
+              if (consulta.ok) {
+                notaCompleta = {
+                  encontradaEn: ruta,
+                  datos: JSON.parse(await consulta.text()),
+                };
+                break;
+              }
+            } catch {
+              intentosConsulta.push({ url: ruta, status: 0 });
+            }
+          }
+
+          if (notaCompleta === null) {
             notaCompleta = {
-              error: "no se pudo volver a consultar la nota",
-              detalle: err instanceof Error ? err.message : String(err),
+              error: "ninguna ruta de consulta respondió bien",
+              intentos: intentosConsulta,
             };
           }
         }
