@@ -18,7 +18,6 @@ interface InvoicePreviewProps {
 const COMPANY = {
   nombre: "Positivo Group S.A.S",
   nit: "900.227.153 - 9",
-  tel: "(4) 448 3427",
   // La dirección va en dos renglones: la calle y la oficina juntas en el
   // primero, la ciudad sola en el segundo.
   address: "Cr 34A Cl 30 · CC Premium Plaza, Piso 4, Of. La Lonja LC 4450",
@@ -239,7 +238,7 @@ export default function InvoicePreview({ data, creador }: InvoicePreviewProps) {
           <td colSpan={2} className={`${cell} space-y-0.5 px-4 py-4 align-top`}>
             <p className="font-semibold">{creador?.nombre || "—"}</p>
             <p>Ejecutivo Comercial</p>
-            <p>Tel: {creador?.telefono || COMPANY.tel}</p>
+            <p>Tel: {creador?.telefono || "—"}</p>
             <p>Email: {creador?.correo || COMPANY.email}</p>
             <p>{COMPANY.nombre}</p>
           </td>

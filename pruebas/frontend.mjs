@@ -777,12 +777,11 @@ console.log("\n== Ver en PDF ==");
   comprobar("se monta fuera de #root", (await page.locator("#impresion #invoice-preview").count()) === 1);
 
   // La firma del PDF trae los datos de quien creó esa cotización. Sin
-  // teléfono propio todavía, se ve el de la empresa (es el valor por
-  // defecto del componente, no algo que dependa de este dato).
+  // teléfono propio todavía, se ve una raya: nunca el de la empresa.
   const firmante = usuarios.get("juan@positivogroup.com");
   comprobar("la firma del PDF trae el nombre de quien la creó", hoja.includes(firmante.nombre), hoja);
-  comprobar("y su teléfono, o el de la empresa si todavía no tiene uno propio",
-    hoja.includes(firmante.telefono || "(4) 448 3427"), hoja);
+  comprobar("sin teléfono propio, se ve una raya y no uno fijo de la empresa",
+    hoja.includes("Tel: —") && !hoja.includes("448 3427"), hoja);
   comprobar("y su correo", hoja.includes("juan@positivogroup.com"), hoja);
   comprobar("marca el body para imprimir",
     await page.evaluate(() => document.body.classList.contains("imprimiendo")));
