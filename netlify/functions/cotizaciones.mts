@@ -21,22 +21,29 @@ import {
  *   GET    /api/cotizaciones/equipo               -> nombre y correo del equipo, para reasignar
  *   POST   /api/cotizaciones                      -> guarda o reemplaza una
  *   POST   /api/cotizaciones/enlace                -> enlace público para el cliente
- *   POST   /api/cotizaciones/PG 0001/26/reasignar -> le cambia el dueño
+ *   POST   /api/cotizaciones/PG 0001/26/reasignar -> le pasa el acceso a otra persona
  *   DELETE /api/cotizaciones/PG 0001/26           -> elimina una
  *
  * Quién ve qué se decide aquí y no en el navegador: un administrador ve las de
- * todo el equipo, y una cuenta básica solo las suyas. Cada cotización guarda
+ * todo el equipo, una cuenta básica solo las que tiene asignadas (las que creó
+ * y no ha reasignado, o las que le reasignaron a ella). Cada cotización guarda
  * quién la creó, y ese dato no se toma del cuerpo de la petición sino de la
  * sesión, para que nadie pueda atribuirse las de otro.
  *
- * Reasignar solo cambia ese dueño: la cotización en sí (cliente, items,
- * fecha de guardado) no se toca. Lo puede hacer un administrador, o el dueño
- * actual para pasársela a otra persona del equipo.
+ * Reasignar NUNCA cambia quién la creó — ese dato es permanente, se muestra
+ * como autor en el listado y en la cotización, y esta ruta no lo toca. Lo que
+ * hace es TRASLADAR el acceso al nuevo dueño: a partir de ahí quien la creó ya
+ * no la ve, solo la persona a la que se le pasó (o un administrador, que
+ * siempre puede). Lo puede hacer un administrador, o quien tenga el acceso en
+ * ese momento, para pasárselo a otra persona del equipo.
  */
 
 interface CotizacionGuardada {
   guardadoEn: string;
+  /** Quién la creó. Es un dato fijo para mostrar; no decide quién la ve. */
   creadoPor?: string;
+  /** A quién se le pasó el acceso. Mientras esté puesto, manda sobre creadoPor. */
+  reasignadoA?: string;
   data: { numeroFactura?: unknown };
 }
 
@@ -52,15 +59,27 @@ function esCotizacion(valor: unknown): valor is CotizacionGuardada {
 }
 
 /**
+ * Quién la ve y la puede tocar ahora mismo: si se reasignó, es la persona a
+ * la que se le dio — no las dos a la vez. Reasignar traslada el acceso, no lo
+ * comparte; quien la creó deja de verla igual que si nunca hubiera sido suya.
+ *
+ * "creadoPor" no entra aquí después de una reasignación: eso es solo el dato
+ * que se muestra como autor, y es aparte de quién puede verla.
+ */
+function duenoActual(cotizacion: CotizacionGuardada): string {
+  return normalizarEmail(cotizacion.reasignadoA || cotizacion.creadoPor || "");
+}
+
+/**
  * ¿Puede esta persona ver o tocar esta cotización?
  *
  * Las cotizaciones guardadas antes de que existieran los roles no tienen autor.
  * Se tratan como del administrador: nadie las pierde, pero tampoco aparecen en
- * el listado de una cuenta básica que no las creó.
+ * el listado de una cuenta básica que no las creó ni le hayan reasignado.
  */
 function esSuya(cotizacion: CotizacionGuardada, quien: Usuario): boolean {
   if (esAdmin(quien)) return true;
-  return normalizarEmail(cotizacion.creadoPor ?? "") === quien.email;
+  return duenoActual(cotizacion) === quien.email;
 }
 
 export default async (req: Request) => {
@@ -98,7 +117,7 @@ export default async (req: Request) => {
       return json({ cotizaciones });
     }
 
-    // --- Reasignar el dueño ---
+    // --- Reasignar: traslada el acceso, sin tocar quién la creó ---
     if (req.method === "POST" && resto.endsWith("/reasignar")) {
       const numero = resto.replace(/\/reasignar$/, "");
       const guardada = (await almacen.get(claveCotizacion(numero), {
@@ -113,15 +132,23 @@ export default async (req: Request) => {
       const cuerpo = (await req.json().catch(() => ({}))) as {
         nuevoDueno?: unknown;
       };
-      const nuevoDueno = normalizarEmail(String(cuerpo.nuevoDueno ?? ""));
-      if (nuevoDueno === "") return json({ error: "falta_nuevo_dueno" }, 400);
+      const texto = String(cuerpo.nuevoDueno ?? "").trim();
 
+      // Vacío quita la reasignación: vuelve a verla solo quien la creó (y un
+      // administrador, que siempre puede).
+      if (texto === "") {
+        const { reasignadoA: _quitado, ...registro } = guardada;
+        await almacen.setJSON(claveCotizacion(numero), registro);
+        return json({ cotizacion: registro });
+      }
+
+      const nuevoDueno = normalizarEmail(texto);
       const cuenta = await buscarUsuario(nuevoDueno);
       if (!cuenta) return json({ error: "usuario_no_existe" }, 404);
 
       const registro: CotizacionGuardada = {
         ...guardada,
-        creadoPor: nuevoDueno,
+        reasignadoA: nuevoDueno,
       };
 
       await almacen.setJSON(claveCotizacion(numero), registro);
@@ -188,6 +215,9 @@ export default async (req: Request) => {
         // El autor se conserva al reeditar y, si es nueva, es quien la guarda.
         // Sale de la sesión y no del cuerpo, para que nadie firme por otro.
         creadoPor: previa?.creadoPor ?? quien.email,
+        // La reasignación también se conserva: guardar cambios no es
+        // reasignar, así que no debe quitarle el acceso a quien se lo dieron.
+        ...(previa?.reasignadoA ? { reasignadoA: previa.reasignadoA } : {}),
         guardadoEn: new Date().toISOString(),
       };
 

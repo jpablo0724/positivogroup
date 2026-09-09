@@ -395,7 +395,9 @@ console.log("\n== Roles y permisos ==");
     JSON.stringify(Object.keys(equipoAna.cuerpo.equipo[0]).sort()) === JSON.stringify(["apellidos", "email", "nombre"]),
     JSON.stringify(equipoAna.cuerpo.equipo[0]));
 
-  // El dueño actual (Ana) se la puede pasar a otra persona del equipo.
+  // El dueño actual (Ana) se la puede pasar a otra persona del equipo. Eso
+  // traslada el acceso: deja de ser ella quien la ve, pero sigue figurando
+  // como quien la creó.
   const antes9002 = listaAna.cuerpo.cotizaciones.find((c) => c.data.numeroFactura === "PG 9002/26");
   const propiaReasignada = await leer(await cotizaciones(req(`/api/cotizaciones/${encodeURIComponent("PG 9002/26")}/reasignar`, {
     cookie: cookieAna, cuerpo: { nuevoDueno: CUENTA.email },
@@ -403,11 +405,31 @@ console.log("\n== Roles y permisos ==");
   comprobar("el dueño se la reasigna a otro -> 200", propiaReasignada.status === 200, `status ${propiaReasignada.status}`);
   comprobar("nada del contenido cambia", propiaReasignada.cuerpo.cotizacion?.data?.cliente === "De Ana", propiaReasignada.cuerpo.cotizacion?.data?.cliente);
   comprobar("ni la fecha de guardado", propiaReasignada.cuerpo.cotizacion?.guardadoEn === antes9002?.guardadoEn, propiaReasignada.cuerpo.cotizacion?.guardadoEn);
+  comprobar("quién la creó NO cambia", propiaReasignada.cuerpo.cotizacion?.creadoPor === "ana@positivogroup.com", propiaReasignada.cuerpo.cotizacion?.creadoPor);
+  comprobar("queda anotado a quién se le pasó", propiaReasignada.cuerpo.cotizacion?.reasignadoA === CUENTA.email.toLowerCase(), propiaReasignada.cuerpo.cotizacion?.reasignadoA);
 
   const listaAnaTrasReasignar = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieAna })));
-  comprobar("Ana deja de verla al perder la propiedad",
+  comprobar("Ana deja de verla al perder el acceso, aunque la haya creado ella",
     !listaAnaTrasReasignar.cuerpo.cotizaciones.some((c) => c.data.numeroFactura === "PG 9002/26"),
     listaAnaTrasReasignar.cuerpo.cotizaciones.map((c) => c.data.numeroFactura).join(", "));
+
+  // Habiendo perdido el acceso, Ana tampoco la puede volver a reasignar.
+  const reasignarSinAcceso = await leer(await cotizaciones(req(`/api/cotizaciones/${encodeURIComponent("PG 9002/26")}/reasignar`, {
+    cookie: cookieAna, cuerpo: { nuevoDueno: "ana@positivogroup.com" },
+  })));
+  comprobar("sin acceso, no la puede reasignar de vuelta -> 403", reasignarSinAcceso.status === 403, reasignarSinAcceso.cuerpo.error);
+
+  // Se le quita la reasignación (vacío): vuelve a ser de quien la creó.
+  const sinReasignar = await leer(await cotizaciones(req(`/api/cotizaciones/${encodeURIComponent("PG 9002/26")}/reasignar`, {
+    cookie: cookieAdmin, cuerpo: { nuevoDueno: "" },
+  })));
+  comprobar("un administrador le quita la reasignación -> 200", sinReasignar.status === 200, `status ${sinReasignar.status}`);
+  comprobar("ya no queda reasignada a nadie", sinReasignar.cuerpo.cotizacion?.reasignadoA === undefined, JSON.stringify(sinReasignar.cuerpo.cotizacion));
+  comprobar("y quién la creó sigue igual", sinReasignar.cuerpo.cotizacion?.creadoPor === "ana@positivogroup.com");
+
+  const listaAnaTrasQuitar = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieAna })));
+  comprobar("Ana vuelve a verla al quitarle la reasignación",
+    listaAnaTrasQuitar.cuerpo.cotizaciones.some((c) => c.data.numeroFactura === "PG 9002/26"));
 
   // Una cotización de un tercero (aún del admin) no se la puede asignar quien no es dueño ni admin.
   const ajenaReasignada = await leer(await cotizaciones(req(`/api/cotizaciones/${encodeURIComponent("PG 9001/26")}/reasignar`, {
@@ -425,6 +447,7 @@ console.log("\n== Roles y permisos ==");
     cookie: cookieAdmin, cuerpo: { nuevoDueno: "ana@positivogroup.com" },
   })));
   comprobar("el admin reasigna cualquiera -> 200", porAdmin.status === 200, `status ${porAdmin.status}`);
+  comprobar("quién la creó sigue siendo el admin", porAdmin.cuerpo.cotizacion?.creadoPor === CUENTA.email.toLowerCase(), porAdmin.cuerpo.cotizacion?.creadoPor);
 
   const listaAnaConLaDelAdmin = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieAna })));
   comprobar("y ahora Ana sí la ve, aunque no era suya",

@@ -242,7 +242,9 @@ function armarApi(page) {
         const { nuevoDueno } = JSON.parse(req.postData());
         const guardada = servidor.cotizaciones.get(numero);
         if (!guardada) return responder({ error: "cotizacion_no_existe" }, 404);
-        guardada.creadoPor = nuevoDueno;
+        // Traslada el acceso; quién la creó (creadoPor) nunca se toca aquí.
+        if (nuevoDueno) guardada.reasignadoA = nuevoDueno;
+        else delete guardada.reasignadoA;
         return responder({ cotizacion: guardada });
       }
       if (req.method() === "POST") {
@@ -251,6 +253,7 @@ function armarApi(page) {
         servidor.cotizaciones.set(cuerpo.data.numeroFactura, {
           ...cuerpo,
           creadoPor: previa?.creadoPor ?? email,
+          ...(previa?.reasignadoA ? { reasignadoA: previa.reasignadoA } : {}),
         });
         return responder({ cotizacion: servidor.cotizaciones.get(cuerpo.data.numeroFactura) });
       }
@@ -1055,18 +1058,42 @@ console.log("\n== Reasignar cotizaciones ==");
   const filaAjena = page.locator("tbody tr").filter({ hasText: "Cliente de otra persona" });
   const selector = filaAjena.locator('select[aria-label^="Reasignar"]');
   comprobar("el admin puede reasignar cualquiera", (await selector.count()) === 1);
+  comprobar("sin creador registrado, la columna muestra una raya",
+    (await filaAjena.locator("td").nth(5).innerText()) === "—");
 
   await selector.selectOption({ label: "Sofía Restrepo" });
-  await page.waitForTimeout(400);
-  comprobar("queda asignada a Sofía en el servidor",
-    servidor.cotizaciones.get("PG 0009/26")?.creadoPor === "sofia@positivogroup.com",
+  // El selector es controlado: el valor no se asienta hasta que vuelve la
+  // respuesta del servidor y se refresca el listado.
+  await page.waitForFunction(
+    (numero) => document.querySelector(`select[aria-label="Reasignar ${numero}"]`)?.value === "sofia@positivogroup.com",
+    "PG 0009/26",
+    { timeout: 3000 },
+  );
+  comprobar("queda anotado a quién se reasignó, en el servidor",
+    servidor.cotizaciones.get("PG 0009/26")?.reasignadoA === "sofia@positivogroup.com",
+    servidor.cotizaciones.get("PG 0009/26")?.reasignadoA);
+  comprobar("quién la creó NO se toca (sigue sin haber ninguno)",
+    servidor.cotizaciones.get("PG 0009/26")?.creadoPor === undefined,
     servidor.cotizaciones.get("PG 0009/26")?.creadoPor);
-  comprobar("el nombre de Sofía aparece como creadora",
-    (await filaAjena.innerText()).includes("Sofía Restrepo"));
+  comprobar("la columna \"Creada por\" no cambia a Sofía",
+    (await filaAjena.locator("td").nth(5).innerText()) === "—");
+  comprobar("el selector queda mostrando a quién se reasignó",
+    (await selector.inputValue()) === "sofia@positivogroup.com");
   comprobar("y nada del contenido de la cotización cambió",
     (await filaAjena.innerText()).includes("Cliente de otra persona"));
 
   await page.screenshot({ path: `${OUT}/F1b-reasignar.png`, fullPage: true });
+
+  // Se le quita la reasignación: vuelve a "Sin reasignar".
+  await selector.selectOption({ label: "Sin reasignar" });
+  await page.waitForFunction(
+    (numero) => document.querySelector(`select[aria-label="Reasignar ${numero}"]`)?.value === "",
+    "PG 0009/26",
+    { timeout: 3000 },
+  );
+  comprobar("quitar la reasignación la deja sin nadie asignado",
+    servidor.cotizaciones.get("PG 0009/26")?.reasignadoA === undefined,
+    servidor.cotizaciones.get("PG 0009/26")?.reasignadoA);
 }
 
 console.log("\n== Lo que ve una cuenta básica ==");

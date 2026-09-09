@@ -150,10 +150,14 @@ export default function ListadoCotizaciones({
                 c.data.items,
                 c.data.ivaPorcentaje,
               );
-              // Sin dueño registrado (cotizaciones de antes de los roles), se
-              // trata como del administrador: solo él la puede reasignar.
+              // Mientras esté reasignada, quien la ve y la puede reasignar de
+              // nuevo es esa persona, no quien la creó — igual que decide el
+              // backend. Sin reasignar, es quien la creó. Sin dueño
+              // registrado (cotizaciones de antes de los roles), solo el
+              // administrador.
+              const dueñoActual = c.reasignadoA || c.creadoPor;
               const puedeReasignar =
-                usuarioActual.admin || c.creadoPor === usuarioActual.email;
+                usuarioActual.admin || dueñoActual === usuarioActual.email;
               return (
                 <tr
                   key={c.data.numeroFactura}
@@ -184,15 +188,15 @@ export default function ListadoCotizaciones({
                       <select
                         aria-label={`Reasignar ${c.data.numeroFactura}`}
                         className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700"
-                        value={c.creadoPor ?? ""}
+                        value={c.reasignadoA ?? ""}
                         onChange={(e) => {
-                          const nuevoDueno = e.target.value;
-                          if (nuevoDueno && nuevoDueno !== c.creadoPor) {
-                            onReasignar(c.data.numeroFactura, nuevoDueno);
+                          const nuevoValor = e.target.value;
+                          if (nuevoValor !== (c.reasignadoA ?? "")) {
+                            onReasignar(c.data.numeroFactura, nuevoValor);
                           }
                         }}
                       >
-                        {!c.creadoPor && <option value="">Sin asignar</option>}
+                        <option value="">Sin reasignar</option>
                         {equipo.map((m) => (
                           <option key={m.email} value={m.email}>
                             {nombreCompleto(m)}
