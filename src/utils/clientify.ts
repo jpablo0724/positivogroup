@@ -87,8 +87,12 @@ export async function buscarEmpresas(
 }
 
 /**
- * Los empleados llegan dentro de la empresa, con nombre y correo, así que no
- * hace falta una segunda consulta al elegir el cliente.
+ * Los empleados llegan dentro de la empresa (el proxy los cruza por nombre
+ * antes de responder), así que no hace falta una segunda consulta al elegir
+ * el cliente.
+ *
+ * El correo va en un arreglo `emails` (una persona puede tener varios en
+ * Clientify): se usa el primero, que es el principal.
  */
 function comoEmpleados(employees: unknown): ContactoClientify[] {
   if (!Array.isArray(employees)) return [];
@@ -96,12 +100,18 @@ function comoEmpleados(employees: unknown): ContactoClientify[] {
   return employees
     .map((entrada) => {
       const empleado = (entrada ?? {}) as Record<string, unknown>;
-      return {
-        nombre: [texto(empleado.first_name), texto(empleado.last_name)]
+      const correos = Array.isArray(empleado.emails)
+        ? (empleado.emails as Record<string, unknown>[])
+        : [];
+      const nombre =
+        texto(empleado.full_name) ||
+        [texto(empleado.first_name), texto(empleado.last_name)]
           .filter(Boolean)
           .join(" ")
-          .trim(),
-        email: texto(empleado.email),
+          .trim();
+      return {
+        nombre,
+        email: texto(correos[0]?.email),
       };
     })
     .filter((empleado) => empleado.nombre !== "" || empleado.email !== "");

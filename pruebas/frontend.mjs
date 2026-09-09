@@ -21,10 +21,27 @@ const servidor = {
   ultimo: 0,
 };
 
-// CRM simulado.
+// CRM simulado. Los empleados llevan la misma forma real de Clientify: el
+// correo va en un arreglo "emails", no como texto plano, que es justo lo que
+// se rompió la primera vez (el backend real tampoco los anida en la empresa,
+// pero eso lo prueba pruebas/backend.mjs contra la función serverless; aquí
+// se simula ya con la forma que el proxy corregido entrega).
 const clientify = {
   empresas: [
     { id: 501, name: "Redcol Holding S.A.S", business_name: "Redcol Holding S.A.S", taxpayer_identification_number: "901234567-1", employees: [] },
+    {
+      id: 601, name: "Positivo Uno S.A.S", business_name: "Positivo Uno S.A.S", taxpayer_identification_number: "800111222-3",
+      employees: [
+        { id: 1, first_name: "Laura", last_name: "Gómez", full_name: "Laura Gómez", emails: [{ email: "laura@positivouno.co" }] },
+      ],
+    },
+    {
+      id: 602, name: "Positivo Dos S.A.S", business_name: "Positivo Dos S.A.S", taxpayer_identification_number: "800333444-5",
+      employees: [
+        { id: 2, first_name: "Carlos", last_name: "Pérez", full_name: "Carlos Pérez", emails: [{ email: "carlos@positivodos.co" }] },
+        { id: 3, first_name: "María", last_name: "Ruiz", full_name: "María Ruiz", emails: [{ email: "maria@positivodos.co" }] },
+      ],
+    },
   ],
   notas: [],
 };
@@ -385,6 +402,47 @@ console.log("\n== Crear producto y guardar cotización ==");
   comprobar("el formulario queda listo para la siguiente", /PG 0002\/\d{2}/.test(encabezado), encabezado);
 }
 await page.screenshot({ path: `${OUT}/B2-tras-guardar.png`, fullPage: true });
+
+console.log("\n== Razón social trae los contactos de Clientify ==");
+{
+  const razonSocial = page.getByPlaceholder("Escribe para buscar en Clientify");
+
+  // Una empresa con un solo contacto: se autocompleta directo, sin desplegable.
+  await razonSocial.fill("Positivo Uno");
+  await page.waitForSelector("text=Positivo Uno S.A.S");
+  await page.click("text=Positivo Uno S.A.S");
+  await page.waitForTimeout(150);
+
+  comprobar("con un solo contacto, autocompleta el nombre",
+    (await page.locator('input[placeholder="Nombre del contacto"]').inputValue()) === "Laura Gómez");
+  comprobar("y el correo",
+    (await page.locator('input[type="email"]').inputValue()) === "laura@positivouno.co");
+  comprobar("y el NIT",
+    (await page.locator('input[placeholder="900.000.000-1"]').inputValue()) === "800111222-3");
+  comprobar("no muestra desplegable con un solo contacto",
+    (await page.locator("text=Elige el contacto").count()) === 0);
+
+  // Una empresa con más de un contacto: no autocompleta, ofrece el desplegable.
+  await razonSocial.fill("");
+  await razonSocial.fill("Positivo Dos");
+  await page.waitForSelector("text=Positivo Dos S.A.S");
+  await page.click("text=Positivo Dos S.A.S");
+  await page.waitForTimeout(150);
+
+  comprobar("con más de un contacto, muestra el desplegable",
+    (await page.locator("text=Elige el contacto (2)").count()) === 1);
+
+  await page.click("text=María Ruiz");
+  await page.waitForTimeout(150);
+  comprobar("elegir del desplegable completa el nombre",
+    (await page.locator('input[placeholder="Nombre del contacto"]').inputValue()) === "María Ruiz");
+  comprobar("y el correo de quien se eligió",
+    (await page.locator('input[type="email"]').inputValue()) === "maria@positivodos.co");
+  comprobar("el desplegable se cierra tras elegir",
+    (await page.locator("text=Elige el contacto").count()) === 0);
+
+  await page.screenshot({ path: `${OUT}/B2b-contactos-clientify.png`, fullPage: true });
+}
 
 console.log("\n== Listado compartido ==");
 {

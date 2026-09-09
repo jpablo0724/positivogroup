@@ -19,6 +19,7 @@
     "prueba:servidor": "node --experimental-sqlite pruebas/servidor.mjs",
     "prueba:auth": "node pruebas/auth.mjs",
     "prueba:backend": "node pruebas/backend.mjs",
+    "prueba:clientify": "node pruebas/clientify.mjs",
     "prueba:ui": "node pruebas/frontend.mjs"
   },
   "dependencies": {

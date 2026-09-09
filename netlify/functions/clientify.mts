@@ -12,11 +12,11 @@ import { revisarSesion } from "../lib/acceso.mts";
  *
  * Rutas:
  *   /api/clientify/me                      -> valida el token y devuelve la cuenta
- *   /api/clientify/companies?buscar=texto  -> empresas cuyo nombre/NIT coincide
- *   /api/clientify/contacts?empresa=nombre -> contactos de esa empresa
- *   /api/clientify/nota  (POST)            -> anota una cotización en la empresa
+ *   /api/clientify/companies?buscar=texto    -> empresas cuyo nombre/NIT coincide, con sus contactos
+ *   /api/clientify/contacts?empresaId=id     -> contactos de esa empresa
+ *   /api/clientify/nota  (POST)              -> anota una cotización en la empresa
  *
- * Sin "buscar"/"empresa" la consulta se reenvía tal cual a Clientify, lo que
+ * Sin "buscar"/"empresaId" la consulta se reenvía tal cual a Clientify, lo que
  * sirve para inspeccionar la API desde el navegador.
  *
  * Nota: la v2 ignora los filtros por parámetro (?name=, ?company=) y devuelve
@@ -61,12 +61,14 @@ function candidatosDeNota(empresaId: string) {
 }
 
 // La v2 obliga a declarar qué campos se quieren.
+//
+// Los contactos NO llegan anidados en la empresa (se probó pidiendo
+// "employees" y Clientify simplemente no lo devuelve): viven en su propio
+// recurso, /contacts/, y cada uno solo dice el NOMBRE de su empresa en el
+// campo "company" — no hay un id que los enlace. Por eso companies() cruza
+// ambos catálogos por nombre normalizado antes de responder.
 const CAMPOS_POR_DEFECTO: Record<string, string> = {
-  // "employees" llega con los contactos completos (id, nombre, email), así que
-  // la búsqueda de empresas ya trae todo lo necesario para la cotización y no
-  // hace falta una segunda consulta.
-  companies:
-    "id,name,business_name,taxpayer_identification_number,employees",
+  companies: "id,name,business_name,taxpayer_identification_number",
   contacts: "id,full_name,first_name,last_name,emails,phones,company,company_name",
 };
 
@@ -88,6 +90,48 @@ function json(body: unknown, status = 200) {
       "cache-control": "no-store",
     },
   });
+}
+
+/**
+ * Agrupa los contactos por el nombre de su empresa (normalizado), que es el
+ * único dato con el que Clientify los enlaza — no hay un id de por medio.
+ */
+export function contactosPorNombreDeEmpresa(
+  contactos: Registro[],
+): Map<string, Registro[]> {
+  const mapa = new Map<string, Registro[]>();
+  for (const contacto of contactos) {
+    const clave = normalizar(contacto.company);
+    if (clave === "") continue;
+    const lista = mapa.get(clave);
+    if (lista) lista.push(contacto);
+    else mapa.set(clave, [contacto]);
+  }
+  return mapa;
+}
+
+/**
+ * Los contactos de una empresa: se busca tanto por su nombre comercial como
+ * por su razón social, porque en Clientify el contacto solo trae uno de los
+ * dos como texto y no siempre es el mismo que se muestra en la búsqueda.
+ */
+export function contactosDeEmpresa(
+  empresa: Registro,
+  porNombre: Map<string, Registro[]>,
+): Registro[] {
+  const deNombre = porNombre.get(normalizar(empresa.name)) ?? [];
+  const claveRazonSocial = normalizar(empresa.business_name);
+  if (claveRazonSocial === "" || claveRazonSocial === normalizar(empresa.name)) {
+    return deNombre;
+  }
+
+  const deRazonSocial = porNombre.get(claveRazonSocial) ?? [];
+  if (deRazonSocial.length === 0) return deNombre;
+
+  // Se combinan sin duplicar, por si el mismo contacto quedó con el mismo
+  // texto en las dos búsquedas.
+  const vistos = new Set(deNombre.map((c) => c.id));
+  return [...deNombre, ...deRazonSocial.filter((c) => !vistos.has(c.id))];
 }
 
 /** Quita acentos y mayúsculas para que "Bancoldex" encuentre "Bancóldex". */
@@ -295,7 +339,12 @@ export default async (req: Request) => {
       const consulta = normalizar(buscar);
       if (consulta.length < 2) return json({ count: 0, results: [] });
 
-      const todas = await catalogoCompleto("companies", token);
+      const [todas, contactos] = await Promise.all([
+        catalogoCompleto("companies", token),
+        catalogoCompleto("contacts", token),
+      ]);
+      const contactosPorNombre = contactosPorNombreDeEmpresa(contactos);
+
       const coincidencias = todas
         .filter(
           (registro) =>
@@ -305,19 +354,26 @@ export default async (req: Request) => {
               consulta,
             ),
         )
-        .slice(0, 20);
+        .slice(0, 20)
+        .map((empresa) => ({
+          ...empresa,
+          employees: contactosDeEmpresa(empresa, contactosPorNombre),
+        }));
 
       return json({ count: coincidencias.length, results: coincidencias });
     }
 
     // --- Empleados de una empresa, tomados del catálogo ya cacheado ---
     if (recurso === "contacts" && empresaId !== null) {
-      const empresas = await catalogoCompleto("companies", token);
+      const [empresas, contactos] = await Promise.all([
+        catalogoCompleto("companies", token),
+        catalogoCompleto("contacts", token),
+      ]);
       const laEmpresa = empresas.find(
         (registro) => String(registro.id) === empresaId,
       );
-      const empleados = Array.isArray(laEmpresa?.employees)
-        ? laEmpresa.employees
+      const empleados = laEmpresa
+        ? contactosDeEmpresa(laEmpresa, contactosPorNombreDeEmpresa(contactos))
         : [];
 
       return json({ count: empleados.length, results: empleados });
