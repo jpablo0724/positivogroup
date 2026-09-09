@@ -92,7 +92,9 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
             <p>
               <span className="font-semibold">NIT: </span>
               {data.cliente.nit || "—"}
-              <span className="ml-6 font-semibold">Contacto: </span>
+            </p>
+            <p>
+              <span className="font-semibold">Contacto: </span>
               {data.cliente.contacto || "—"}
             </p>
             <p>
