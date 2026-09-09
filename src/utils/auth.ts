@@ -14,6 +14,7 @@ export interface UsuarioPublico {
   email: string;
   nombre: string;
   apellidos: string;
+  telefono: string;
   rol: Rol;
   permisos: Permisos;
   admin: boolean;
@@ -70,6 +71,19 @@ export async function registrarse(datos: {
 }): Promise<UsuarioPublico> {
   const { usuario } = await pedir<{ usuario: UsuarioPublico }>(
     "/api/auth/registro",
+    { metodo: "POST", cuerpo: datos },
+  );
+  return usuario;
+}
+
+/** Cambia el nombre, los apellidos y el teléfono propios. El correo no se toca. */
+export async function actualizarPerfil(datos: {
+  nombre: string;
+  apellidos: string;
+  telefono: string;
+}): Promise<UsuarioPublico> {
+  const { usuario } = await pedir<{ usuario: UsuarioPublico }>(
+    "/api/auth/perfil",
     { metodo: "POST", cuerpo: datos },
   );
   return usuario;

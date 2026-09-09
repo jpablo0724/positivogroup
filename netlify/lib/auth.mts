@@ -65,6 +65,7 @@ export interface Usuario {
   email: string;
   nombre: string;
   apellidos?: string;
+  telefono?: string;
   rol?: Rol;
   /** Ajustes por cuenta sobre los permisos por defecto de su rol. */
   permisos?: Partial<Permisos>;
@@ -82,6 +83,7 @@ export interface UsuarioPublico {
   email: string;
   nombre: string;
   apellidos: string;
+  telefono: string;
   rol: Rol;
   permisos: Permisos;
   /** Se mantiene por comodidad: equivale a rol === "admin". */
@@ -165,6 +167,7 @@ export function comoPublico(usuario: Usuario): UsuarioPublico {
     email: usuario.email,
     nombre: usuario.nombre,
     apellidos: usuario.apellidos ?? "",
+    telefono: usuario.telefono ?? "",
     rol: rolDe(usuario),
     permisos: permisosDe(usuario),
     admin: esAdmin(usuario),

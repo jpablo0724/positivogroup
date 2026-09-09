@@ -18,6 +18,7 @@ export async function listarUsuarios(): Promise<UsuarioPublico[]> {
 export interface DatosCuenta {
   nombre: string;
   apellidos: string;
+  telefono: string;
   email: string;
   rol: Rol;
   permisos: Permisos;

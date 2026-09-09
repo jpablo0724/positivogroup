@@ -41,6 +41,7 @@ interface Formulario {
   editando: string | null;
   nombre: string;
   apellidos: string;
+  telefono: string;
   email: string;
   rol: Rol;
   permisos: Permisos;
@@ -50,6 +51,7 @@ const VACIO: Formulario = {
   editando: null,
   nombre: "",
   apellidos: "",
+  telefono: "",
   email: "",
   rol: "basico",
   permisos: { ...PERMISOS_NUEVOS },
@@ -105,6 +107,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
       editando: usuario.email,
       nombre: usuario.nombre,
       apellidos: usuario.apellidos,
+      telefono: usuario.telefono,
       email: usuario.email,
       rol: usuario.rol,
       permisos: { ...usuario.permisos },
@@ -114,13 +117,13 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
 
   async function guardarFormulario() {
     if (!formulario) return;
-    const { editando, nombre, apellidos, email, rol, permisos } = formulario;
+    const { editando, nombre, apellidos, telefono, email, rol, permisos } = formulario;
     if (nombre.trim() === "" || email.trim() === "") return;
 
     setOcupado(true);
     try {
       if (editando) {
-        await actualizarUsuario(editando, { nombre, apellidos, rol, permisos });
+        await actualizarUsuario(editando, { nombre, apellidos, telefono, rol, permisos });
       } else {
         // La contraseña la genera el sistema y se muestra una sola vez, igual
         // que al restablecerla: así no viaja escrita en ningún sitio.
@@ -128,6 +131,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
         await crearUsuario({
           nombre,
           apellidos,
+          telefono,
           email,
           rol,
           permisos,
@@ -155,6 +159,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
       await actualizarUsuario(usuario.email, {
         nombre: usuario.nombre,
         apellidos: usuario.apellidos,
+        telefono: usuario.telefono,
         rol: usuario.rol,
         permisos: { ...usuario.permisos, [seccion]: valor },
       });
@@ -554,6 +559,18 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
               setFormulario({ ...formulario, email: e.target.value })
             }
             placeholder="nombre@positivogroup.com"
+          />
+
+          <label className="mt-3 mb-1 block text-xs font-medium text-slate-600">
+            Teléfono (opcional)
+          </label>
+          <input
+            type="tel"
+            className={selectTriggerClass}
+            value={formulario.telefono}
+            onChange={(e) =>
+              setFormulario({ ...formulario, telefono: e.target.value })
+            }
           />
 
           <label className="mt-3 mb-1 block text-xs font-medium text-slate-600">

@@ -217,6 +217,7 @@ export default async (req: Request) => {
         email: correo,
         nombre,
         apellidos: texto((cuerpo as never)["apellidos"]).trim(),
+        telefono: texto((cuerpo as never)["telefono"]).trim(),
         rol,
         // A un administrador no se le guardan permisos: los tiene todos por su
         // rol, y guardarlos solo crearía dos fuentes de verdad.
@@ -255,6 +256,7 @@ export default async (req: Request) => {
         ...cuenta,
         nombre: nombre === "" ? cuenta.nombre : nombre,
         apellidos: texto((cuerpo as never)["apellidos"]).trim(),
+        telefono: texto((cuerpo as never)["telefono"]).trim(),
         rol,
         admin: rol === "admin",
         permisos:

@@ -119,7 +119,7 @@ interface SidebarProps {
     permisos: Permisos;
   };
   onSalir: () => void;
-  onCambiarContrasena: () => void;
+  onAbrirPerfil: () => void;
 }
 
 export default function Sidebar({
@@ -127,7 +127,7 @@ export default function Sidebar({
   onNavigate,
   usuario,
   onSalir,
-  onCambiarContrasena,
+  onAbrirPerfil,
 }: SidebarProps) {
   // El menú muestra solo lo que la cuenta puede ver. Es comodidad, no
   // seguridad: quien escriba la dirección a mano se topa igualmente con el
@@ -170,10 +170,10 @@ export default function Sidebar({
         <p className="truncate text-xs text-slate-500">{usuario.email}</p>
         <button
           type="button"
-          onClick={onCambiarContrasena}
+          onClick={onAbrirPerfil}
           className="mt-2 block text-xs font-medium text-slate-400 transition-colors hover:text-slate-100"
         >
-          Cambiar contraseña
+          Perfil
         </button>
         <button
           type="button"

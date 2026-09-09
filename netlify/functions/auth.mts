@@ -28,6 +28,7 @@ import {
  *   POST /api/auth/entrar   -> inicia sesión
  *   POST /api/auth/salir    -> cierra la sesión
  *   GET  /api/auth/sesion   -> quién está dentro
+ *   POST /api/auth/perfil   -> cambia el propio nombre, apellidos y teléfono
  *
  * El registro está cerrado: las cuentas las crea un administrador desde la
  * sección de Usuarios. La única excepción es el arranque, cuando todavía no
@@ -158,6 +159,31 @@ export default async (req: Request) => {
 
       const testigo = await abrirSesion(email);
       return conCookie({ usuario: comoPublico(creado) }, cookieSesion(testigo));
+    }
+
+    // --- Cambiar los propios datos ---
+    //
+    // El correo no se toca aquí a propósito: es la clave con la que el
+    // sistema identifica la cuenta —la sesión, el autor de cada cotización,
+    // la marca de administrador—, así que cambiarlo es una operación aparte
+    // que hoy no existe. Cualquier cuenta con sesión puede cambiar sus
+    // propios datos, no solo un administrador: son suyos.
+    if (accion === "perfil") {
+      const usuario = await usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
+      if (!usuario) return json({ error: "sin_sesion" }, 401);
+
+      const nombre = texto((cuerpo as never)["nombre"]).trim();
+      if (nombre === "") return json({ error: "falta_nombre" }, 400);
+
+      const actualizado = {
+        ...usuario,
+        nombre,
+        apellidos: texto((cuerpo as never)["apellidos"]).trim(),
+        telefono: texto((cuerpo as never)["telefono"]).trim(),
+      };
+
+      await guardarUsuario(actualizado);
+      return json({ usuario: comoPublico(actualizado) });
     }
 
     // --- Cambiar la propia contraseña ---

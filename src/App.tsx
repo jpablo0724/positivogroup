@@ -6,6 +6,7 @@ import ListadoCotizaciones from "./components/ListadoCotizaciones";
 import CatalogoProductos from "./components/CatalogoProductos";
 import AdminUsuarios from "./components/AdminUsuarios";
 import ModalContrasena from "./components/ModalContrasena";
+import ModalPerfil from "./components/ModalPerfil";
 import VistaImpresion from "./components/VistaImpresion";
 import ModalEnviarClientify from "./components/ModalEnviarClientify";
 import CotizacionPublica from "./components/CotizacionPublica";
@@ -62,6 +63,7 @@ function App() {
   );
   const [avisoAcceso, setAvisoAcceso] = useState<string | null>(null);
   const [modalContrasena, setModalContrasena] = useState(false);
+  const [modalPerfil, setModalPerfil] = useState(false);
   // Cotización que se está viendo a página completa para guardarla en PDF.
   const [paraImprimir, setParaImprimir] = useState<InvoiceData | null>(null);
   // Cotización que se va a anotar en la ficha de la empresa en Clientify.
@@ -265,7 +267,7 @@ function App() {
           onNavigate={setActiveView}
           usuario={usuario}
           onSalir={handleSalir}
-          onCambiarContrasena={() => setModalContrasena(true)}
+          onAbrirPerfil={() => setModalPerfil(true)}
         />
       </div>
 
@@ -414,6 +416,18 @@ function App() {
 
       {modalContrasena && (
         <ModalContrasena onCerrar={() => setModalContrasena(false)} />
+      )}
+
+      {modalPerfil && usuario && (
+        <ModalPerfil
+          usuario={usuario}
+          onCerrar={() => setModalPerfil(false)}
+          onGuardado={setUsuario}
+          onCambiarContrasena={() => {
+            setModalPerfil(false);
+            setModalContrasena(true);
+          }}
+        />
       )}
 
       {paraImprimir && (

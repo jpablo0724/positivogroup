@@ -40,6 +40,7 @@ function cuenta(datos) {
     email: datos.email,
     nombre: datos.nombre ?? "",
     apellidos: datos.apellidos ?? "",
+    telefono: datos.telefono ?? "",
     clave: datos.clave,
     rol,
     admin: rol === "admin",
@@ -112,6 +113,12 @@ function armarApi(page) {
         const nuevo = `t${sesiones.size + 1}`;
         sesiones.set(nuevo, correo);
         return responder({ usuario: usuarios.get(correo) }, 200, `pg_sesion=${nuevo}; Path=/`);
+      }
+      if (accion === "perfil") {
+        if (!email) return responder({ error: "sin_sesion" }, 401);
+        const previa = usuarios.get(email);
+        usuarios.set(email, cuenta({ ...previa, ...cuerpo, email }));
+        return responder({ usuario: usuarios.get(email) });
       }
       if (accion === "contrasena") {
         const cuenta = usuarios.get(email);
@@ -920,6 +927,7 @@ console.log("\n== Crear usuarios, roles y permisos ==");
   await ventana.locator("input").nth(0).fill("Sofía");
   await ventana.locator("input").nth(1).fill("Restrepo");
   await ventana.locator('input[type="email"]').fill("sofia@positivogroup.com");
+  await ventana.locator('input[type="tel"]').fill("3001234567");
 
   // Nace como básica y solo con el listado de cotizaciones.
   comprobar("propone el rol básico",
@@ -934,6 +942,7 @@ console.log("\n== Crear usuarios, roles y permisos ==");
   comprobar("y sin catálogo ni usuarios",
     creada?.permisos.catalogo === false && creada?.permisos.usuarios === false,
     JSON.stringify(creada?.permisos));
+  comprobar("guarda el teléfono", creada?.telefono === "3001234567", creada?.telefono);
   comprobar("muestra la contraseña una sola vez",
     (await page.locator("text=no se vuelve a mostrar").count()) > 0);
   await page.screenshot({ path: `${OUT}/F1-crear-usuario.png`, fullPage: true });
@@ -948,6 +957,9 @@ console.log("\n== Crear usuarios, roles y permisos ==");
   comprobar("la casilla habilita el catálogo",
     usuarios.get("sofia@positivogroup.com")?.permisos.catalogo === true,
     JSON.stringify(usuarios.get("sofia@positivogroup.com")?.permisos));
+  comprobar("y no borra el teléfono al cambiar un permiso",
+    usuarios.get("sofia@positivogroup.com")?.telefono === "3001234567",
+    usuarios.get("sofia@positivogroup.com")?.telefono);
 
   // Un administrador no tiene nada que ajustar: sus casillas están bloqueadas.
   const filaAdmin = page.locator("tbody tr").filter({ hasText: "juan@positivogroup.com" });
@@ -1007,9 +1019,39 @@ console.log("\n== Lo que ve una cuenta básica ==");
   await page.waitForSelector("text=Crear cotización", { timeout: 5000 });
 }
 
+console.log("\n== Perfil propio ==");
+{
+  comprobar("la barra lateral ya no ofrece Cambiar contraseña directamente",
+    (await page.locator('aside button:has-text("Cambiar contraseña")').count()) === 0);
+
+  await page.click('aside button:has-text("Perfil")');
+  await page.waitForSelector('[role="dialog"][aria-label="Perfil"]');
+  const perfil = page.locator('[role="dialog"][aria-label="Perfil"]');
+
+  comprobar("el correo se muestra pero no se puede editar",
+    await perfil.locator('input[type="email"]').isDisabled());
+  comprobar("el correo mostrado es el propio",
+    (await perfil.locator('input[type="email"]').inputValue()) === "juan@positivogroup.com");
+
+  await perfil.locator('input').nth(0).fill("Juan Pablo");
+  await perfil.locator('input[type="tel"]').fill("3009998877");
+  await perfil.locator('button:has-text("Guardar")').click();
+  await page.waitForSelector('[role="dialog"][aria-label="Perfil"]', { state: "detached" });
+
+  comprobar("guarda el nombre y el teléfono nuevos",
+    usuarios.get("juan@positivogroup.com")?.nombre === "Juan Pablo" &&
+    usuarios.get("juan@positivogroup.com")?.telefono === "3009998877",
+    JSON.stringify(usuarios.get("juan@positivogroup.com")));
+  await page.screenshot({ path: `${OUT}/F3-perfil.png`, fullPage: true });
+
+  // El botón de cambiar la contraseña vive ahora dentro del popup de perfil.
+  await page.click('aside button:has-text("Perfil")');
+  await page.waitForSelector('[role="dialog"][aria-label="Perfil"]');
+  await page.click('[role="dialog"][aria-label="Perfil"] button:has-text("Cambiar contraseña")');
+}
+
 console.log("\n== Cambiar la propia contraseña ==");
 {
-  await page.click('button:has-text("Cambiar contraseña")');
   await page.waitForSelector('[role="dialog"][aria-label="Cambiar contraseña"]');
   const dlg = page.locator('[role="dialog"][aria-label="Cambiar contraseña"]');
   const campos = dlg.locator('input[type="password"]');
