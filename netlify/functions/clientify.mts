@@ -34,6 +34,16 @@ const CLIENTIFY_BASE = (
   process.env.CLIENTIFY_API_BASE ?? "https://api-plus.clientify.com/v2"
 ).replace(/\/+$/, "");
 
+// Campos del recurso de actividades/tareas de Clientify, tomados de su
+// documentación (newapi.clientify.com): trae "owner"/"owner_id" y
+// "assigned_to"/"assigned_to_id" por separado, que es lo que hace falta para
+// ver con cuál de los dos de verdad se guarda el dueño de una nota.
+const CAMPOS_ACTIVIDAD =
+  "url,id,owner,owner_name,owner_id,assigned_to,assigned_to_name,assigned_to_id," +
+  "name,description,remarks,type,status,status_desc,activity_type,notes," +
+  "related_companies,related_companies_names,related_contacts,related_contacts_names," +
+  "created,modified";
+
 // Lectura, más la anotación de cotizaciones. Nada más: el proxy no puede
 // usarse para modificar ni borrar lo que ya hay en el CRM.
 //
@@ -88,14 +98,25 @@ function extraerIdDeNota(cuerpoTexto: string): string | null {
  * responda bien; la respuesta dice cuál funcionó. Se detiene en el primer
  * acierto para no crear la nota dos veces.
  *
- * "owner" es quien queda como dueño de la nota en Clientify: el id del
- * usuario del CRM que corresponde a quien creó la cotización. Se manda en
- * las tres formas por si acaso, y se omite si no se pudo resolver a nadie —
- * mejor una nota sin dueño que una a nombre de quien no es.
+ * El dueño es el id del usuario del CRM que corresponde a quien creó la
+ * cotización. El modelo de Clientify (visto en su documentación, para
+ * actividades/tareas) trae "owner", "owner_id", "assigned_to" y
+ * "assigned_to_id" como campos separados — lo habitual en esa clase de API es
+ * que el nombre corto sea un objeto de solo lectura y el que termina en "_id"
+ * sea el que de verdad se puede escribir, así que se mandan los cuatro: el
+ * que no aplique, Clientify lo ignora sin protestar.
  */
 function candidatosDeNota(empresaId: string, ownerId: number | null) {
   const conDuenio = <T extends object>(cuerpo: T) =>
-    ownerId === null ? cuerpo : { ...cuerpo, owner: ownerId };
+    ownerId === null
+      ? cuerpo
+      : {
+          ...cuerpo,
+          owner: ownerId,
+          owner_id: ownerId,
+          assigned_to: ownerId,
+          assigned_to_id: ownerId,
+        };
 
   return [
     {
@@ -406,13 +427,19 @@ export default async (req: Request) => {
         let notaCompleta: unknown = null;
         const noteId = extraerIdDeNota(cuerpoTexto);
         if (noteId !== null) {
+          // Con "fields" completo por si la ruta que responda exige
+          // declararlos (como pasa con companies/contacts/users) — así no se
+          // pierde el intento por ese motivo.
+          const conCampos = (url: string) =>
+            `${url}?fields=${encodeURIComponent(CAMPOS_ACTIVIDAD)}`;
           const rutasDeConsulta = [
             `${CLIENTIFY_BASE}/notes/${noteId}/`,
             `${CLIENTIFY_BASE}/companies/${empresaId}/notes/${noteId}/`,
             `${CLIENTIFY_BASE}/companies/${empresaId}/note/${noteId}/`,
             `${CLIENTIFY_BASE}/companies/${empresaId}/notes/`,
-            `${CLIENTIFY_BASE}/activities/${noteId}/`,
-            `${CLIENTIFY_BASE}/interactions/${noteId}/`,
+            conCampos(`${CLIENTIFY_BASE}/activities/${noteId}/`),
+            conCampos(`${CLIENTIFY_BASE}/interactions/${noteId}/`),
+            conCampos(`${CLIENTIFY_BASE}/tasks/${noteId}/`),
           ];
           const intentosConsulta: { url: string; status: number }[] = [];
 
