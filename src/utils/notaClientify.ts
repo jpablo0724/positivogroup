@@ -31,16 +31,30 @@ function escaparHtml(valor: string): string {
 }
 
 /**
- * Cuerpo de la nota: el número de la cotización y el enlace, nada más.
+ * Cuerpo de la nota: quién la creó, la marca, el número de la cotización y el
+ * enlace.
  *
  * Va en HTML porque Clientify lo renderiza como tal —se vio en que colapsó el
  * salto de línea del texto plano—, así que el enlace tiene que ir con <a> para
  * poder abrirse desde la ficha. El texto del enlace es la propia dirección: si
  * algún día Clientify quitara las etiquetas, la URL seguiría a la vista para
  * copiarla.
+ *
+ * Clientify no ofrece ninguna forma de fijar el dueño de la nota por su API
+ * (se probó a fondo: ni por id de usuario, ni por correo, con ningún nombre
+ * de campo — su propio endpoint de anotar una empresa solo acepta título y
+ * comentario). Por eso quien la creó va como texto, encabezando la nota, en
+ * vez de como un dato del CRM.
  */
-export function textoDeNota(data: InvoiceData, enlace?: string): string {
+export function textoDeNota(
+  data: InvoiceData,
+  enlace?: string,
+  nombreCreador?: string,
+): string {
   const lineas: string[] = [];
+
+  const creador = (nombreCreador ?? "").trim();
+  if (creador !== "") lineas.push(escaparHtml(`Creada por: ${creador}`));
 
   // La marca es opcional y encabeza la nota solo si el comercial la escribió.
   // Sin ella no se deja una línea vacía ni un rótulo suelto en la ficha.
@@ -104,7 +118,6 @@ export async function empresaDeLaCotizacion(
 export interface ResultadoNota {
   enviada: boolean;
   endpoint?: string;
-  duenioAsignado?: boolean;
   intentos?: { url: string; status: number; respuesta: string }[];
 }
 
@@ -112,17 +125,15 @@ export async function enviarNota(
   empresaId: number,
   data: InvoiceData,
   enlace: string,
-  /** Quien creó la cotización, para que la nota quede a su nombre en Clientify. */
-  creador?: { nombre: string; correo: string } | null,
+  /** Quien creó la cotización: encabeza el texto de la nota. */
+  creador?: { nombre: string } | null,
 ): Promise<ResultadoNota> {
   return pedir<ResultadoNota>("/api/clientify/nota", {
     metodo: "POST",
     cuerpo: {
       empresaId,
       titulo: tituloDeNota(data),
-      texto: textoDeNota(data, enlace),
-      creadorEmail: creador?.correo ?? "",
-      creadorNombre: creador?.nombre ?? "",
+      texto: textoDeNota(data, enlace, creador?.nombre),
     },
   });
 }

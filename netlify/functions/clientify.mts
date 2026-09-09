@@ -16,10 +16,14 @@ import { revisarSesion } from "../lib/acceso.mts";
  *   /api/clientify/contacts?empresaId=id     -> contactos de esa empresa
  *   /api/clientify/nota  (POST)              -> anota una cotización en la empresa
  *
- * La nota lleva "creadorEmail"/"creadorNombre" (quien creó la cotización en
- * el cotizador) para que quede a su nombre en Clientify: se cruza contra
- * /v2/users/ primero por correo y, si no aparece, por nombre completo. Si no
- * se encuentra a nadie, la nota se manda igual, sin dueño asignado.
+ * La nota se anota siempre a nombre de la cuenta dueña de CLIENTIFY_API_TOKEN:
+ * se probó a mandar el dueño real (por id de usuario, por correo, con los
+ * distintos nombres de campo que usa la API — owner, owner_id, assigned_to,
+ * assigned_to_id) y Clientify los ignora todos. Su endpoint de anotar una
+ * empresa (/companies/<id>/note/, documentado así en newapi.clientify.com)
+ * solo acepta "name" y "comment" — no hay forma soportada de fijar el dueño.
+ * Por eso quien creó la cotización va como texto, en la propia nota
+ * (ver textoDeNota en src/utils/notaClientify.ts), no como un dato del CRM.
  *
  * Sin "buscar"/"empresaId" la consulta se reenvía tal cual a Clientify, lo que
  * sirve para inspeccionar la API desde el navegador.
@@ -34,134 +38,35 @@ const CLIENTIFY_BASE = (
   process.env.CLIENTIFY_API_BASE ?? "https://api-plus.clientify.com/v2"
 ).replace(/\/+$/, "");
 
-// Campos del recurso de actividades/tareas de Clientify, tomados de su
-// documentación (newapi.clientify.com): trae "owner"/"owner_id" y
-// "assigned_to"/"assigned_to_id" por separado, que es lo que hace falta para
-// ver con cuál de los dos de verdad se guarda el dueño de una nota.
-const CAMPOS_ACTIVIDAD =
-  "url,id,owner,owner_name,owner_id,assigned_to,assigned_to_name,assigned_to_id," +
-  "name,description,remarks,type,status,status_desc,activity_type,notes," +
-  "related_companies,related_companies_names,related_contacts,related_contacts_names," +
-  "created,modified";
-
 // Lectura, más la anotación de cotizaciones. Nada más: el proxy no puede
 // usarse para modificar ni borrar lo que ya hay en el CRM.
-//
-// "users" y "notes" están para inspeccionar la API (con qué campo se pone el
-// dueño de una nota, cómo lucen los usuarios de Clientify) mientras se arma
-// el cruce de cuentas; quedan de lectura, igual que el resto.
-const RECURSOS_PERMITIDOS = new Set([
-  "me",
-  "companies",
-  "contacts",
-  "users",
-  "notes",
-  "nota",
-]);
-
-/**
- * El id de la nota recién creada, para poder volver a consultarla. La
- * respuesta de creación no tiene una forma fija conocida, así que se prueban
- * los lugares donde ya se ha visto un id (extra.note_id) y los habituales de
- * un recurso REST (id, pk), por si el endpoint que responda es otro.
- */
-function extraerIdDeNota(cuerpoTexto: string): string | null {
-  let cuerpo: unknown;
-  try {
-    cuerpo = JSON.parse(cuerpoTexto);
-  } catch {
-    return null;
-  }
-  if (typeof cuerpo !== "object" || cuerpo === null) return null;
-
-  const registro = cuerpo as Record<string, unknown>;
-  const extra = registro.extra;
-  const posibles = [
-    typeof extra === "object" && extra !== null
-      ? (extra as Record<string, unknown>).note_id
-      : undefined,
-    registro.id,
-    registro.pk,
-  ];
-
-  for (const valor of posibles) {
-    if (typeof valor === "number" || typeof valor === "string") {
-      return String(valor);
-    }
-  }
-  return null;
-}
+const RECURSOS_PERMITIDOS = new Set(["me", "companies", "contacts", "nota"]);
 
 /**
  * Formas posibles del endpoint de notas en Clientify. No pude confirmarlas
  * contra la API real, así que se prueban en orden y se usa la primera que
  * responda bien; la respuesta dice cuál funcionó. Se detiene en el primer
  * acierto para no crear la nota dos veces.
- *
- * El dueño es el id del usuario del CRM que corresponde a quien creó la
- * cotización. El modelo de Clientify (visto en su documentación, para
- * actividades/tareas) trae "owner", "owner_id", "assigned_to" y
- * "assigned_to_id" como campos separados — lo habitual en esa clase de API es
- * que el nombre corto sea un objeto de solo lectura y el que termina en "_id"
- * sea el que de verdad se puede escribir, así que se mandan los cuatro: el
- * que no aplique, Clientify lo ignora sin protestar.
  */
-function candidatosDeNota(empresaId: string, ownerId: number | null) {
-  const conDuenio = <T extends object>(cuerpo: T) =>
-    ownerId === null
-      ? cuerpo
-      : {
-          ...cuerpo,
-          owner: ownerId,
-          owner_id: ownerId,
-          assigned_to: ownerId,
-          assigned_to_id: ownerId,
-        };
-
+function candidatosDeNota(empresaId: string) {
   return [
     {
       url: `${CLIENTIFY_BASE}/companies/${empresaId}/note/`,
-      cuerpo: (titulo: string, texto: string) =>
-        conDuenio({ name: titulo, comment: texto }),
+      cuerpo: (titulo: string, texto: string) => ({ name: titulo, comment: texto }),
     },
     {
       url: `${CLIENTIFY_BASE}/companies/${empresaId}/notes/`,
-      cuerpo: (titulo: string, texto: string) =>
-        conDuenio({ name: titulo, comment: texto }),
+      cuerpo: (titulo: string, texto: string) => ({ name: titulo, comment: texto }),
     },
     {
       url: `${CLIENTIFY_BASE}/notes/`,
-      cuerpo: (titulo: string, texto: string) =>
-        conDuenio({ name: titulo, comment: texto, company: Number(empresaId) }),
+      cuerpo: (titulo: string, texto: string) => ({
+        name: titulo,
+        comment: texto,
+        company: Number(empresaId),
+      }),
     },
   ];
-}
-
-/**
- * El usuario de Clientify que corresponde a quien creó la cotización, para
- * que la nota quede a su nombre. Se busca primero por correo (lo más
- * confiable) y, si no aparece, por nombre completo — por si la cuenta de
- * Clientify usa un correo distinto al del cotizador.
- */
-export function resolverDuenioDeNota(
-  usuarios: Registro[],
-  correo: string,
-  nombre: string,
-): number | null {
-  const correoBuscado = normalizar(correo);
-  const nombreBuscado = normalizar(nombre);
-
-  const porCorreo =
-    correoBuscado !== "" &&
-    usuarios.find((u) => normalizar(u.email) === correoBuscado);
-  if (porCorreo) return Number(porCorreo.id);
-
-  const porNombre =
-    nombreBuscado !== "" &&
-    usuarios.find((u) => normalizar(u.full_name) === nombreBuscado);
-  if (porNombre) return Number(porNombre.id);
-
-  return null;
 }
 
 // La v2 obliga a declarar qué campos se quieren.
@@ -174,7 +79,6 @@ export function resolverDuenioDeNota(
 const CAMPOS_POR_DEFECTO: Record<string, string> = {
   companies: "id,name,business_name,taxpayer_identification_number",
   contacts: "id,full_name,first_name,last_name,emails,phones,company,company_name",
-  users: "id,email,first_name,last_name,full_name",
 };
 
 const TAMANO_PAGINA = 500;
@@ -372,8 +276,6 @@ export default async (req: Request) => {
       empresaId?: unknown;
       titulo?: unknown;
       texto?: unknown;
-      creadorEmail?: unknown;
-      creadorNombre?: unknown;
     };
 
     const empresaId = String(cuerpo.empresaId ?? "").trim();
@@ -383,24 +285,13 @@ export default async (req: Request) => {
     if (!/^\d+$/.test(empresaId)) return json({ error: "empresa_invalida" }, 400);
     if (titulo === "" || texto === "") return json({ error: "nota_vacia" }, 400);
 
-    const creadorEmail = String(cuerpo.creadorEmail ?? "").trim();
-    const creadorNombre = String(cuerpo.creadorNombre ?? "").trim();
-    const ownerId =
-      creadorEmail === "" && creadorNombre === ""
-        ? null
-        : resolverDuenioDeNota(
-            await catalogoCompleto("users", token),
-            creadorEmail,
-            creadorNombre,
-          );
-
     const intentos: {
       url: string;
       status: number;
       respuesta: string;
     }[] = [];
 
-    for (const candidato of candidatosDeNota(empresaId, ownerId)) {
+    for (const candidato of candidatosDeNota(empresaId)) {
       const destino = new URL(candidato.url);
       let respuesta: Response;
       try {
@@ -420,60 +311,10 @@ export default async (req: Request) => {
       const cuerpoTexto = await respuesta.text();
 
       if (respuesta.ok) {
-        // La respuesta de creación es mínima y no dice si "owner" quedó
-        // puesto. Se prueba a volver a consultar la nota por varias rutas
-        // posibles, hasta encontrar una que responda: así se sabe con qué
-        // campo real Clientify guarda el dueño, en vez de seguir adivinando.
-        let notaCompleta: unknown = null;
-        const noteId = extraerIdDeNota(cuerpoTexto);
-        if (noteId !== null) {
-          // Con "fields" completo por si la ruta que responda exige
-          // declararlos (como pasa con companies/contacts/users) — así no se
-          // pierde el intento por ese motivo.
-          const conCampos = (url: string) =>
-            `${url}?fields=${encodeURIComponent(CAMPOS_ACTIVIDAD)}`;
-          const rutasDeConsulta = [
-            `${CLIENTIFY_BASE}/notes/${noteId}/`,
-            `${CLIENTIFY_BASE}/companies/${empresaId}/notes/${noteId}/`,
-            `${CLIENTIFY_BASE}/companies/${empresaId}/note/${noteId}/`,
-            `${CLIENTIFY_BASE}/companies/${empresaId}/notes/`,
-            conCampos(`${CLIENTIFY_BASE}/activities/${noteId}/`),
-            conCampos(`${CLIENTIFY_BASE}/interactions/${noteId}/`),
-            conCampos(`${CLIENTIFY_BASE}/tasks/${noteId}/`),
-          ];
-          const intentosConsulta: { url: string; status: number }[] = [];
-
-          for (const ruta of rutasDeConsulta) {
-            try {
-              const consulta = await pedirAClientify(new URL(ruta), token);
-              intentosConsulta.push({ url: ruta, status: consulta.status });
-              if (consulta.ok) {
-                notaCompleta = {
-                  encontradaEn: ruta,
-                  datos: JSON.parse(await consulta.text()),
-                };
-                break;
-              }
-            } catch {
-              intentosConsulta.push({ url: ruta, status: 0 });
-            }
-          }
-
-          if (notaCompleta === null) {
-            notaCompleta = {
-              error: "ninguna ruta de consulta respondió bien",
-              intentos: intentosConsulta,
-            };
-          }
-        }
-
         return json({
           enviada: true,
           endpoint: candidato.url,
-          duenioAsignado: ownerId !== null,
-          ownerId,
           respuesta: cuerpoTexto.slice(0, 500),
-          notaCompleta,
         });
       }
 

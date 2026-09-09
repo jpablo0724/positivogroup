@@ -37,7 +37,7 @@ export default function ModalEnviarClientify({
   const [estado, setEstado] = useState<Estado>({ paso: "buscando" });
   const [enlace, setEnlace] = useState("");
   const [copiado, setCopiado] = useState(false);
-  const nota = textoDeNota(data, enlace || undefined);
+  const nota = textoDeNota(data, enlace || undefined, creador?.nombre);
 
   useEffect(() => {
     let cancelado = false;

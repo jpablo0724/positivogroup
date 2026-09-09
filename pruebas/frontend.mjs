@@ -861,10 +861,13 @@ console.log("\n== Enviar a Clientify ==");
   await page.waitForSelector("text=Así se verá en la ficha");
   comprobar("muestra la nota antes de mandarla", true);
 
+  const firmante = usuarios.get("juan@positivogroup.com");
   const caja = page.locator('[role="dialog"] div[class*="[&_a]"]');
   const vistaPrevia = await caja.innerText();
-  comprobar("la nota lleva el número", vistaPrevia.includes("COTIZACIÓN N° PG 0500/26"), vistaPrevia.split("\n")[0]);
-  comprobar("son solo dos líneas: número y enlace", vistaPrevia.trim().split("\n").length === 2,
+  comprobar("encabeza con quien la creó, ya que Clientify no deja fijar el dueño por la API",
+    vistaPrevia.split("\n")[0] === `Creada por: ${firmante.nombre}`, vistaPrevia.split("\n")[0]);
+  comprobar("la nota lleva el número", vistaPrevia.includes("COTIZACIÓN N° PG 0500/26"), vistaPrevia);
+  comprobar("son solo tres líneas: quien la creó, el número y el enlace", vistaPrevia.trim().split("\n").length === 3,
     JSON.stringify(vistaPrevia.trim()));
   comprobar("NO manda el detalle de productos", !vistaPrevia.includes("P01 - Ascensores"));
   comprobar("NO manda los totales", !vistaPrevia.includes("IVA"));
@@ -878,11 +881,8 @@ console.log("\n== Enviar a Clientify ==");
   comprobar("envía la nota", clientify.notas.length === 1, `${clientify.notas.length} notas`);
   comprobar("va a la empresa correcta", clientify.notas[0].empresaId === 501, `empresa ${clientify.notas[0].empresaId}`);
   comprobar("el título lleva el número", clientify.notas[0].titulo === "Cotización PG 0500/26", clientify.notas[0].titulo);
-  comprobar("manda el correo de quien creó la cotización, para el dueño en Clientify",
-    clientify.notas[0].creadorEmail === "juan@positivogroup.com", clientify.notas[0].creadorEmail);
-  comprobar("y su nombre, por si el correo no coincide en Clientify",
-    clientify.notas[0].creadorNombre === usuarios.get("juan@positivogroup.com").nombre,
-    clientify.notas[0].creadorNombre);
+  comprobar("el texto que de verdad se manda también encabeza con quien la creó",
+    clientify.notas[0].texto.startsWith(`Creada por: ${firmante.nombre}`), clientify.notas[0].texto);
 
   await page.click('[role="dialog"] button:has-text("Cerrar")');
   await page.waitForTimeout(200);
@@ -900,9 +900,11 @@ console.log("\n== Enviar a Clientify ==");
   await page.waitForSelector("text=Así se verá en la ficha");
 
   const conMarca = (await page.locator('[role="dialog"] div[class*="[&_a]"]').innerText()).trim().split("\n");
-  comprobar("la marca encabeza la nota, con su rótulo", conMarca[0] === "Marca: Aromas del Valle", conMarca[0]);
-  comprobar("y el número va debajo", conMarca[1] === "COTIZACIÓN N° PG 0500/26", conMarca[1]);
-  comprobar("son tres líneas con marca", conMarca.length === 3, JSON.stringify(conMarca));
+  comprobar("quien la creó sigue yendo primero, antes que la marca",
+    conMarca[0] === `Creada por: ${firmante.nombre}`, conMarca[0]);
+  comprobar("la marca va después, con su rótulo", conMarca[1] === "Marca: Aromas del Valle", conMarca[1]);
+  comprobar("y el número va debajo", conMarca[2] === "COTIZACIÓN N° PG 0500/26", conMarca[2]);
+  comprobar("son cuatro líneas con marca", conMarca.length === 4, JSON.stringify(conMarca));
   await page.screenshot({ path: `${OUT}/C5-nota-con-marca.png`, fullPage: true });
 
   await page.click('button:has-text("Cancelar")');
@@ -1301,7 +1303,9 @@ console.log("\n== Botones del listado y enlace público ==");
 
   const caja = page.locator('[role="dialog"] div[class*="[&_a]"]');
   const nota = await caja.innerText();
-  comprobar("la nota es solo número y enlace", nota.trim() === `COTIZACIÓN N° PG 0500/26\n${url}`,
+  const firmanteRedcol = usuarios.get("juan@positivogroup.com");
+  comprobar("la nota lleva quien la creó, el número y el enlace, nada más",
+    nota.trim() === `Creada por: ${firmanteRedcol.nombre}\nCOTIZACIÓN N° PG 0500/26\n${url}`,
     JSON.stringify(nota.trim()));
 
   const ancla = caja.locator("a");
