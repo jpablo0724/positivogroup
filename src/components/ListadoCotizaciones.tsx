@@ -1,12 +1,17 @@
+import { useEffect, useState } from "react";
 import type { CotizacionGuardada } from "../types";
 import { calcInvoiceTotals, formatCurrency, formatDateLong } from "../utils/calculations";
+import { nombreCompleto, type UsuarioPublico } from "../utils/auth";
+import { listarEquipo, type MiembroEquipo } from "../utils/cotizacionesGuardadas";
 
 interface ListadoCotizacionesProps {
   cotizaciones: CotizacionGuardada[];
+  usuarioActual: UsuarioPublico;
   onVer: (cotizacion: CotizacionGuardada) => void;
   onVerPdf: (cotizacion: CotizacionGuardada) => void;
   onEnviarClientify: (cotizacion: CotizacionGuardada) => void;
   onEliminar: (numeroFactura: string) => void;
+  onReasignar: (numeroFactura: string, nuevoDueno: string) => void;
 }
 
 const trazo = {
@@ -86,11 +91,27 @@ function BotonIcono({
 
 export default function ListadoCotizaciones({
   cotizaciones,
+  usuarioActual,
   onVer,
   onVerPdf,
   onEnviarClientify,
   onEliminar,
+  onReasignar,
 }: ListadoCotizacionesProps) {
+  const [equipo, setEquipo] = useState<MiembroEquipo[]>([]);
+
+  // Solo hace falta para el selector de reasignar: si falla, el listado
+  // sigue viéndose igual, nada más sin esa columna con nombres.
+  useEffect(() => {
+    listarEquipo()
+      .then(setEquipo)
+      .catch(() => {});
+  }, []);
+
+  const nombresPorCorreo = new Map(
+    equipo.map((m) => [m.email, nombreCompleto(m)]),
+  );
+
   if (cotizaciones.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-6">
@@ -118,7 +139,8 @@ export default function ListadoCotizaciones({
               <th className="px-4 py-3">Fecha</th>
               <th className="px-4 py-3">Válida hasta</th>
               <th className="px-4 py-3 text-right">Total antes de IVA</th>
-              <th className="px-4 py-3">Guardada</th>
+              <th className="px-4 py-3">Creada por</th>
+              <th className="px-4 py-3">Reasignar</th>
               <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
@@ -128,6 +150,10 @@ export default function ListadoCotizaciones({
                 c.data.items,
                 c.data.ivaPorcentaje,
               );
+              // Sin dueño registrado (cotizaciones de antes de los roles), se
+              // trata como del administrador: solo él la puede reasignar.
+              const puedeReasignar =
+                usuarioActual.admin || c.creadoPor === usuarioActual.email;
               return (
                 <tr
                   key={c.data.numeroFactura}
@@ -148,8 +174,34 @@ export default function ListadoCotizaciones({
                   <td className="px-4 py-3 text-right font-medium text-slate-900">
                     {formatCurrency(totals.subtotal)}
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-400">
-                    {new Date(c.guardadoEn).toLocaleString("es-CO")}
+                  <td className="px-4 py-3 text-slate-700">
+                    {(c.creadoPor && nombresPorCorreo.get(c.creadoPor)) ||
+                      c.creadoPor ||
+                      "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    {puedeReasignar ? (
+                      <select
+                        aria-label={`Reasignar ${c.data.numeroFactura}`}
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700"
+                        value={c.creadoPor ?? ""}
+                        onChange={(e) => {
+                          const nuevoDueno = e.target.value;
+                          if (nuevoDueno && nuevoDueno !== c.creadoPor) {
+                            onReasignar(c.data.numeroFactura, nuevoDueno);
+                          }
+                        }}
+                      >
+                        {!c.creadoPor && <option value="">Sin asignar</option>}
+                        {equipo.map((m) => (
+                          <option key={m.email} value={m.email}>
+                            {nombreCompleto(m)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">

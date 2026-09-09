@@ -1,6 +1,12 @@
 import { json, quienPide } from "../lib/acceso.mts";
 import { randomBytes } from "node:crypto";
-import { esAdmin, normalizarEmail, type Usuario } from "../lib/auth.mts";
+import {
+  buscarUsuario,
+  esAdmin,
+  listarUsuarios,
+  normalizarEmail,
+  type Usuario,
+} from "../lib/auth.mts";
 import {
   almacenCotizaciones,
   almacenEnlaces,
@@ -11,15 +17,21 @@ import {
 /**
  * Cotizaciones guardadas.
  *
- *   GET    /api/cotizaciones            -> listado
- *   POST   /api/cotizaciones            -> guarda o reemplaza una
- *   POST   /api/cotizaciones/enlace     -> enlace público para el cliente
- *   DELETE /api/cotizaciones/PG 0001/26 -> elimina una
+ *   GET    /api/cotizaciones                     -> listado
+ *   GET    /api/cotizaciones/equipo               -> nombre y correo del equipo, para reasignar
+ *   POST   /api/cotizaciones                      -> guarda o reemplaza una
+ *   POST   /api/cotizaciones/enlace                -> enlace público para el cliente
+ *   POST   /api/cotizaciones/PG 0001/26/reasignar -> le cambia el dueño
+ *   DELETE /api/cotizaciones/PG 0001/26           -> elimina una
  *
  * Quién ve qué se decide aquí y no en el navegador: un administrador ve las de
  * todo el equipo, y una cuenta básica solo las suyas. Cada cotización guarda
  * quién la creó, y ese dato no se toma del cuerpo de la petición sino de la
  * sesión, para que nadie pueda atribuirse las de otro.
+ *
+ * Reasignar solo cambia ese dueño: la cotización en sí (cliente, items,
+ * fecha de guardado) no se toca. Lo puede hacer un administrador, o el dueño
+ * actual para pasársela a otra persona del equipo.
  */
 
 interface CotizacionGuardada {
@@ -64,11 +76,56 @@ export default async (req: Request) => {
   );
 
   try {
+    // --- Con quién se puede compartir una cotización ---
+    //
+    // Solo nombre, apellidos y correo: es lo que hace falta para elegir a
+    // quién reasignar, no la lista completa de cuentas que ve Usuarios.
+    if (req.method === "GET" && resto === "equipo") {
+      const cuentas = await listarUsuarios();
+      return json({
+        equipo: cuentas.map((u) => ({
+          email: u.email,
+          nombre: u.nombre,
+          apellidos: u.apellidos ?? "",
+        })),
+      });
+    }
+
     if (req.method === "GET") {
       const todas = await leerTodo<CotizacionGuardada>(almacen);
       const cotizaciones = todas.filter((c) => esSuya(c, quien));
       cotizaciones.sort((a, b) => b.guardadoEn.localeCompare(a.guardadoEn));
       return json({ cotizaciones });
+    }
+
+    // --- Reasignar el dueño ---
+    if (req.method === "POST" && resto.endsWith("/reasignar")) {
+      const numero = resto.replace(/\/reasignar$/, "");
+      const guardada = (await almacen.get(claveCotizacion(numero), {
+        type: "json",
+      })) as CotizacionGuardada | null;
+
+      if (!guardada) return json({ error: "cotizacion_no_existe" }, 404);
+      if (!esSuya(guardada, quien)) {
+        return json({ error: "cotizacion_de_otra_persona" }, 403);
+      }
+
+      const cuerpo = (await req.json().catch(() => ({}))) as {
+        nuevoDueno?: unknown;
+      };
+      const nuevoDueno = normalizarEmail(String(cuerpo.nuevoDueno ?? ""));
+      if (nuevoDueno === "") return json({ error: "falta_nuevo_dueno" }, 400);
+
+      const cuenta = await buscarUsuario(nuevoDueno);
+      if (!cuenta) return json({ error: "usuario_no_existe" }, 404);
+
+      const registro: CotizacionGuardada = {
+        ...guardada,
+        creadoPor: nuevoDueno,
+      };
+
+      await almacen.setJSON(claveCotizacion(numero), registro);
+      return json({ cotizacion: registro });
     }
 
     // --- Enlace público para mandarle al cliente ---

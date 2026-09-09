@@ -26,6 +26,7 @@ import {
   eliminarCotizacion,
   guardarCotizacion,
   listarCotizaciones,
+  reasignarCotizacion,
 } from "./utils/cotizacionesGuardadas";
 import {
   datosLocalesPendientes,
@@ -231,6 +232,14 @@ function App() {
     }
   }
 
+  async function handleReasignar(numeroFactura: string, nuevoDueno: string) {
+    try {
+      setCotizaciones(await reasignarCotizacion(numeroFactura, nuevoDueno));
+    } catch (err) {
+      manejarError(err);
+    }
+  }
+
   if (testigo) return <CotizacionPublica testigo={testigo} />;
 
   if (usuario === undefined) {
@@ -360,10 +369,12 @@ function App() {
 
           <ListadoCotizaciones
             cotizaciones={cotizaciones}
+            usuarioActual={usuario}
             onVer={handleVer}
             onVerPdf={(c) => setParaImprimir(c.data)}
             onEnviarClientify={(c) => setParaClientify(c.data)}
             onEliminar={handleEliminar}
+            onReasignar={handleReasignar}
           />
         </main>
       )}

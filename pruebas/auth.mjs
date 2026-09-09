@@ -388,6 +388,48 @@ console.log("\n== Roles y permisos ==");
   const enlaceAjeno = await leer(await cotizaciones(req("/api/cotizaciones/enlace", { cookie: cookieAna, cuerpo: { numeroFactura: "PG 9001/26" } })));
   comprobar("ni sacarle enlace público -> 404", enlaceAjeno.status === 404, enlaceAjeno.cuerpo.error);
 
+  // --- Reasignar: cambia el dueño y con eso quién la ve, nada más ---
+  const equipoAna = await leer(await cotizaciones(req("/api/cotizaciones/equipo", { metodo: "GET", cookie: cookieAna })));
+  comprobar("cualquier cuenta con sesión ve el equipo -> 200", equipoAna.status === 200, `status ${equipoAna.status}`);
+  comprobar("solo nombre, apellidos y correo",
+    JSON.stringify(Object.keys(equipoAna.cuerpo.equipo[0]).sort()) === JSON.stringify(["apellidos", "email", "nombre"]),
+    JSON.stringify(equipoAna.cuerpo.equipo[0]));
+
+  // El dueño actual (Ana) se la puede pasar a otra persona del equipo.
+  const antes9002 = listaAna.cuerpo.cotizaciones.find((c) => c.data.numeroFactura === "PG 9002/26");
+  const propiaReasignada = await leer(await cotizaciones(req(`/api/cotizaciones/${encodeURIComponent("PG 9002/26")}/reasignar`, {
+    cookie: cookieAna, cuerpo: { nuevoDueno: CUENTA.email },
+  })));
+  comprobar("el dueño se la reasigna a otro -> 200", propiaReasignada.status === 200, `status ${propiaReasignada.status}`);
+  comprobar("nada del contenido cambia", propiaReasignada.cuerpo.cotizacion?.data?.cliente === "De Ana", propiaReasignada.cuerpo.cotizacion?.data?.cliente);
+  comprobar("ni la fecha de guardado", propiaReasignada.cuerpo.cotizacion?.guardadoEn === antes9002?.guardadoEn, propiaReasignada.cuerpo.cotizacion?.guardadoEn);
+
+  const listaAnaTrasReasignar = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieAna })));
+  comprobar("Ana deja de verla al perder la propiedad",
+    !listaAnaTrasReasignar.cuerpo.cotizaciones.some((c) => c.data.numeroFactura === "PG 9002/26"),
+    listaAnaTrasReasignar.cuerpo.cotizaciones.map((c) => c.data.numeroFactura).join(", "));
+
+  // Una cotización de un tercero (aún del admin) no se la puede asignar quien no es dueño ni admin.
+  const ajenaReasignada = await leer(await cotizaciones(req(`/api/cotizaciones/${encodeURIComponent("PG 9001/26")}/reasignar`, {
+    cookie: cookieAna, cuerpo: { nuevoDueno: "ana@positivogroup.com" },
+  })));
+  comprobar("no puede reasignarse una ajena -> 403", ajenaReasignada.status === 403, ajenaReasignada.cuerpo.error);
+
+  // El administrador sí puede, y a una cuenta que no existe se lo rechaza.
+  const destinoInvalido = await leer(await cotizaciones(req(`/api/cotizaciones/${encodeURIComponent("PG 9001/26")}/reasignar`, {
+    cookie: cookieAdmin, cuerpo: { nuevoDueno: "nadie@positivogroup.com" },
+  })));
+  comprobar("reasignar a quien no existe -> 404", destinoInvalido.status === 404, destinoInvalido.cuerpo.error);
+
+  const porAdmin = await leer(await cotizaciones(req(`/api/cotizaciones/${encodeURIComponent("PG 9001/26")}/reasignar`, {
+    cookie: cookieAdmin, cuerpo: { nuevoDueno: "ana@positivogroup.com" },
+  })));
+  comprobar("el admin reasigna cualquiera -> 200", porAdmin.status === 200, `status ${porAdmin.status}`);
+
+  const listaAnaConLaDelAdmin = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieAna })));
+  comprobar("y ahora Ana sí la ve, aunque no era suya",
+    listaAnaConLaDelAdmin.cuerpo.cotizaciones.some((c) => c.data.numeroFactura === "PG 9001/26"));
+
   // --- El catálogo se consulta siempre, pero no se edita sin permiso ---
   const verCatalogo = await leer(await productos(req("/api/productos", { metodo: "GET", cookie: cookieAna })));
   comprobar("puede consultar el catálogo para cotizar", verCatalogo.status === 200, `status ${verCatalogo.status}`);

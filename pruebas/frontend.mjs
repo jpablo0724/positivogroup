@@ -204,6 +204,13 @@ function armarApi(page) {
     }
 
     if (ruta.startsWith("/api/cotizaciones")) {
+      if (ruta === "/api/cotizaciones/equipo") {
+        return responder({
+          equipo: [...usuarios.values()].map((u) => ({
+            email: u.email, nombre: u.nombre, apellidos: u.apellidos ?? "",
+          })),
+        });
+      }
       if (ruta === "/api/cotizaciones/enlace") {
         const { numeroFactura } = JSON.parse(req.postData());
         const guardada = servidor.cotizaciones.get(numeroFactura);
@@ -213,10 +220,22 @@ function armarApi(page) {
         servidor.enlaces.set(guardada.enlace, numeroFactura);
         return responder({ testigo: guardada.enlace });
       }
+      if (ruta.endsWith("/reasignar") && req.method() === "POST") {
+        const numero = decodeURIComponent(ruta.replace("/api/cotizaciones/", "").replace(/\/reasignar$/, ""));
+        const { nuevoDueno } = JSON.parse(req.postData());
+        const guardada = servidor.cotizaciones.get(numero);
+        if (!guardada) return responder({ error: "cotizacion_no_existe" }, 404);
+        guardada.creadoPor = nuevoDueno;
+        return responder({ cotizacion: guardada });
+      }
       if (req.method() === "POST") {
         const cuerpo = JSON.parse(req.postData());
-        servidor.cotizaciones.set(cuerpo.data.numeroFactura, cuerpo);
-        return responder({ cotizacion: cuerpo });
+        const previa = servidor.cotizaciones.get(cuerpo.data.numeroFactura);
+        servidor.cotizaciones.set(cuerpo.data.numeroFactura, {
+          ...cuerpo,
+          creadoPor: previa?.creadoPor ?? email,
+        });
+        return responder({ cotizacion: servidor.cotizaciones.get(cuerpo.data.numeroFactura) });
       }
       if (req.method() === "DELETE") {
         servidor.cotizaciones.delete(decodeURIComponent(ruta.replace("/api/cotizaciones/", "")));
@@ -965,6 +984,31 @@ console.log("\n== Crear usuarios, roles y permisos ==");
   const filaAdmin = page.locator("tbody tr").filter({ hasText: "juan@positivogroup.com" });
   comprobar("las casillas del admin están bloqueadas",
     await filaAdmin.locator('input[type="checkbox"]').first().isDisabled());
+}
+
+console.log("\n== Reasignar cotizaciones ==");
+{
+  await page.click("text=Listado de Cotizaciones");
+  await page.waitForSelector("th:has-text('Reasignar')");
+
+  comprobar("la columna \"Guardada\" ya no está", (await page.locator("th:has-text('Guardada')").count()) === 0);
+  comprobar("muestra quién la creó en su lugar", (await page.locator("th:has-text('Creada por')").count()) === 1);
+
+  const filaAjena = page.locator("tbody tr").filter({ hasText: "Cliente de otra persona" });
+  const selector = filaAjena.locator('select[aria-label^="Reasignar"]');
+  comprobar("el admin puede reasignar cualquiera", (await selector.count()) === 1);
+
+  await selector.selectOption({ label: "Sofía Restrepo" });
+  await page.waitForTimeout(400);
+  comprobar("queda asignada a Sofía en el servidor",
+    servidor.cotizaciones.get("PG 0009/26")?.creadoPor === "sofia@positivogroup.com",
+    servidor.cotizaciones.get("PG 0009/26")?.creadoPor);
+  comprobar("el nombre de Sofía aparece como creadora",
+    (await filaAjena.innerText()).includes("Sofía Restrepo"));
+  comprobar("y nada del contenido de la cotización cambió",
+    (await filaAjena.innerText()).includes("Cliente de otra persona"));
+
+  await page.screenshot({ path: `${OUT}/F1b-reasignar.png`, fullPage: true });
 }
 
 console.log("\n== Lo que ve una cuenta básica ==");

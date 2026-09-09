@@ -34,3 +34,29 @@ export async function eliminarCotizacion(
   });
   return listarCotizaciones();
 }
+
+export interface MiembroEquipo {
+  email: string;
+  nombre: string;
+  apellidos: string;
+}
+
+/** Nombre, apellidos y correo del equipo, para elegir a quién reasignar. */
+export async function listarEquipo(): Promise<MiembroEquipo[]> {
+  const { equipo } = await pedir<{ equipo: MiembroEquipo[] }>(
+    "/api/cotizaciones/equipo",
+  );
+  return equipo;
+}
+
+/** Cambia el dueño de una cotización. No toca nada más de su contenido. */
+export async function reasignarCotizacion(
+  numeroFactura: string,
+  nuevoDueno: string,
+): Promise<CotizacionGuardada[]> {
+  await pedir(
+    `/api/cotizaciones/${encodeURIComponent(numeroFactura)}/reasignar`,
+    { metodo: "POST", cuerpo: { nuevoDueno } },
+  );
+  return listarCotizaciones();
+}

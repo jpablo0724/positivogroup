@@ -44,6 +44,8 @@ export interface InvoiceData {
 
 export interface CotizacionGuardada {
   guardadoEn: string;
+  /** Correo de quién la creó. Las guardadas antes de que existiera este dato no lo traen. */
+  creadoPor?: string;
   data: InvoiceData;
 }
 
