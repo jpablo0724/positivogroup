@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import InvoicePreview from "./InvoicePreview";
-import type { InvoiceData } from "../types";
+import type { CreadorFirma, InvoiceData } from "../types";
 
 interface VistaImpresionProps {
   data: InvoiceData;
+  /** Quién firma: quien creó la cotización. */
+  creador?: CreadorFirma | null;
   onCerrar: () => void;
   /** Abre el diálogo de impresión apenas se muestra, sin esperar el botón. */
   imprimirAlAbrir?: boolean;
@@ -23,6 +25,7 @@ interface VistaImpresionProps {
  */
 export default function VistaImpresion({
   data,
+  creador,
   onCerrar,
   imprimirAlAbrir = false,
 }: VistaImpresionProps) {
@@ -87,7 +90,7 @@ export default function VistaImpresion({
       </p>
 
       <div className="hoja mx-auto max-w-[920px] p-6">
-        <InvoicePreview data={data} />
+        <InvoicePreview data={data} creador={creador} />
       </div>
     </div>,
     destino,

@@ -1,4 +1,5 @@
 import { json } from "../lib/acceso.mts";
+import { buscarUsuario } from "../lib/auth.mts";
 import {
   almacenCotizaciones,
   almacenEnlaces,
@@ -17,6 +18,10 @@ import {
  *
  * Solo entrega la cotización que corresponde a ese testigo. Nunca lista, ni
  * permite escribir.
+ *
+ * También resuelve quién firma (nombre, teléfono y correo de quien la creó):
+ * quien recibe el enlace no tiene sesión, así que no puede consultar el
+ * equipo por su cuenta como sí hace la aplicación por dentro.
  */
 
 export default async (req: Request) => {
@@ -42,15 +47,26 @@ export default async (req: Request) => {
 
     if (!enlace?.numeroFactura) return json({ error: "enlace_invalido" }, 404);
 
-    const cotizacion = await almacenCotizaciones().get(
+    const cotizacion = (await almacenCotizaciones().get(
       claveCotizacion(enlace.numeroFactura),
       { type: "json" },
-    );
+    )) as { creadoPor?: string } | null;
 
     // El enlace puede seguir vivo aunque la cotización ya se haya eliminado.
     if (!cotizacion) return json({ error: "cotizacion_no_existe" }, 404);
 
-    return json({ cotizacion });
+    const autor = cotizacion.creadoPor
+      ? await buscarUsuario(cotizacion.creadoPor)
+      : null;
+    const creador = autor
+      ? {
+          nombre: [autor.nombre, autor.apellidos].filter(Boolean).join(" "),
+          telefono: autor.telefono ?? "",
+          correo: autor.email,
+        }
+      : null;
+
+    return json({ cotizacion, creador });
   } catch (err) {
     return json(
       {

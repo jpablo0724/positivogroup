@@ -39,9 +39,13 @@ export interface MiembroEquipo {
   email: string;
   nombre: string;
   apellidos: string;
+  telefono: string;
 }
 
-/** Nombre, apellidos y correo del equipo, para elegir a quién reasignar. */
+/**
+ * Nombre, apellidos, teléfono y correo del equipo: para elegir a quién
+ * reasignar y para armar la firma de quien creó la cotización.
+ */
 export async function listarEquipo(): Promise<MiembroEquipo[]> {
   const { equipo } = await pedir<{ equipo: MiembroEquipo[] }>(
     "/api/cotizaciones/equipo",

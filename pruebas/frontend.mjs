@@ -98,7 +98,12 @@ function armarApi(page) {
       const t = ruta.replace("/api/publico/", "");
       const numero = servidor.enlaces.get(t);
       if (!numero) return responder({ error: "enlace_invalido" }, 404);
-      return responder({ cotizacion: servidor.cotizaciones.get(numero) });
+      const cotizacion = servidor.cotizaciones.get(numero);
+      const autor = cotizacion?.creadoPor ? usuarios.get(cotizacion.creadoPor) : null;
+      const creador = autor
+        ? { nombre: [autor.nombre, autor.apellidos].filter(Boolean).join(" "), telefono: autor.telefono ?? "", correo: autor.email }
+        : null;
+      return responder({ cotizacion, creador });
     }
 
     const cookies = req.headers()["cookie"] ?? "";
@@ -770,6 +775,15 @@ console.log("\n== Ver en PDF ==");
   const hoja = await page.locator("#impresion").innerText();
   comprobar("la hoja muestra la cotización", /COTIZACIÓN N.º PG/.test(hoja), hoja.split("\n")[0]);
   comprobar("se monta fuera de #root", (await page.locator("#impresion #invoice-preview").count()) === 1);
+
+  // La firma del PDF trae los datos de quien creó esa cotización. Sin
+  // teléfono propio todavía, se ve el de la empresa (es el valor por
+  // defecto del componente, no algo que dependa de este dato).
+  const firmante = usuarios.get("juan@positivogroup.com");
+  comprobar("la firma del PDF trae el nombre de quien la creó", hoja.includes(firmante.nombre), hoja);
+  comprobar("y su teléfono, o el de la empresa si todavía no tiene uno propio",
+    hoja.includes(firmante.telefono || "(4) 448 3427"), hoja);
+  comprobar("y su correo", hoja.includes("juan@positivogroup.com"), hoja);
   comprobar("marca el body para imprimir",
     await page.evaluate(() => document.body.classList.contains("imprimiendo")));
 
@@ -831,6 +845,7 @@ console.log("\n== Enviar a Clientify ==");
   // 2. Cotización vinculada a una empresa de Clientify.
   servidor.cotizaciones.set("PG 0500/26", {
     guardadoEn: new Date().toISOString(),
+    creadoPor: "juan@positivogroup.com",
     data: {
       numeroFactura: "PG 0500/26", fecha: "2026-08-20", validaHasta: "2026-09-20",
       formaPago: "Contado", ivaPorcentaje: 19, observaciones: "",
@@ -1303,6 +1318,14 @@ console.log("\n== Botones del listado y enlace público ==");
   const contenido = await page.locator("#invoice-preview").innerText();
   comprobar("muestra la cotización", contenido.includes("PG 0500/26"), contenido.split("\n")[0]);
   comprobar("no pide contraseña", (await page.locator('input[type="password"]').count()) === 0);
+
+  // La firma muestra a quien la creó, resuelto por el servidor sin sesión.
+  const creadorEsperado = usuarios.get("juan@positivogroup.com");
+  comprobar("la firma trae el nombre de quien la creó",
+    contenido.includes(creadorEsperado.nombre), contenido);
+  comprobar("y su teléfono", contenido.includes(creadorEsperado.telefono), contenido);
+  comprobar("y su correo", contenido.includes("juan@positivogroup.com"), contenido);
+  comprobar("y sigue diciendo Positivo Group S.A.S", contenido.includes("Positivo Group S.A.S"), contenido);
   await page.screenshot({ path: `${OUT}/D3-publica.png`, fullPage: true });
 
   // Al imprimirla sale la hoja, no la barra.

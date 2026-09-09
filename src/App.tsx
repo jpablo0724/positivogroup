@@ -15,18 +15,21 @@ import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import {
   ID_BORRADOR,
   type CotizacionGuardada,
+  type CreadorFirma,
   type InvoiceData,
   type InvoiceItem,
 } from "./types";
 import { todayIso } from "./utils/calculations";
 import { apartarNumero, numeroProvisional } from "./utils/invoiceNumber";
 import { SinSesion } from "./utils/api";
-import { salir, sesionActual, type UsuarioPublico } from "./utils/auth";
+import { nombreCompleto, salir, sesionActual, type UsuarioPublico } from "./utils/auth";
 import {
   eliminarCotizacion,
   guardarCotizacion,
   listarCotizaciones,
+  listarEquipo,
   reasignarCotizacion,
+  type MiembroEquipo,
 } from "./utils/cotizacionesGuardadas";
 import {
   datosLocalesPendientes,
@@ -67,6 +70,11 @@ function App() {
   const [modalPerfil, setModalPerfil] = useState(false);
   // Cotización que se está viendo a página completa para guardarla en PDF.
   const [paraImprimir, setParaImprimir] = useState<InvoiceData | null>(null);
+  // Quién la creó, para la firma del PDF. undefined = no se sabe (se cae a
+  // los datos de la propia cuenta).
+  const [paraImprimirCreadoPor, setParaImprimirCreadoPor] = useState<
+    string | undefined
+  >(undefined);
   // Cotización que se va a anotar en la ficha de la empresa en Clientify.
   const [paraClientify, setParaClientify] = useState<InvoiceData | null>(null);
 
@@ -74,12 +82,21 @@ function App() {
   const [invoice, setInvoice] = useState<InvoiceData>(() =>
     cotizacionEnBlanco(""),
   );
+  // Quién creó la cotización que está en el formulario, para la firma en la
+  // vista previa. undefined = es una cotización nueva: firma quien tiene la
+  // sesión abierta.
+  const [invoiceCreadoPor, setInvoiceCreadoPor] = useState<
+    string | undefined
+  >(undefined);
   // Mientras es false, el número que se muestra es provisional y se aparta de
   // verdad al guardar. Al abrir una cotización ya guardada pasa a true, para
   // que volver a guardarla la actualice en vez de consumir otro número.
   const [numeroAsignado, setNumeroAsignado] = useState(false);
 
   const [cotizaciones, setCotizaciones] = useState<CotizacionGuardada[]>([]);
+  // Nombre, teléfono y correo de cada cuenta, para armar la firma de quien
+  // creó cada cotización en el documento.
+  const [equipo, setEquipo] = useState<MiembroEquipo[]>([]);
   // Catálogo completo, compartido entre el formulario y la vista de productos.
   const [productos, setProductos] = useState<Producto[]>([]);
   // Productos tal como se ven en la cotización, incluyendo el que se está
@@ -106,14 +123,17 @@ function App() {
     setCargando(true);
     setError(null);
     try {
-      const [lista, catalogo, numero] = await Promise.all([
+      const [lista, catalogo, numero, cuentas] = await Promise.all([
         listarCotizaciones(),
         listarProductos(),
         numeroProvisional(),
+        listarEquipo(),
       ]);
       setCotizaciones(lista);
       setProductos(catalogo);
+      setEquipo(cuentas);
       setInvoice(cotizacionEnBlanco(numero));
+      setInvoiceCreadoPor(undefined);
       setNumeroAsignado(false);
       setPendientes(datosLocalesPendientes());
     } catch (err) {
@@ -122,6 +142,35 @@ function App() {
       setCargando(false);
     }
   }, [manejarError]);
+
+  /**
+   * Quién firma la cotización en el documento: se busca en el equipo por
+   * correo y, si no se encuentra (cotización nueva, o de antes de que
+   * existiera este dato), firma quien tiene la sesión abierta.
+   */
+  function resolverCreador(email: string | undefined): CreadorFirma | null {
+    const correo = email ?? usuario?.email;
+    if (!correo) return null;
+
+    const miembro = equipo.find((m) => m.email === correo);
+    if (miembro) {
+      return {
+        nombre: nombreCompleto(miembro),
+        telefono: miembro.telefono,
+        correo: miembro.email,
+      };
+    }
+
+    if (usuario && correo === usuario.email) {
+      return {
+        nombre: nombreCompleto(usuario),
+        telefono: usuario.telefono,
+        correo: usuario.email,
+      };
+    }
+
+    return { nombre: "", telefono: "", correo };
+  }
 
   // Al abrir la página se le pregunta al servidor si la cookie sigue valiendo.
   useEffect(() => {
@@ -210,6 +259,7 @@ function App() {
       setTimeout(() => setGuardadoMensaje(false), 2500);
 
       setInvoice(cotizacionEnBlanco(await numeroProvisional()));
+      setInvoiceCreadoPor(undefined);
       setNumeroAsignado(false);
     } catch (err) {
       manejarError(err);
@@ -220,6 +270,7 @@ function App() {
 
   function handleVer(cotizacion: CotizacionGuardada) {
     setInvoice(cotizacion.data);
+    setInvoiceCreadoPor(cotizacion.creadoPor);
     setNumeroAsignado(true);
     setActiveView("crear-factura");
   }
@@ -344,7 +395,10 @@ function App() {
             </div>
 
             <div className="flex-1 overflow-auto rounded-xl bg-slate-200/60 p-6 print:overflow-visible print:bg-transparent print:p-0">
-              <InvoicePreview data={{ ...invoice, items: itemsVistaPrevia }} />
+              <InvoicePreview
+                data={{ ...invoice, items: itemsVistaPrevia }}
+                creador={resolverCreador(invoiceCreadoPor)}
+              />
             </div>
           </div>
         </main>
@@ -371,7 +425,10 @@ function App() {
             cotizaciones={cotizaciones}
             usuarioActual={usuario}
             onVer={handleVer}
-            onVerPdf={(c) => setParaImprimir(c.data)}
+            onVerPdf={(c) => {
+              setParaImprimir(c.data);
+              setParaImprimirCreadoPor(c.creadoPor);
+            }}
             onEnviarClientify={(c) => setParaClientify(c.data)}
             onEliminar={handleEliminar}
             onReasignar={handleReasignar}
@@ -444,7 +501,11 @@ function App() {
       {paraImprimir && (
         <VistaImpresion
           data={paraImprimir}
-          onCerrar={() => setParaImprimir(null)}
+          creador={resolverCreador(paraImprimirCreadoPor)}
+          onCerrar={() => {
+            setParaImprimir(null);
+            setParaImprimirCreadoPor(undefined);
+          }}
           imprimirAlAbrir
         />
       )}

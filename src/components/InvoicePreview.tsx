@@ -1,4 +1,4 @@
-import { ID_BORRADOR, type InvoiceData } from "../types";
+import { ID_BORRADOR, type CreadorFirma, type InvoiceData } from "../types";
 import {
   calcInvoiceTotals,
   calcItemTotals,
@@ -11,6 +11,8 @@ import LogoEmpresa from "./LogoEmpresa";
 
 interface InvoicePreviewProps {
   data: InvoiceData;
+  /** Quién firma: quien creó la cotización. Sin datos si no se pudo resolver. */
+  creador?: CreadorFirma | null;
 }
 
 const COMPANY = {
@@ -27,7 +29,7 @@ const COMPANY = {
 const border = "border-slate-900";
 const cell = `border ${border} px-2 py-1`;
 
-export default function InvoicePreview({ data }: InvoicePreviewProps) {
+export default function InvoicePreview({ data, creador }: InvoicePreviewProps) {
   const totals = calcInvoiceTotals(data.items, data.ivaPorcentaje);
   const hasItems = data.items.some(
     (item) => item.nombreProducto || item.cantidad || item.precioUnitario,
@@ -235,10 +237,11 @@ export default function InvoicePreview({ data }: InvoicePreviewProps) {
         {/* Firma */}
         <tr className="break-inside-avoid">
           <td colSpan={2} className={`${cell} space-y-0.5 px-4 py-4 align-top`}>
-            <p className="font-semibold">Positivo Group S.A.S.</p>
-            <p>Ejecutiva Comercial</p>
-            <p>Tel: {COMPANY.tel}</p>
-            <p>Email: {COMPANY.email}</p>
+            <p className="font-semibold">{creador?.nombre || "—"}</p>
+            <p>Ejecutivo Comercial</p>
+            <p>Tel: {creador?.telefono || COMPANY.tel}</p>
+            <p>Email: {creador?.correo || COMPANY.email}</p>
+            <p>{COMPANY.nombre}</p>
           </td>
           <td colSpan={2} className={`${cell} p-0 align-top`}>
             <div

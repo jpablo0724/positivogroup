@@ -388,11 +388,11 @@ console.log("\n== Roles y permisos ==");
   const enlaceAjeno = await leer(await cotizaciones(req("/api/cotizaciones/enlace", { cookie: cookieAna, cuerpo: { numeroFactura: "PG 9001/26" } })));
   comprobar("ni sacarle enlace público -> 404", enlaceAjeno.status === 404, enlaceAjeno.cuerpo.error);
 
-  // --- Reasignar: cambia el dueño y con eso quién la ve, nada más ---
+  // --- Reasignar: traslada quién la ve, sin tocar quién la creó ---
   const equipoAna = await leer(await cotizaciones(req("/api/cotizaciones/equipo", { metodo: "GET", cookie: cookieAna })));
   comprobar("cualquier cuenta con sesión ve el equipo -> 200", equipoAna.status === 200, `status ${equipoAna.status}`);
-  comprobar("solo nombre, apellidos y correo",
-    JSON.stringify(Object.keys(equipoAna.cuerpo.equipo[0]).sort()) === JSON.stringify(["apellidos", "email", "nombre"]),
+  comprobar("nombre, apellidos, teléfono y correo, nada de rol ni permisos",
+    JSON.stringify(Object.keys(equipoAna.cuerpo.equipo[0]).sort()) === JSON.stringify(["apellidos", "email", "nombre", "telefono"]),
     JSON.stringify(equipoAna.cuerpo.equipo[0]));
 
   // El dueño actual (Ana) se la puede pasar a otra persona del equipo. Eso

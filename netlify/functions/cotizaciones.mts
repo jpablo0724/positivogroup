@@ -97,8 +97,9 @@ export default async (req: Request) => {
   try {
     // --- Con quién se puede compartir una cotización ---
     //
-    // Solo nombre, apellidos y correo: es lo que hace falta para elegir a
-    // quién reasignar, no la lista completa de cuentas que ve Usuarios.
+    // Nombre, apellidos, teléfono y correo: lo que hace falta para elegir a
+    // quién reasignar y para armar la firma de quien creó la cotización en el
+    // documento, no la lista completa de cuentas que ve Usuarios.
     if (req.method === "GET" && resto === "equipo") {
       const cuentas = await listarUsuarios();
       return json({
@@ -106,6 +107,7 @@ export default async (req: Request) => {
           email: u.email,
           nombre: u.nombre,
           apellidos: u.apellidos ?? "",
+          telefono: u.telefono ?? "",
         })),
       });
     }

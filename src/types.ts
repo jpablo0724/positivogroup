@@ -51,6 +51,13 @@ export interface CotizacionGuardada {
   data: InvoiceData;
 }
 
+/** Quién firma la cotización, para el bloque de firma del documento. */
+export interface CreadorFirma {
+  nombre: string;
+  telefono: string;
+  correo: string;
+}
+
 export const FORMAS_PAGO = [
   "Contado",
   "Crédito a 15 días",

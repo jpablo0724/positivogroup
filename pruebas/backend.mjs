@@ -113,6 +113,9 @@ console.log("\n== Enlace público para el cliente ==");
   const sinSesion = await leer(await publico(req(`/api/publico/${testigo}`, { metodo: "GET", cookie: null })));
   comprobar("el cliente lo ve sin cuenta -> 200", sinSesion.status === 200, `status ${sinSesion.status}`);
   comprobar("trae la cotización correcta", sinSesion.cuerpo.cotizacion?.data?.numeroFactura === "PG 0777/26", sinSesion.cuerpo.cotizacion?.data?.numeroFactura);
+  comprobar("trae quién firma, resuelto del lado del servidor",
+    sinSesion.cuerpo.creador?.nombre === "Prueba" && sinSesion.cuerpo.creador?.correo === "prueba@positivogroup.com",
+    JSON.stringify(sinSesion.cuerpo.creador));
 
   // Y lo igual de esencial: no deja ver ninguna otra.
   const inventado = await leer(await publico(req(`/api/publico/${"x".repeat(43)}`, { metodo: "GET", cookie: null })));

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import InvoicePreview from "./InvoicePreview";
 import PositivoLogo from "./PositivoLogo";
-import type { CotizacionGuardada } from "../types";
+import type { CotizacionGuardada, CreadorFirma } from "../types";
 
 interface CotizacionPublicaProps {
   testigo: string;
@@ -9,7 +9,7 @@ interface CotizacionPublicaProps {
 
 type Estado =
   | { paso: "cargando" }
-  | { paso: "lista"; cotizacion: CotizacionGuardada }
+  | { paso: "lista"; cotizacion: CotizacionGuardada; creador: CreadorFirma | null }
   | { paso: "error"; mensaje: string };
 
 /**
@@ -41,7 +41,11 @@ export default function CotizacionPublica({ testigo }: CotizacionPublicaProps) {
           });
           return;
         }
-        setEstado({ paso: "lista", cotizacion: datos.cotizacion });
+        setEstado({
+          paso: "lista",
+          cotizacion: datos.cotizacion,
+          creador: datos.creador ?? null,
+        });
       })
       .catch(() => {
         if (!cancelado) {
@@ -110,7 +114,7 @@ export default function CotizacionPublica({ testigo }: CotizacionPublicaProps) {
       </div>
 
       <div className="hoja mx-auto max-w-[920px] p-6">
-        <InvoicePreview data={estado.cotizacion.data} />
+        <InvoicePreview data={estado.cotizacion.data} creador={estado.creador} />
       </div>
     </div>
   );
