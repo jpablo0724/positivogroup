@@ -50,6 +50,39 @@ const RECURSOS_PERMITIDOS = new Set([
 ]);
 
 /**
+ * El id de la nota recién creada, para poder volver a consultarla. La
+ * respuesta de creación no tiene una forma fija conocida, así que se prueban
+ * los lugares donde ya se ha visto un id (extra.note_id) y los habituales de
+ * un recurso REST (id, pk), por si el endpoint que responda es otro.
+ */
+function extraerIdDeNota(cuerpoTexto: string): string | null {
+  let cuerpo: unknown;
+  try {
+    cuerpo = JSON.parse(cuerpoTexto);
+  } catch {
+    return null;
+  }
+  if (typeof cuerpo !== "object" || cuerpo === null) return null;
+
+  const registro = cuerpo as Record<string, unknown>;
+  const extra = registro.extra;
+  const posibles = [
+    typeof extra === "object" && extra !== null
+      ? (extra as Record<string, unknown>).note_id
+      : undefined,
+    registro.id,
+    registro.pk,
+  ];
+
+  for (const valor of posibles) {
+    if (typeof valor === "number" || typeof valor === "string") {
+      return String(valor);
+    }
+  }
+  return null;
+}
+
+/**
  * Formas posibles del endpoint de notas en Clientify. No pude confirmarlas
  * contra la API real, así que se prueban en orden y se usa la primera que
  * responda bien; la respuesta dice cuál funcionó. Se detiene en el primer
@@ -366,11 +399,37 @@ export default async (req: Request) => {
       const cuerpoTexto = await respuesta.text();
 
       if (respuesta.ok) {
+        // La respuesta de creación es mínima y no dice si "owner" quedó
+        // puesto. Se vuelve a pedir la nota por su id para ver su forma
+        // real: así se sabe con qué campo Clientify guarda el dueño, en
+        // vez de seguir adivinando.
+        let notaCompleta: unknown = null;
+        const noteId = extraerIdDeNota(cuerpoTexto);
+        if (noteId !== null) {
+          try {
+            const consulta = await pedirAClientify(
+              new URL(`${CLIENTIFY_BASE}/notes/${noteId}/`),
+              token,
+            );
+            const textoConsulta = await consulta.text();
+            notaCompleta = consulta.ok
+              ? JSON.parse(textoConsulta)
+              : { error: `consulta respondió ${consulta.status}`, detalle: textoConsulta.slice(0, 300) };
+          } catch (err) {
+            notaCompleta = {
+              error: "no se pudo volver a consultar la nota",
+              detalle: err instanceof Error ? err.message : String(err),
+            };
+          }
+        }
+
         return json({
           enviada: true,
           endpoint: candidato.url,
           duenioAsignado: ownerId !== null,
+          ownerId,
           respuesta: cuerpoTexto.slice(0, 500),
+          notaCompleta,
         });
       }
 
