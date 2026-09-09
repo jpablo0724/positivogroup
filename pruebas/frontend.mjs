@@ -895,7 +895,7 @@ console.log("\n== Enviar a Clientify ==");
   await page.waitForSelector("text=Así se verá en la ficha");
 
   const conMarca = (await page.locator('[role="dialog"] div[class*="[&_a]"]').innerText()).trim().split("\n");
-  comprobar("la marca encabeza la nota", conMarca[0] === "Aromas del Valle", conMarca[0]);
+  comprobar("la marca encabeza la nota, con su rótulo", conMarca[0] === "Marca: Aromas del Valle", conMarca[0]);
   comprobar("y el número va debajo", conMarca[1] === "COTIZACIÓN N° PG 0500/26", conMarca[1]);
   comprobar("son tres líneas con marca", conMarca.length === 3, JSON.stringify(conMarca));
   await page.screenshot({ path: `${OUT}/C5-nota-con-marca.png`, fullPage: true });

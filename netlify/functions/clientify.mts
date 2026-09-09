@@ -31,7 +31,18 @@ const CLIENTIFY_BASE = (
 
 // Lectura, más la anotación de cotizaciones. Nada más: el proxy no puede
 // usarse para modificar ni borrar lo que ya hay en el CRM.
-const RECURSOS_PERMITIDOS = new Set(["me", "companies", "contacts", "nota"]);
+//
+// "users" y "notes" están para inspeccionar la API (con qué campo se pone el
+// dueño de una nota, cómo lucen los usuarios de Clientify) mientras se arma
+// el cruce de cuentas; quedan de lectura, igual que el resto.
+const RECURSOS_PERMITIDOS = new Set([
+  "me",
+  "companies",
+  "contacts",
+  "users",
+  "notes",
+  "nota",
+]);
 
 /**
  * Formas posibles del endpoint de notas en Clientify. No pude confirmarlas

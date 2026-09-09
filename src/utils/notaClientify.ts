@@ -45,7 +45,7 @@ export function textoDeNota(data: InvoiceData, enlace?: string): string {
   // La marca es opcional y encabeza la nota solo si el comercial la escribió.
   // Sin ella no se deja una línea vacía ni un rótulo suelto en la ficha.
   const marca = (data.cliente.marca ?? "").trim();
-  if (marca !== "") lineas.push(escaparHtml(marca));
+  if (marca !== "") lineas.push(escaparHtml(`Marca: ${marca}`));
 
   lineas.push(escaparHtml(`COTIZACIÓN N° ${data.numeroFactura}`));
 
