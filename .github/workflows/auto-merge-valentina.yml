@@ -1,0 +1,62 @@
+name: Fusionar valentina a main
+
+# Cada push a `valentina` se valida aquí mismo (mismas comprobaciones que
+# "Pruebas") y, si todo pasa, se fusiona automáticamente en `main` sin
+# esperar revisión humana. Como Hostinger despliega en cuanto hay un push
+# a `main`, las pruebas corren ANTES de fusionar: si algo falla, no se toca
+# `main` y no se publica nada roto en intranet.positivogroup.com.
+
+on:
+  push:
+    branches: [valentina]
+
+permissions:
+  contents: write
+
+jobs:
+  fusionar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fusionar valentina en main (local)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin valentina
+          git merge origin/valentina --no-edit
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Tipos
+        run: npx tsc -b
+
+      - name: Estilo
+        run: npm run lint
+
+      - name: Almacén SQL
+        run: npm run prueba:sql
+
+      - name: Servidor HTTP
+        run: npm run prueba:servidor
+
+      - name: Autenticación
+        run: npm run prueba:auth
+
+      - name: Backend
+        run: npm run prueba:backend
+
+      - name: Compilación completa
+        run: npm run build
+
+      - name: Publicar en main
+        run: git push origin HEAD:main
