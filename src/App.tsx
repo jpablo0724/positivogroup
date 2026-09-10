@@ -162,6 +162,7 @@ function App() {
         nombre: nombreCompleto(miembro),
         telefono: miembro.telefono,
         correo: miembro.email,
+        cargo: miembro.cargo,
       };
     }
 
@@ -170,10 +171,11 @@ function App() {
         nombre: nombreCompleto(usuario),
         telefono: usuario.telefono,
         correo: usuario.email,
+        cargo: usuario.cargo,
       };
     }
 
-    return { nombre: "", telefono: "", correo };
+    return { nombre: "", telefono: "", correo, cargo: "" };
   }
 
   // Al abrir la página se le pregunta al servidor si la cookie sigue valiendo.

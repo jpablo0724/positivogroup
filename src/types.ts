@@ -56,6 +56,7 @@ export interface CreadorFirma {
   nombre: string;
   telefono: string;
   correo: string;
+  cargo: string;
 }
 
 export const FORMAS_PAGO = [

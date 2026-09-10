@@ -18,9 +18,9 @@ function mensajeDeError(err: unknown): string {
 }
 
 /**
- * Datos propios: nombre y teléfono se pueden cambiar aquí mismo; el correo
- * solo se muestra, porque es la clave con la que el sistema identifica la
- * cuenta y cambiarlo es una operación que hoy no existe.
+ * Datos propios: nombre, teléfono y cargo se pueden cambiar aquí mismo; el
+ * correo solo se muestra, porque es la clave con la que el sistema identifica
+ * la cuenta y cambiarlo es una operación que hoy no existe.
  */
 export default function ModalPerfil({
   usuario,
@@ -30,6 +30,7 @@ export default function ModalPerfil({
 }: ModalPerfilProps) {
   const [nombre, setNombre] = useState(usuario.nombre);
   const [telefono, setTelefono] = useState(usuario.telefono);
+  const [cargo, setCargo] = useState(usuario.cargo);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +47,7 @@ export default function ModalPerfil({
         nombre,
         apellidos: usuario.apellidos,
         telefono,
+        cargo,
       });
       onGuardado(actualizado);
       onCerrar();
@@ -80,6 +82,14 @@ export default function ModalPerfil({
               className={selectTriggerClass}
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Cargo</label>
+            <input
+              className={selectTriggerClass}
+              value={cargo}
+              onChange={(e) => setCargo(e.target.value)}
             />
           </div>
           <div>

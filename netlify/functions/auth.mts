@@ -28,7 +28,7 @@ import {
  *   POST /api/auth/entrar   -> inicia sesión
  *   POST /api/auth/salir    -> cierra la sesión
  *   GET  /api/auth/sesion   -> quién está dentro
- *   POST /api/auth/perfil   -> cambia el propio nombre, apellidos y teléfono
+ *   POST /api/auth/perfil   -> cambia el propio nombre, apellidos, teléfono y cargo
  *
  * El registro está cerrado: las cuentas las crea un administrador desde la
  * sección de Usuarios. La única excepción es el arranque, cuando todavía no
@@ -180,6 +180,7 @@ export default async (req: Request) => {
         nombre,
         apellidos: texto((cuerpo as never)["apellidos"]).trim(),
         telefono: texto((cuerpo as never)["telefono"]).trim(),
+        cargo: texto((cuerpo as never)["cargo"]).trim(),
       };
 
       await guardarUsuario(actualizado);

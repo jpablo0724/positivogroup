@@ -237,7 +237,7 @@ export default function InvoicePreview({ data, creador }: InvoicePreviewProps) {
         <tr className="break-inside-avoid">
           <td colSpan={2} className={`${cell} space-y-0.5 px-4 py-4 align-top`}>
             <p className="font-semibold">{creador?.nombre || "—"}</p>
-            <p>Ejecutivo Comercial</p>
+            {creador?.cargo && <p>{creador.cargo}</p>}
             <p>Tel: {creador?.telefono || "—"}</p>
             <p>Email: {creador?.correo || COMPANY.email}</p>
             <p>{COMPANY.nombre}</p>

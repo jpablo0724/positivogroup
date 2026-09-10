@@ -40,10 +40,11 @@ export interface MiembroEquipo {
   nombre: string;
   apellidos: string;
   telefono: string;
+  cargo: string;
 }
 
 /**
- * Nombre, apellidos, teléfono y correo del equipo: para elegir a quién
+ * Nombre, apellidos, teléfono, cargo y correo del equipo: para elegir a quién
  * reasignar y para armar la firma de quien creó la cotización.
  */
 export async function listarEquipo(): Promise<MiembroEquipo[]> {

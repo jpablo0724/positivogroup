@@ -15,6 +15,7 @@ export interface UsuarioPublico {
   nombre: string;
   apellidos: string;
   telefono: string;
+  cargo: string;
   rol: Rol;
   permisos: Permisos;
   admin: boolean;
@@ -76,11 +77,12 @@ export async function registrarse(datos: {
   return usuario;
 }
 
-/** Cambia el nombre, los apellidos y el teléfono propios. El correo no se toca. */
+/** Cambia el nombre, los apellidos, el teléfono y el cargo propios. El correo no se toca. */
 export async function actualizarPerfil(datos: {
   nombre: string;
   apellidos: string;
   telefono: string;
+  cargo: string;
 }): Promise<UsuarioPublico> {
   const { usuario } = await pedir<{ usuario: UsuarioPublico }>(
     "/api/auth/perfil",
