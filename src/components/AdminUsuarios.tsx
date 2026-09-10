@@ -342,7 +342,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
         </div>
       )}
 
-      <div className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="hidden">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-slate-800">
