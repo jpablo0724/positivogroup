@@ -13,6 +13,8 @@ interface ModalEnviarClientifyProps {
   /** Quien creó la cotización, para que la nota quede a su nombre en Clientify. */
   creador?: CreadorFirma | null;
   onCerrar: () => void;
+  /** Se llama tras un envío exitoso, para anotarlo en el historial de la cotización. */
+  onEnviada?: (numeroFactura: string) => void;
 }
 
 type Estado =
@@ -33,6 +35,7 @@ export default function ModalEnviarClientify({
   data,
   creador,
   onCerrar,
+  onEnviada,
 }: ModalEnviarClientifyProps) {
   const [estado, setEstado] = useState<Estado>({ paso: "buscando" });
   const [enlace, setEnlace] = useState("");
@@ -87,6 +90,10 @@ export default function ModalEnviarClientify({
     try {
       await enviarNota(empresaId, data, enlace, creador);
       setEstado({ paso: "enviada" });
+      // Si esto falla, no revierte el envío: la nota ya quedó en Clientify.
+      // Solo se pierde la línea del historial, no algo que valga la pena
+      // devolverle a la persona como error tras un envío que sí funcionó.
+      onEnviada?.(data.numeroFactura);
     } catch (err) {
       // El backend devuelve lo que respondió Clientify, que es lo que hace
       // falta para saber qué corregir.

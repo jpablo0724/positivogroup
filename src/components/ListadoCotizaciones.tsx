@@ -145,6 +145,8 @@ export default function ListadoCotizaciones({
   >[number]): string {
     if (entrada.accion === "creada") return "Creada";
     if (entrada.accion === "editada") return "Editada";
+    if (entrada.accion === "enviada_clientify")
+      return "Cotización enviada a Clientify";
     return entrada.nuevoDueno
       ? `Reasignada a ${nombreOCorreo(entrada.nuevoDueno)}`
       : "Se quitó la reasignación";

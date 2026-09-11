@@ -45,7 +45,7 @@ export interface InvoiceData {
 /** Un movimiento en la vida de la cotización, para el timeline del historial. */
 export interface HistorialEntrada {
   fecha: string;
-  accion: "creada" | "editada" | "reasignada";
+  accion: "creada" | "editada" | "reasignada" | "enviada_clientify";
   /** Correo de quién hizo el movimiento. */
   quien: string;
   /** Solo en "reasignada": correo a quien se le dio el acceso, o "" si se quitó. */

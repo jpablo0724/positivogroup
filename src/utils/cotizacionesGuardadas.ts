@@ -71,3 +71,20 @@ export async function reasignarCotizacion(
   );
   return cotizacion;
 }
+
+/**
+ * Anota en el historial de la cotización que se mandó a Clientify.
+ *
+ * Se llama después de que la nota ya quedó guardada en el CRM
+ * (`/api/clientify/nota`): esto no manda nada allá, solo deja el registro
+ * en el timeline.
+ */
+export async function registrarEnvioClientify(
+  numeroFactura: string,
+): Promise<CotizacionGuardada> {
+  const { cotizacion } = await pedir<{ cotizacion: CotizacionGuardada }>(
+    `/api/cotizaciones/${encodeURIComponent(numeroFactura)}/enviada-clientify`,
+    { metodo: "POST" },
+  );
+  return cotizacion;
+}

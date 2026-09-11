@@ -22,6 +22,7 @@ import {
  *   POST   /api/cotizaciones                      -> guarda o reemplaza una
  *   POST   /api/cotizaciones/enlace                -> enlace público para el cliente
  *   POST   /api/cotizaciones/PG 0001/26/reasignar -> le pasa el acceso a otra persona
+ *   POST   /api/cotizaciones/PG 0001/26/enviada-clientify -> anota en el historial que se mandó
  *   DELETE /api/cotizaciones/PG 0001/26           -> elimina una
  *
  * Quién ve qué se decide aquí y no en el navegador: un administrador ve las de
@@ -41,7 +42,7 @@ import {
 /** Un movimiento en la vida de la cotización, para el timeline del historial. */
 interface HistorialEntrada {
   fecha: string;
-  accion: "creada" | "editada" | "reasignada";
+  accion: "creada" | "editada" | "reasignada" | "enviada_clientify";
   quien: string;
   nuevoDueno?: string;
 }
@@ -181,6 +182,37 @@ export default async (req: Request) => {
             accion: "reasignada",
             quien: quien.email,
             nuevoDueno,
+          },
+        ],
+      };
+
+      await almacen.setJSON(claveCotizacion(numero), registro);
+      return json({ cotizacion: registro });
+    }
+
+    // --- Anota en el historial que se mandó a Clientify ---
+    //
+    // No manda nada al CRM: eso ya lo hizo /api/clientify/nota. Esto solo deja
+    // constancia del envío en el timeline de la cotización.
+    if (req.method === "POST" && resto.endsWith("/enviada-clientify")) {
+      const numero = resto.replace(/\/enviada-clientify$/, "");
+      const guardada = (await almacen.get(claveCotizacion(numero), {
+        type: "json",
+      })) as CotizacionGuardada | null;
+
+      if (!guardada) return json({ error: "cotizacion_no_existe" }, 404);
+      if (!esSuya(guardada, quien)) {
+        return json({ error: "cotizacion_de_otra_persona" }, 403);
+      }
+
+      const registro: CotizacionGuardada = {
+        ...guardada,
+        historial: [
+          ...(guardada.historial ?? []),
+          {
+            fecha: new Date().toISOString(),
+            accion: "enviada_clientify",
+            quien: quien.email,
           },
         ],
       };

@@ -30,6 +30,7 @@ import {
   listarCotizaciones,
   listarEquipo,
   reasignarCotizacion,
+  registrarEnvioClientify,
   type MiembroEquipo,
 } from "./utils/cotizacionesGuardadas";
 import {
@@ -314,6 +315,24 @@ function App() {
     }
   }
 
+  /**
+   * Anota en el historial que se mandó a Clientify. Se llama después de que
+   * la nota ya quedó guardada allá, así que un fallo aquí no debe verse como
+   * un error del envío (que sí funcionó) — solo se registra en la consola.
+   */
+  async function handleEnviadaClientify(numeroFactura: string) {
+    try {
+      const actualizada = await registrarEnvioClientify(numeroFactura);
+      setCotizaciones((previas) =>
+        previas.map((c) =>
+          c.data.numeroFactura === numeroFactura ? actualizada : c,
+        ),
+      );
+    } catch (err) {
+      console.error("No se pudo anotar el envío a Clientify en el historial", err);
+    }
+  }
+
   if (testigo) return <CotizacionPublica testigo={testigo} />;
 
   if (usuario === undefined) {
@@ -564,6 +583,7 @@ function App() {
             setParaClientify(null);
             setParaClientifyCreadoPor(undefined);
           }}
+          onEnviada={handleEnviadaClientify}
         />
       )}
     </div>
