@@ -176,7 +176,7 @@ export default async (req: Request) => {
         error: "falta_token",
         mensaje:
           "La función no puede leer CLIENTIFY_API_TOKEN. Si la variable ya " +
-          "está creada en Netlify, hay que desplegar de nuevo para que entre.",
+          "está creada en el servidor, hay que reiniciarlo para que entre.",
       },
       503,
     );

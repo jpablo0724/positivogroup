@@ -1,5 +1,5 @@
 /**
- * Cliente del backend del sistema (funciones serverless en Netlify).
+ * Cliente del backend del sistema.
  *
  * La sesión viaja en una cookie HttpOnly que pone el servidor: el navegador la
  * envía sola en cada petición y este código no puede leerla ni copiarla, que

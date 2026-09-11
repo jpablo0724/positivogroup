@@ -1,14 +1,9 @@
 import { getStore } from "./store.mts";
 
 /**
- * Almacenamiento compartido del sistema, sobre Netlify Blobs.
- *
- * Es el mismo sitio de Netlify donde ya está publicada la aplicación, así que
- * no hace falta otra cuenta ni otra contraseña de base de datos. Cada
- * cotización y cada producto es un registro JSON dentro de su almacén.
- *
- * "strong" obliga a que una lectura vea siempre la última escritura: sin eso
- * alguien podría guardar una cotización y no verla al recargar.
+ * Almacenamiento compartido del sistema, sobre SQL (MySQL o SQLite, según
+ * decida `store.mts`). Cada cotización y cada producto es un registro JSON
+ * dentro de su almacén.
  */
 
 /** Un producto del catálogo, venga del catálogo inicial o creado a mano. */

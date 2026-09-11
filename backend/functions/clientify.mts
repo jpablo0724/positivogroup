@@ -5,8 +5,8 @@ import { CLIENTIFY_BASE, pedirAClientify } from "../lib/clientifyApi.mts";
  * Proxy hacia la API de Clientify (v2).
  *
  * El token de Clientify da acceso a todo el CRM, así que nunca puede viajar
- * al navegador: vive solo aquí, como variable de entorno del sitio en Netlify
- * (Site configuration → Environment variables → CLIENTIFY_API_TOKEN).
+ * al navegador: vive solo aquí, como variable de entorno del servidor
+ * (CLIENTIFY_API_TOKEN).
  *
  * Exige sesión abierta: sin eso, cualquiera con la dirección podría leerse el
  * CRM completo a través de este proxy.
@@ -205,7 +205,7 @@ export default async (req: Request) => {
         error: "falta_token",
         mensaje:
           "La función no puede leer CLIENTIFY_API_TOKEN. Si la variable ya " +
-          "está creada en Netlify, hay que desplegar de nuevo para que entre.",
+          "está creada en el servidor, hay que reiniciarlo para que entre.",
         diagnostico: {
           variableDefinida: "CLIENTIFY_API_TOKEN" in process.env,
           contexto: process.env.CONTEXT ?? "(desconocido)",

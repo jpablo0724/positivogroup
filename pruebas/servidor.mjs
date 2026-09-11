@@ -1,6 +1,5 @@
 // Levanta el servidor propio de verdad —el mismo archivo que correrá en
-// Hostinger— contra SQLite, y lo ejercita por HTTP. Comprueba que las
-// funciones del backend siguen respondiendo igual fuera de Netlify.
+// Hostinger— contra SQLite, y lo ejercita por HTTP.
 
 import { spawn } from "node:child_process";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
@@ -25,14 +24,13 @@ writeFileSync(join(dist, "Logo-Cotización.png"), "png-de-mentira");
 const PUERTO = 3311;
 const proceso = spawn(
   process.execPath,
-  ["--experimental-sqlite", "--import", "./pruebas/registrar-sqlite.mjs", "servidor/index.mts"],
+  ["--experimental-sqlite", "servidor/index.mts"],
   {
     env: {
       ...process.env,
       PORT: String(PUERTO),
       DIST_DIR: dist,
       APP_ACCESS_CODE: "codigo-de-prueba",
-      PRUEBA_ALMACEN: "sqlite",
     },
     stdio: ["ignore", "pipe", "pipe"],
   },

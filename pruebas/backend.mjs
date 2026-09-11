@@ -1,6 +1,3 @@
-import { register } from "node:module";
-register("./loader.mjs", import.meta.url);
-
 const CODIGO = "clave-de-prueba-local";
 process.env.APP_ACCESS_CODE = CODIGO;
 
@@ -10,7 +7,7 @@ const { default: numero } = await import("../backend/functions/numero.mts");
 const { default: auth } = await import("../backend/functions/auth.mts");
 const { default: publico } = await import("../backend/functions/publico.mts");
 
-const BASE = "https://cotizador-positivo.netlify.app";
+const BASE = "http://localhost";
 
 // Se registra una cuenta y se reutiliza su sesión para todas las pruebas: la
 // API ya no acepta un código suelto, exige sesión abierta.

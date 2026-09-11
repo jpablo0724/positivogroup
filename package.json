@@ -23,13 +23,11 @@
     "prueba:ui": "node pruebas/frontend.mjs"
   },
   "dependencies": {
-    "@netlify/blobs": "^11.0.1",
     "mysql2": "^3.24.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@netlify/functions": "^6.0.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",

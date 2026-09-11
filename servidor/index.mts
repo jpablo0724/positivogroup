@@ -180,7 +180,7 @@ servidor.listen(PUERTO, () => {
     console.log(`Base de datos SQLite en ${process.env.SQLITE_FILE}`);
   } else {
     console.log(
-      "AVISO: sin DB_HOST ni SQLITE_FILE definidos, intentará usar Netlify Blobs",
+      "AVISO: sin DB_HOST ni SQLITE_FILE definidos, usará SQLite en memoria (se pierde todo al reiniciar)",
     );
   }
 });

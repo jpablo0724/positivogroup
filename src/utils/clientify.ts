@@ -1,11 +1,11 @@
 /**
- * Cliente del proxy /api/clientify (función serverless en Netlify).
+ * Cliente del proxy /api/clientify.
  *
- * El navegador nunca ve el token de Clientify: la función serverless lo
- * agrega del lado del servidor. Si el proxy no está disponible (por ejemplo
- * en local sin `netlify dev`, o si falta configurar el token), estas
- * funciones lanzan un error y la interfaz sigue permitiendo escribir los
- * datos del cliente a mano.
+ * El navegador nunca ve el token de Clientify: el backend lo agrega del lado
+ * del servidor. Si el proxy no está disponible (por ejemplo en local sin el
+ * servidor levantado, o si falta configurar el token), estas funciones
+ * lanzan un error y la interfaz sigue permitiendo escribir los datos del
+ * cliente a mano.
  */
 
 export interface EmpresaClientify {

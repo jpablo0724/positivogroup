@@ -102,7 +102,7 @@ export default async (req: Request) => {
             error: "falta_codigo_configurado",
             mensaje:
               "El backend no tiene definida la variable APP_ACCESS_CODE en " +
-              "Netlify, que es el código con el que se autoriza el registro.",
+              "el servidor, que es el código con el que se autoriza el registro.",
           },
           503,
         );

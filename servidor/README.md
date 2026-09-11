@@ -1,19 +1,16 @@
 # Servidor propio (Hostinger)
 
-Alternativa a Netlify: un proceso Node que sirve el frontend y el backend, con
-los datos en MySQL.
+Un proceso Node que sirve el frontend y el backend, con los datos en MySQL.
 
-Las funciones del backend **no cambian**. Se escribieron con `Request` y
-`Response`, que son del lenguaje y no de Netlify, así que `index.mts` solo
-traduce entre el servidor HTTP de Node y esos objetos. Lo único que se
-reemplazó fue el almacenamiento: `almacenSql.mts` expone la misma interfaz que
-Netlify Blobs (`get`, `setJSON` con sus condiciones, `delete`, `list`) sobre
-SQL.
+Las funciones del backend se escribieron con `Request` y `Response`, que son
+del lenguaje y no de ningún proveedor, así que `index.mts` solo traduce entre
+el servidor HTTP de Node y esos objetos. El almacenamiento vive en
+`almacenSql.mts`, sobre SQL (`get`, `setJSON` con sus condiciones, `delete`,
+`list`).
 
 Qué motor se usa lo decide `backend/lib/store.mts`: con `DB_HOST` definido usa
-MySQL; con `SQLITE_FILE`, un archivo SQLite (útil para ensayar el servidor
-completo sin base de datos); sin ninguna de las dos, Netlify Blobs. Los dos
-despliegues pueden convivir durante la migración.
+MySQL; sin eso, un archivo SQLite (`SQLITE_FILE`), útil para ensayar el
+servidor completo sin base de datos, o en memoria si tampoco se define.
 
 ## Variables de entorno
 

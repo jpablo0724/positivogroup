@@ -1,6 +1,3 @@
-import { register } from "node:module";
-register("./loader.mjs", import.meta.url);
-
 const CODIGO_EMPRESA = "codigo-de-la-empresa-para-pruebas";
 process.env.APP_ACCESS_CODE = CODIGO_EMPRESA;
 
@@ -8,7 +5,7 @@ const { default: auth } = await import("../backend/functions/auth.mts");
 const { default: cotizaciones } = await import("../backend/functions/cotizaciones.mts");
 const { default: admin } = await import("../backend/functions/admin.mts");
 
-const BASE = "https://cotizador-positivo.netlify.app";
+const BASE = "http://localhost";
 
 let fallos = 0;
 function comprobar(nombre, condicion, detalle = "") {
@@ -91,7 +88,7 @@ let cookieJuan = "";
 
 console.log("\n== La contraseña nunca se guarda en claro ==");
 {
-  const { getStore } = await import("@netlify/blobs");
+  const { getStore } = await import("../backend/lib/store.mts");
   const usuarios = getStore({ name: "usuarios" });
   const { blobs } = await usuarios.list();
   const registro = await usuarios.get(blobs[0].key, { type: "json" });
@@ -158,7 +155,7 @@ console.log("\n== Cerrar sesión ==");
 
 console.log("\n== El testigo no se guarda en claro ==");
 {
-  const { getStore } = await import("@netlify/blobs");
+  const { getStore } = await import("../backend/lib/store.mts");
   const nueva = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: CUENTA.contrasena } })));
   const testigo = decodeURIComponent(comoCookie(nueva.cookie).split("=").slice(1).join("="));
 
@@ -231,7 +228,7 @@ console.log("\n== Administración ==");
 
 console.log("\n== Cuenta creada antes de que existiera la marca de admin ==");
 {
-  const { getStore } = await import("@netlify/blobs");
+  const { getStore } = await import("../backend/lib/store.mts");
   const usuarios = getStore({ name: "usuarios" });
   const contadores = getStore({ name: "contadores" });
 
@@ -539,7 +536,7 @@ console.log("\n== Respaldo: exportar e importar ==");
   })));
   comprobar("importa lo que falta", nuevo.cuerpo.escritos === 1, `escribió ${nuevo.cuerpo.escritos}`);
 
-  const { getStore } = await import("@netlify/blobs");
+  const { getStore } = await import("../backend/lib/store.mts");
   const traido = await getStore({ name: "productos" }).get("prueba_respaldo", { type: "json" });
   comprobar("y queda guardado", traido?.nombre === "Traído del respaldo");
 

@@ -16,9 +16,10 @@ contraseña no sacaría a nadie del sistema.
 
 ## Backend — `npm run prueba:backend`
 
-Ejercita las funciones serverless (`backend/functions/`) sin red ni cuenta de
-Netlify: `loader.mjs` sustituye `@netlify/blobs` por `blobs-memoria.mjs`, un
-almacén en memoria que respeta la semántica de etag y `onlyIfMatch`.
+Ejercita las funciones del backend (`backend/functions/`) sin red: al no
+definir `DB_HOST` ni `SQLITE_FILE`, `backend/lib/store.mts` usa SQLite en
+memoria — el mismo almacén SQL que va a producción sobre MySQL, sin instalar
+ni configurar nada aparte.
 
 Cubre el control de acceso, el guardado y borrado de cotizaciones y productos,
 y sobre todo la numeración: hay una prueba que lanza 25 peticiones simultáneas
@@ -41,5 +42,5 @@ npm install --no-save playwright
 npm run prueba:ui
 ```
 
-Playwright no está en `package.json` a propósito: en Netlify se instalaría en
-cada despliegue y descargaría un navegador entero sin necesidad.
+Playwright no está en `package.json` a propósito: `npm install` en el
+servidor descargaría un navegador entero sin necesidad.
