@@ -28,12 +28,14 @@ const SECCIONES: { clave: keyof Permisos; etiqueta: string }[] = [
   { clave: "cotizaciones", etiqueta: "Cotizaciones" },
   { clave: "catalogo", etiqueta: "Catálogo" },
   { clave: "usuarios", etiqueta: "Usuarios" },
+  { clave: "informes", etiqueta: "Informes" },
 ];
 
 const PERMISOS_NUEVOS: Permisos = {
   cotizaciones: true,
   catalogo: false,
   usuarios: false,
+  informes: false,
 };
 
 interface Formulario {

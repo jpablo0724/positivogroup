@@ -6,6 +6,7 @@ import auth from "../netlify/functions/auth.mts";
 import admin from "../netlify/functions/admin.mts";
 import clientify from "../netlify/functions/clientify.mts";
 import cotizaciones from "../netlify/functions/cotizaciones.mts";
+import informes from "../netlify/functions/informes.mts";
 import numero from "../netlify/functions/numero.mts";
 import productos from "../netlify/functions/productos.mts";
 import publico from "../netlify/functions/publico.mts";
@@ -33,6 +34,7 @@ const RUTAS: { prefijo: string; manejador: Manejador }[] = [
   { prefijo: "/api/auth/", manejador: auth },
   { prefijo: "/api/admin/", manejador: admin },
   { prefijo: "/api/clientify/", manejador: clientify },
+  { prefijo: "/api/informes/", manejador: informes },
   { prefijo: "/api/publico/", manejador: publico },
   { prefijo: "/api/cotizaciones", manejador: cotizaciones },
   { prefijo: "/api/productos", manejador: productos },

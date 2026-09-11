@@ -370,7 +370,7 @@ console.log("\n== Roles y permisos ==");
   })));
   comprobar("sin cargo -> 400", sinCargo.status === 400, sinCargo.cuerpo.error);
   comprobar("por defecto ve sus cotizaciones y nada más",
-    JSON.stringify(creada.cuerpo.usuario?.permisos) === JSON.stringify({ cotizaciones: true, catalogo: false, usuarios: false }),
+    JSON.stringify(creada.cuerpo.usuario?.permisos) === JSON.stringify({ cotizaciones: true, catalogo: false, usuarios: false, informes: false }),
     JSON.stringify(creada.cuerpo.usuario?.permisos));
 
   const entrarAna = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "ana@positivogroup.com", contrasena: CLAVE_BASICA } })));
@@ -501,7 +501,7 @@ console.log("\n== Roles y permisos ==");
   await admin(req("/api/admin/usuarios/ana@positivogroup.com", { metodo: "PUT", cookie: cookieAdmin, cuerpo: { nombre: "Ana", rol: "admin" } }));
   const anaAdmin = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: "ana@positivogroup.com", contrasena: CLAVE_BASICA } })));
   comprobar("al ascender, lo puede todo",
-    JSON.stringify(anaAdmin.cuerpo.usuario?.permisos) === JSON.stringify({ cotizaciones: true, catalogo: true, usuarios: true }),
+    JSON.stringify(anaAdmin.cuerpo.usuario?.permisos) === JSON.stringify({ cotizaciones: true, catalogo: true, usuarios: true, informes: true }),
     JSON.stringify(anaAdmin.cuerpo.usuario?.permisos));
 
   const todasAhora = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: comoCookie(anaAdmin.cookie) })));

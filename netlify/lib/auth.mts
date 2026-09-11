@@ -47,18 +47,22 @@ export interface Permisos {
   catalogo: boolean;
   /** Ver la sección de usuarios. */
   usuarios: boolean;
+  /** Ver la pestaña de informes. */
+  informes: boolean;
 }
 
 export const PERMISOS_BASICO: Permisos = {
   cotizaciones: true,
   catalogo: false,
   usuarios: false,
+  informes: false,
 };
 
 const PERMISOS_TODOS: Permisos = {
   cotizaciones: true,
   catalogo: true,
   usuarios: true,
+  informes: true,
 };
 
 export interface Usuario {

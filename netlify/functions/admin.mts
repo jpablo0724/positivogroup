@@ -54,6 +54,7 @@ function permisosValidos(valor: unknown): Permisos {
     cotizaciones: dado.cotizaciones === true,
     catalogo: dado.catalogo === true,
     usuarios: dado.usuarios === true,
+    informes: dado.informes === true,
   };
 }
 

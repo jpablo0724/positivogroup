@@ -5,6 +5,7 @@ import InvoicePreview from "./components/InvoicePreview";
 import ListadoCotizaciones from "./components/ListadoCotizaciones";
 import CatalogoProductos from "./components/CatalogoProductos";
 import AdminUsuarios from "./components/AdminUsuarios";
+import Informes from "./components/Informes";
 import ModalContrasena from "./components/ModalContrasena";
 import ModalPerfil from "./components/ModalPerfil";
 import VistaImpresion from "./components/VistaImpresion";
@@ -210,6 +211,7 @@ function App() {
       "listado-cotizaciones": usuario.permisos.cotizaciones,
       "catalogo-productos": usuario.permisos.catalogo,
       "admin-usuarios": usuario.permisos.usuarios,
+      informes: usuario.permisos.informes,
     };
     if (permiso[activeView] === false) setActiveView("crear-factura");
   }, [usuario, activeView]);
@@ -488,6 +490,26 @@ function App() {
             onProductosChange={setProductos}
             onError={manejarError}
           />
+        </main>
+      )}
+
+      {activeView === "informes" && usuario.permisos.informes && (
+        <main className="flex flex-1 flex-col overflow-hidden">
+          <header className="border-b border-slate-200 bg-white px-8 py-5">
+            <h1 className="text-xl font-semibold text-slate-900">Informes</h1>
+            <p className="text-sm text-slate-500">
+              Contactos de Clientify por campaña, tipo, estado y estado de
+              gestión.
+            </p>
+          </header>
+
+          {error && (
+            <p className="border-b border-red-200 bg-red-50 px-8 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
+
+          <Informes onError={manejarError} />
         </main>
       )}
 

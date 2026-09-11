@@ -8,6 +8,7 @@ export interface Permisos {
   cotizaciones: boolean;
   catalogo: boolean;
   usuarios: boolean;
+  informes: boolean;
 }
 
 export interface UsuarioPublico {

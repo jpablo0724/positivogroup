@@ -1,4 +1,5 @@
 import { revisarSesion } from "../lib/acceso.mts";
+import { CLIENTIFY_BASE, pedirAClientify } from "../lib/clientifyApi.mts";
 
 /**
  * Proxy hacia la API de Clientify (v2).
@@ -33,10 +34,6 @@ import { revisarSesion } from "../lib/acceso.mts";
  * descargado, que se guarda en memoria unos minutos para no rebajar el CRM en
  * cada tecla que se escribe.
  */
-
-const CLIENTIFY_BASE = (
-  process.env.CLIENTIFY_API_BASE ?? "https://api-plus.clientify.com/v2"
-).replace(/\/+$/, "");
 
 // Lectura, más la anotación de cotizaciones. Nada más: el proxy no puede
 // usarse para modificar ni borrar lo que ya hay en el CRM.
@@ -150,37 +147,6 @@ function normalizar(valor: unknown): string {
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim();
-}
-
-interface OpcionesClientify {
-  metodo?: "GET" | "POST";
-  cuerpo?: unknown;
-}
-
-async function pedirAClientify(
-  url: URL,
-  token: string,
-  { metodo = "GET", cuerpo }: OpcionesClientify = {},
-): Promise<Response> {
-  const opciones = (esquema: string): RequestInit => ({
-    method: metodo,
-    headers: {
-      Authorization: `${esquema} ${token}`,
-      Accept: "application/json",
-      ...(cuerpo === undefined ? {} : { "content-type": "application/json" }),
-    },
-    body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
-  });
-
-  // La v1 autentica con "Token <clave>"; si la v2 esperara "Bearer", el primer
-  // intento devuelve 401 y se reintenta con el otro esquema.
-  let respuesta = await fetch(url, opciones("Token"));
-
-  if (respuesta.status === 401 || respuesta.status === 403) {
-    respuesta = await fetch(url, opciones("Bearer"));
-  }
-
-  return respuesta;
 }
 
 /** Descarga el listado completo de un recurso, paginando y cacheando. */
