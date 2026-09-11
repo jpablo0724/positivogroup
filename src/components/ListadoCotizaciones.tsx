@@ -99,6 +99,10 @@ export default function ListadoCotizaciones({
   onReasignar,
 }: ListadoCotizacionesProps) {
   const [equipo, setEquipo] = useState<MiembroEquipo[]>([]);
+  const [porReasignar, setPorReasignar] = useState<{
+    numeroFactura: string;
+    nuevoDueno: string;
+  } | null>(null);
 
   // Solo hace falta para el selector de reasignar: si falla, el listado
   // sigue viéndose igual, nada más sin esa columna con nombres.
@@ -192,7 +196,10 @@ export default function ListadoCotizaciones({
                         onChange={(e) => {
                           const nuevoValor = e.target.value;
                           if (nuevoValor !== (c.reasignadoA ?? "")) {
-                            onReasignar(c.data.numeroFactura, nuevoValor);
+                            setPorReasignar({
+                              numeroFactura: c.data.numeroFactura,
+                              nuevoDueno: nuevoValor,
+                            });
                           }
                         }}
                       >
@@ -239,6 +246,50 @@ export default function ListadoCotizaciones({
           </tbody>
         </table>
       </div>
+
+      {porReasignar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40"
+            onClick={() => setPorReasignar(null)}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+          >
+            <h2 className="text-base font-semibold text-slate-900">
+              Reasignar cotización
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              ¿Estás seguro de reasignar esta cotización?
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPorReasignar(null)}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onReasignar(
+                    porReasignar.numeroFactura,
+                    porReasignar.nuevoDueno,
+                  );
+                  setPorReasignar(null);
+                }}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+              >
+                Sí
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
