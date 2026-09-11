@@ -15,6 +15,7 @@ export interface UsuarioPublico {
   nombre: string;
   apellidos: string;
   telefono: string;
+  cargo: string;
   rol: Rol;
   permisos: Permisos;
   admin: boolean;

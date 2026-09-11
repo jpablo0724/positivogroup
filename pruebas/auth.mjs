@@ -103,7 +103,7 @@ console.log("\n== La contraseña nunca se guarda en claro ==");
     `clave de ${registro.clave?.length} caracteres`);
 
   // Dos cuentas con la MISMA contraseña deben tener hashes distintos (sal por usuario).
-  await admin(req("/api/admin/usuarios", { cookie: cookieJuan, cuerpo: { nombre: "Otra", apellidos: "Persona", email: "otra@positivogroup.com", contrasena: CUENTA.contrasena, rol: "basico" } }));
+  await admin(req("/api/admin/usuarios", { cookie: cookieJuan, cuerpo: { nombre: "Otra", apellidos: "Persona", telefono: "3000000000", cargo: "Analista", email: "otra@positivogroup.com", contrasena: CUENTA.contrasena, rol: "basico" } }));
   const todos = await usuarios.list();
   const registros = await Promise.all(todos.blobs.map((b) => usuarios.get(b.key, { type: "json" })));
   const claves = new Set(registros.map((r) => r.clave));
@@ -349,11 +349,26 @@ console.log("\n== Roles y permisos ==");
   const CLAVE_BASICA = "claveDelBasico9";
   const creada = await leer(await admin(req("/api/admin/usuarios", {
     cookie: cookieAdmin,
-    cuerpo: { nombre: "Ana", apellidos: "Ríos", email: "ana@positivogroup.com", contrasena: CLAVE_BASICA, rol: "basico" },
+    cuerpo: { nombre: "Ana", apellidos: "Ríos", telefono: "3001112233", cargo: "Ejecutiva Comercial", email: "ana@positivogroup.com", contrasena: CLAVE_BASICA, rol: "basico" },
   })));
   comprobar("el admin crea una cuenta -> 201", creada.status === 201, `status ${creada.status}`);
   comprobar("nace como básica", creada.cuerpo.usuario?.rol === "basico", creada.cuerpo.usuario?.rol);
   comprobar("guarda los apellidos", creada.cuerpo.usuario?.apellidos === "Ríos", creada.cuerpo.usuario?.apellidos);
+  comprobar("guarda el teléfono", creada.cuerpo.usuario?.telefono === "3001112233", creada.cuerpo.usuario?.telefono);
+  comprobar("guarda el cargo", creada.cuerpo.usuario?.cargo === "Ejecutiva Comercial", creada.cuerpo.usuario?.cargo);
+
+  // Sin teléfono o sin cargo, no deja crear.
+  const sinTelefono = await leer(await admin(req("/api/admin/usuarios", {
+    cookie: cookieAdmin,
+    cuerpo: { nombre: "Sin Telefono", cargo: "Analista", email: "sintelefono@positivogroup.com", contrasena: CLAVE_BASICA, rol: "basico" },
+  })));
+  comprobar("sin teléfono -> 400", sinTelefono.status === 400, sinTelefono.cuerpo.error);
+
+  const sinCargo = await leer(await admin(req("/api/admin/usuarios", {
+    cookie: cookieAdmin,
+    cuerpo: { nombre: "Sin Cargo", telefono: "3000000000", email: "sincargo@positivogroup.com", contrasena: CLAVE_BASICA, rol: "basico" },
+  })));
+  comprobar("sin cargo -> 400", sinCargo.status === 400, sinCargo.cuerpo.error);
   comprobar("por defecto ve sus cotizaciones y nada más",
     JSON.stringify(creada.cuerpo.usuario?.permisos) === JSON.stringify({ cotizaciones: true, catalogo: false, usuarios: false }),
     JSON.stringify(creada.cuerpo.usuario?.permisos));

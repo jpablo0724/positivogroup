@@ -58,6 +58,7 @@ function cuenta(datos) {
     nombre: datos.nombre ?? "",
     apellidos: datos.apellidos ?? "",
     telefono: datos.telefono ?? "",
+    cargo: datos.cargo ?? "",
     clave: datos.clave,
     rol,
     admin: rol === "admin",
@@ -1028,7 +1029,18 @@ console.log("\n== Crear usuarios, roles y permisos ==");
   await ventana.locator("input").nth(0).fill("Sofía");
   await ventana.locator("input").nth(1).fill("Restrepo");
   await ventana.locator('input[type="email"]').fill("sofia@positivogroup.com");
+
+  // Teléfono y cargo son obligatorios al crear: sin ellos no deja seguir.
+  comprobar("sin teléfono ni cargo, no deja crear la cuenta",
+    await ventana.locator('button:has-text("Crear cuenta")').isDisabled());
+
   await ventana.locator('input[type="tel"]').fill("3001234567");
+  comprobar("con solo el teléfono, sigue sin dejar (falta el cargo)",
+    await ventana.locator('button:has-text("Crear cuenta")').isDisabled());
+
+  await ventana.locator('input[placeholder="Ejecutivo Comercial"]').fill("Ejecutiva Comercial");
+  comprobar("con los dos, ya deja crear la cuenta",
+    !(await ventana.locator('button:has-text("Crear cuenta")').isDisabled()));
 
   // Nace como básica y solo con el listado de cotizaciones.
   comprobar("propone el rol básico",
@@ -1044,6 +1056,7 @@ console.log("\n== Crear usuarios, roles y permisos ==");
     creada?.permisos.catalogo === false && creada?.permisos.usuarios === false,
     JSON.stringify(creada?.permisos));
   comprobar("guarda el teléfono", creada?.telefono === "3001234567", creada?.telefono);
+  comprobar("guarda el cargo", creada?.cargo === "Ejecutiva Comercial", creada?.cargo);
   comprobar("muestra la contraseña una sola vez",
     (await page.locator("text=no se vuelve a mostrar").count()) > 0);
   await page.screenshot({ path: `${OUT}/F1-crear-usuario.png`, fullPage: true });
@@ -1061,11 +1074,24 @@ console.log("\n== Crear usuarios, roles y permisos ==");
   comprobar("y no borra el teléfono al cambiar un permiso",
     usuarios.get("sofia@positivogroup.com")?.telefono === "3001234567",
     usuarios.get("sofia@positivogroup.com")?.telefono);
+  comprobar("ni el cargo",
+    usuarios.get("sofia@positivogroup.com")?.cargo === "Ejecutiva Comercial",
+    usuarios.get("sofia@positivogroup.com")?.cargo);
 
   // Un administrador no tiene nada que ajustar: sus casillas están bloqueadas.
   const filaAdmin = page.locator("tbody tr").filter({ hasText: "juan@positivogroup.com" });
   comprobar("las casillas del admin están bloqueadas",
     await filaAdmin.locator('input[type="checkbox"]').first().isDisabled());
+
+  // El admin es una cuenta de antes de este campo: no tiene cargo todavía.
+  // Editarla no debe quedar bloqueada por eso, solo crear una cuenta nueva.
+  await filaAdmin.locator('button:has-text("Editar")').click();
+  await page.waitForSelector("text=Editar cuenta");
+  const ventanaEditar = page.locator('[role="dialog"]');
+  comprobar("editar una cuenta sin cargo no bloquea Guardar",
+    !(await ventanaEditar.locator('button:has-text("Guardar")').isDisabled()));
+  await ventanaEditar.locator('button:has-text("Cancelar")').click();
+  await page.waitForTimeout(150);
 }
 
 console.log("\n== Reasignar cotizaciones ==");

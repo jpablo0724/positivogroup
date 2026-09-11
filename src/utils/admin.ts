@@ -19,6 +19,7 @@ export interface DatosCuenta {
   nombre: string;
   apellidos: string;
   telefono: string;
+  cargo: string;
   email: string;
   rol: Rol;
   permisos: Permisos;

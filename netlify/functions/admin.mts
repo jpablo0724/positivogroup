@@ -203,12 +203,16 @@ export default async (req: Request) => {
       const correo = normalizarEmail(texto((cuerpo as never)["email"]));
       const nombre = texto((cuerpo as never)["nombre"]).trim();
       const contrasena = texto((cuerpo as never)["contrasena"]);
+      const telefono = texto((cuerpo as never)["telefono"]).trim();
+      const cargo = texto((cuerpo as never)["cargo"]).trim();
 
       if (nombre === "") return json({ error: "falta_nombre" }, 400);
       if (!EMAIL_VALIDO.test(correo)) return json({ error: "email_invalido" }, 400);
       if (contrasena.length < MINIMO_CONTRASENA) {
         return json({ error: "contrasena_corta", minimo: MINIMO_CONTRASENA }, 400);
       }
+      if (telefono === "") return json({ error: "falta_telefono" }, 400);
+      if (cargo === "") return json({ error: "falta_cargo" }, 400);
 
       const rol = rolValido((cuerpo as never)["rol"]);
       const { clave, sal } = await derivarContrasena(contrasena);
@@ -217,7 +221,8 @@ export default async (req: Request) => {
         email: correo,
         nombre,
         apellidos: texto((cuerpo as never)["apellidos"]).trim(),
-        telefono: texto((cuerpo as never)["telefono"]).trim(),
+        telefono,
+        cargo,
         rol,
         // A un administrador no se le guardan permisos: los tiene todos por su
         // rol, y guardarlos solo crearía dos fuentes de verdad.
@@ -252,11 +257,16 @@ export default async (req: Request) => {
       }
 
       const nombre = texto((cuerpo as never)["nombre"]).trim();
+      // Obligatorios solo al crear una cuenta; al editar se aceptan tal cual
+      // vengan, para no dejar bloqueada una cuenta de antes de este campo, ni
+      // el cambio rápido de permisos desde la casilla de la tabla (que manda
+      // estos mismos datos sin abrir el formulario completo).
       const actualizado: Usuario = {
         ...cuenta,
         nombre: nombre === "" ? cuenta.nombre : nombre,
         apellidos: texto((cuerpo as never)["apellidos"]).trim(),
         telefono: texto((cuerpo as never)["telefono"]).trim(),
+        cargo: texto((cuerpo as never)["cargo"]).trim(),
         rol,
         admin: rol === "admin",
         permisos:

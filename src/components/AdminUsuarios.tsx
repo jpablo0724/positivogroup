@@ -42,6 +42,7 @@ interface Formulario {
   nombre: string;
   apellidos: string;
   telefono: string;
+  cargo: string;
   email: string;
   rol: Rol;
   permisos: Permisos;
@@ -52,6 +53,7 @@ const VACIO: Formulario = {
   nombre: "",
   apellidos: "",
   telefono: "",
+  cargo: "",
   email: "",
   rol: "basico",
   permisos: { ...PERMISOS_NUEVOS },
@@ -108,6 +110,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
       nombre: usuario.nombre,
       apellidos: usuario.apellidos,
       telefono: usuario.telefono,
+      cargo: usuario.cargo,
       email: usuario.email,
       rol: usuario.rol,
       permisos: { ...usuario.permisos },
@@ -117,13 +120,17 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
 
   async function guardarFormulario() {
     if (!formulario) return;
-    const { editando, nombre, apellidos, telefono, email, rol, permisos } = formulario;
+    const { editando, nombre, apellidos, telefono, cargo, email, rol, permisos } = formulario;
     if (nombre.trim() === "" || email.trim() === "") return;
+    // El teléfono y el cargo son obligatorios al crear una cuenta; al editar
+    // se mandan igual, pero no bloquean guardar si una cuenta de antes de
+    // este campo todavía no los tiene.
+    if (!editando && (telefono.trim() === "" || cargo.trim() === "")) return;
 
     setOcupado(true);
     try {
       if (editando) {
-        await actualizarUsuario(editando, { nombre, apellidos, telefono, rol, permisos });
+        await actualizarUsuario(editando, { nombre, apellidos, telefono, cargo, rol, permisos });
       } else {
         // La contraseña la genera el sistema y se muestra una sola vez, igual
         // que al restablecerla: así no viaja escrita en ningún sitio.
@@ -132,6 +139,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
           nombre,
           apellidos,
           telefono,
+          cargo,
           email,
           rol,
           permisos,
@@ -160,6 +168,7 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
         nombre: usuario.nombre,
         apellidos: usuario.apellidos,
         telefono: usuario.telefono,
+        cargo: usuario.cargo,
         rol: usuario.rol,
         permisos: { ...usuario.permisos, [seccion]: valor },
       });
@@ -561,17 +570,34 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
             placeholder="nombre@positivogroup.com"
           />
 
-          <label className="mt-3 mb-1 block text-xs font-medium text-slate-600">
-            Teléfono (opcional)
-          </label>
-          <input
-            type="tel"
-            className={selectTriggerClass}
-            value={formulario.telefono}
-            onChange={(e) =>
-              setFormulario({ ...formulario, telefono: e.target.value })
-            }
-          />
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Teléfono
+              </label>
+              <input
+                type="tel"
+                className={selectTriggerClass}
+                value={formulario.telefono}
+                onChange={(e) =>
+                  setFormulario({ ...formulario, telefono: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                Cargo
+              </label>
+              <input
+                className={selectTriggerClass}
+                value={formulario.cargo}
+                onChange={(e) =>
+                  setFormulario({ ...formulario, cargo: e.target.value })
+                }
+                placeholder="Ejecutivo Comercial"
+              />
+            </div>
+          </div>
 
           <label className="mt-3 mb-1 block text-xs font-medium text-slate-600">
             Rol
@@ -659,7 +685,12 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
               disabled={
                 ocupado ||
                 formulario.nombre.trim() === "" ||
-                formulario.email.trim() === ""
+                formulario.email.trim() === "" ||
+                // Teléfono y cargo son obligatorios al crear una cuenta; al
+                // editar una que sea de antes de este campo, no bloquean.
+                (!formulario.editando &&
+                  (formulario.telefono.trim() === "" ||
+                    formulario.cargo.trim() === ""))
               }
               className="rounded-md boton-accion px-4 py-2 text-sm font-semibold text-white shadow-sm"
             >
