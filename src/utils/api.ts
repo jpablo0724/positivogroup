@@ -29,9 +29,17 @@ interface OpcionesPeticion {
   cuerpo?: unknown;
 }
 
-export async function pedir<T>(
+function esperar(ms: number): Promise<void> {
+  return new Promise((resolver) => setTimeout(resolver, ms));
+}
+
+/**
+ * Un solo intento de pedir(). Separado de pedir() para poder reintentarlo:
+ * ver ahí por qué.
+ */
+async function intentar<T>(
   ruta: string,
-  { metodo = "GET", cuerpo }: OpcionesPeticion = {},
+  { metodo = "GET", cuerpo }: OpcionesPeticion,
 ): Promise<T> {
   let respuesta: Response;
 
@@ -55,7 +63,7 @@ export async function pedir<T>(
   try {
     datos = JSON.parse(texto);
   } catch {
-    // Sin las funciones serverless, /api/... cae en el index.html de la SPA.
+    // Sin el servidor propio activo, /api/... cae en el index.html de la SPA.
     throw new BackendNoDisponible("El backend no está activo todavía");
   }
 
@@ -73,6 +81,32 @@ export async function pedir<T>(
   }
 
   return datos as T;
+}
+
+/**
+ * Un reinicio del servidor (por ejemplo, tras un despliegue) tarda un
+ * instante en volver a responder, y en ese instante puede contestar con el
+ * index.html de la aplicación en vez de con datos. Antes de darle a la
+ * persona el susto de "el backend no está activo", se reintenta un par de
+ * veces con una pausa corta: si el servidor solo estaba reiniciando, para
+ * cuando termine el segundo intento ya volvió.
+ */
+export async function pedir<T>(
+  ruta: string,
+  opciones: OpcionesPeticion = {},
+): Promise<T> {
+  const REINTENTOS = [300, 900];
+
+  for (const espera of REINTENTOS) {
+    try {
+      return await intentar<T>(ruta, opciones);
+    } catch (err) {
+      if (!(err instanceof BackendNoDisponible)) throw err;
+      await esperar(espera);
+    }
+  }
+
+  return intentar<T>(ruta, opciones);
 }
 
 /** Error del backend que conserva el código, para traducirlo en pantalla. */
