@@ -63,6 +63,7 @@ export default async (req: Request) => {
           nombre: [autor.nombre, autor.apellidos].filter(Boolean).join(" "),
           telefono: autor.telefono ?? "",
           correo: autor.email,
+          cargo: autor.cargo ?? "",
         }
       : null;
 

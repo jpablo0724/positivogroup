@@ -97,7 +97,7 @@ export default async (req: Request) => {
   try {
     // --- Con quién se puede compartir una cotización ---
     //
-    // Nombre, apellidos, teléfono y correo: lo que hace falta para elegir a
+    // Nombre, apellidos, teléfono, cargo y correo: lo que hace falta para elegir a
     // quién reasignar y para armar la firma de quien creó la cotización en el
     // documento, no la lista completa de cuentas que ve Usuarios.
     if (req.method === "GET" && resto === "equipo") {
@@ -108,6 +108,7 @@ export default async (req: Request) => {
           nombre: u.nombre,
           apellidos: u.apellidos ?? "",
           telefono: u.telefono ?? "",
+          cargo: u.cargo ?? "",
         })),
       });
     }

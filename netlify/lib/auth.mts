@@ -66,6 +66,7 @@ export interface Usuario {
   nombre: string;
   apellidos?: string;
   telefono?: string;
+  /** Cargo dentro de la empresa, para la firma de la cotización. */
   cargo?: string;
   rol?: Rol;
   /** Ajustes por cuenta sobre los permisos por defecto de su rol. */

@@ -971,15 +971,11 @@ console.log("\n== Administración de usuarios ==");
   comprobar("marca quién es admin", /admin/i.test(tabla), tabla.split("\n")[1]);
   comprobar("muestra a la otra persona", tabla.includes("Ana Gómez"));
 
-  // El respaldo se descarga desde dentro del sistema, no escribiendo la
-  // dirección: así la cookie de sesión siempre viaja.
-  const descarga = page.waitForEvent("download");
-  await page.click('button:has-text("Descargar respaldo")');
-  const archivo = await descarga;
-  comprobar("el botón descarga el respaldo", true, archivo.suggestedFilename());
-  comprobar("el archivo lleva fecha en el nombre",
-    /^positivogroup-respaldo-\d{4}-\d{2}-\d{2}\.json$/.test(archivo.suggestedFilename()),
-    archivo.suggestedFilename());
+  // El letrero de respaldo se ocultó de la interfaz a propósito (queda el
+  // código, por si se necesita volver a mostrarlo); la función en sí ya se
+  // prueba directamente contra el backend en pruebas/auth.mjs.
+  comprobar("el letrero de respaldo está oculto",
+    (await page.locator('button:has-text("Descargar respaldo")').isVisible()) === false);
 
   // Restablecerle la contraseña a Ana.
   const filaAna = page.locator("tbody tr").filter({ hasText: "Ana Gómez" });
