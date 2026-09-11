@@ -54,14 +54,20 @@ export async function listarEquipo(): Promise<MiembroEquipo[]> {
   return equipo;
 }
 
-/** Cambia el dueño de una cotización. No toca nada más de su contenido. */
+/**
+ * Cambia el dueño de una cotización. No toca nada más de su contenido.
+ *
+ * El servidor devuelve la cotización ya actualizada, así que no hace falta
+ * pedir el listado completo de nuevo: eso ahorra un viaje redondo y hace que
+ * el cambio se vea al instante.
+ */
 export async function reasignarCotizacion(
   numeroFactura: string,
   nuevoDueno: string,
-): Promise<CotizacionGuardada[]> {
-  await pedir(
+): Promise<CotizacionGuardada> {
+  const { cotizacion } = await pedir<{ cotizacion: CotizacionGuardada }>(
     `/api/cotizaciones/${encodeURIComponent(numeroFactura)}/reasignar`,
     { metodo: "POST", cuerpo: { nuevoDueno } },
   );
-  return listarCotizaciones();
+  return cotizacion;
 }

@@ -293,7 +293,22 @@ function App() {
 
   async function handleReasignar(numeroFactura: string, nuevoDueno: string) {
     try {
-      setCotizaciones(await reasignarCotizacion(numeroFactura, nuevoDueno));
+      const actualizada = await reasignarCotizacion(numeroFactura, nuevoDueno);
+      setCotizaciones((previas) => {
+        // El backend ya no manda a esta cuenta el listado de cotizaciones
+        // que dejó de ver, así que si no es administradora y la reasignó a
+        // otra persona, aquí se quita de su lista sin esperar a un refresco.
+        const sigueViendola =
+          usuario?.admin ||
+          actualizada.reasignadoA === usuario?.email ||
+          (!actualizada.reasignadoA && actualizada.creadoPor === usuario?.email);
+        if (!sigueViendola) {
+          return previas.filter((c) => c.data.numeroFactura !== numeroFactura);
+        }
+        return previas.map((c) =>
+          c.data.numeroFactura === numeroFactura ? actualizada : c,
+        );
+      });
     } catch (err) {
       manejarError(err);
     }
