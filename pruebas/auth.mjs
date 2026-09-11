@@ -4,9 +4,9 @@ register("./loader.mjs", import.meta.url);
 const CODIGO_EMPRESA = "codigo-de-la-empresa-para-pruebas";
 process.env.APP_ACCESS_CODE = CODIGO_EMPRESA;
 
-const { default: auth } = await import("../netlify/functions/auth.mts");
-const { default: cotizaciones } = await import("../netlify/functions/cotizaciones.mts");
-const { default: admin } = await import("../netlify/functions/admin.mts");
+const { default: auth } = await import("../backend/functions/auth.mts");
+const { default: cotizaciones } = await import("../backend/functions/cotizaciones.mts");
+const { default: admin } = await import("../backend/functions/admin.mts");
 
 const BASE = "https://cotizador-positivo.netlify.app";
 
@@ -341,7 +341,7 @@ console.log("\n== Cambiar la propia contraseña ==");
 
 console.log("\n== Roles y permisos ==");
 {
-  const { default: productos } = await import("../netlify/functions/productos.mts");
+  const { default: productos } = await import("../backend/functions/productos.mts");
 
   const entrarJuan = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: CUENTA.email, contrasena: "miClaveNuevaSegura7" } })));
   const cookieAdmin = comoCookie(entrarJuan.cookie);

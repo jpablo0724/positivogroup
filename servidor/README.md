@@ -10,7 +10,7 @@ reemplazó fue el almacenamiento: `almacenSql.mts` expone la misma interfaz que
 Netlify Blobs (`get`, `setJSON` con sus condiciones, `delete`, `list`) sobre
 SQL.
 
-Qué motor se usa lo decide `netlify/lib/store.mts`: con `DB_HOST` definido usa
+Qué motor se usa lo decide `backend/lib/store.mts`: con `DB_HOST` definido usa
 MySQL; con `SQLITE_FILE`, un archivo SQLite (útil para ensayar el servidor
 completo sin base de datos); sin ninguna de las dos, Netlify Blobs. Los dos
 despliegues pueden convivir durante la migración.

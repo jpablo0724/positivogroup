@@ -2,14 +2,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 
-import auth from "../netlify/functions/auth.mts";
-import admin from "../netlify/functions/admin.mts";
-import clientify from "../netlify/functions/clientify.mts";
-import cotizaciones from "../netlify/functions/cotizaciones.mts";
-import informes from "../netlify/functions/informes.mts";
-import numero from "../netlify/functions/numero.mts";
-import productos from "../netlify/functions/productos.mts";
-import publico from "../netlify/functions/publico.mts";
+import auth from "../backend/functions/auth.mts";
+import admin from "../backend/functions/admin.mts";
+import clientify from "../backend/functions/clientify.mts";
+import cotizaciones from "../backend/functions/cotizaciones.mts";
+import informes from "../backend/functions/informes.mts";
+import numero from "../backend/functions/numero.mts";
+import productos from "../backend/functions/productos.mts";
+import publico from "../backend/functions/publico.mts";
 
 /**
  * Servidor propio, para alojar el sistema fuera de Netlify.
@@ -29,7 +29,7 @@ import publico from "../netlify/functions/publico.mts";
 
 type Manejador = (req: Request) => Promise<Response>;
 
-// Mismo mapa que los redirects de netlify.toml, en el mismo orden.
+// El orden importa: el primer prefijo que calce gana.
 const RUTAS: { prefijo: string; manejador: Manejador }[] = [
   { prefijo: "/api/auth/", manejador: auth },
   { prefijo: "/api/admin/", manejador: admin },

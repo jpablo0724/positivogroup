@@ -16,7 +16,7 @@ contraseña no sacaría a nadie del sistema.
 
 ## Backend — `npm run prueba:backend`
 
-Ejercita las funciones serverless (`netlify/functions/`) sin red ni cuenta de
+Ejercita las funciones serverless (`backend/functions/`) sin red ni cuenta de
 Netlify: `loader.mjs` sustituye `@netlify/blobs` por `blobs-memoria.mjs`, un
 almacén en memoria que respeta la semántica de etag y `onlyIfMatch`.
 

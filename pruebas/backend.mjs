@@ -4,11 +4,11 @@ register("./loader.mjs", import.meta.url);
 const CODIGO = "clave-de-prueba-local";
 process.env.APP_ACCESS_CODE = CODIGO;
 
-const { default: cotizaciones } = await import("../netlify/functions/cotizaciones.mts");
-const { default: productos } = await import("../netlify/functions/productos.mts");
-const { default: numero } = await import("../netlify/functions/numero.mts");
-const { default: auth } = await import("../netlify/functions/auth.mts");
-const { default: publico } = await import("../netlify/functions/publico.mts");
+const { default: cotizaciones } = await import("../backend/functions/cotizaciones.mts");
+const { default: productos } = await import("../backend/functions/productos.mts");
+const { default: numero } = await import("../backend/functions/numero.mts");
+const { default: auth } = await import("../backend/functions/auth.mts");
+const { default: publico } = await import("../backend/functions/publico.mts");
 
 const BASE = "https://cotizador-positivo.netlify.app";
 

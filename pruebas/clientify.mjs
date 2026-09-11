@@ -1,7 +1,7 @@
 import {
   contactosDeEmpresa,
   contactosPorNombreDeEmpresa,
-} from "../netlify/functions/clientify.mts";
+} from "../backend/functions/clientify.mts";
 
 /**
  * El bug real: Clientify no anida los contactos dentro de la empresa (se
