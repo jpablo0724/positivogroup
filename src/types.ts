@@ -42,12 +42,24 @@ export interface InvoiceData {
   items: InvoiceItem[];
 }
 
+/** Un movimiento en la vida de la cotización, para el timeline del historial. */
+export interface HistorialEntrada {
+  fecha: string;
+  accion: "creada" | "editada" | "reasignada";
+  /** Correo de quién hizo el movimiento. */
+  quien: string;
+  /** Solo en "reasignada": correo a quien se le dio el acceso, o "" si se quitó. */
+  nuevoDueno?: string;
+}
+
 export interface CotizacionGuardada {
   guardadoEn: string;
   /** Correo de quién la creó. Las guardadas antes de que existiera este dato no lo traen. Nunca cambia al reasignar. */
   creadoPor?: string;
   /** Correo de quién más tiene acceso, además de quien la creó. */
   reasignadoA?: string;
+  /** Creación, ediciones y reasignaciones, en orden. Las guardadas antes de que existiera este dato no lo traen. */
+  historial?: HistorialEntrada[];
   data: InvoiceData;
 }
 

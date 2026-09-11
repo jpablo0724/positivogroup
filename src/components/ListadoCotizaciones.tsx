@@ -51,7 +51,25 @@ const ICONOS = {
       <path d="M10 11v6M14 11v6" />
     </svg>
   ),
+  historial: (
+    <svg viewBox="0 0 24 24" {...trazo} className="h-4 w-4">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </svg>
+  ),
 };
+
+function formatFechaHora(iso: string): string {
+  const fecha = new Date(iso);
+  if (Number.isNaN(fecha.getTime())) return "";
+  return new Intl.DateTimeFormat("es-CO", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(fecha);
+}
 
 const TONOS = {
   neutro:
@@ -103,6 +121,8 @@ export default function ListadoCotizaciones({
     numeroFactura: string;
     nuevoDueno: string;
   } | null>(null);
+  const [historialAbierto, setHistorialAbierto] =
+    useState<CotizacionGuardada | null>(null);
 
   // Solo hace falta para el selector de reasignar: si falla, el listado
   // sigue viéndose igual, nada más sin esa columna con nombres.
@@ -115,6 +135,20 @@ export default function ListadoCotizaciones({
   const nombresPorCorreo = new Map(
     equipo.map((m) => [m.email, nombreCompleto(m)]),
   );
+
+  function nombreOCorreo(correo: string): string {
+    return nombresPorCorreo.get(correo) || correo || "—";
+  }
+
+  function describirEntrada(entrada: NonNullable<
+    CotizacionGuardada["historial"]
+  >[number]): string {
+    if (entrada.accion === "creada") return "Creada";
+    if (entrada.accion === "editada") return "Editada";
+    return entrada.nuevoDueno
+      ? `Reasignada a ${nombreOCorreo(entrada.nuevoDueno)}`
+      : "Se quitó la reasignación";
+  }
 
   if (cotizaciones.length === 0) {
     return (
@@ -233,6 +267,11 @@ export default function ListadoCotizaciones({
                         tono="verde"
                       />
                       <BotonIcono
+                        titulo="Historial de cambios"
+                        onClick={() => setHistorialAbierto(c)}
+                        icono={ICONOS.historial}
+                      />
+                      <BotonIcono
                         titulo="Eliminar"
                         onClick={() => onEliminar(c.data.numeroFactura)}
                         icono={ICONOS.eliminar}
@@ -285,6 +324,59 @@ export default function ListadoCotizaciones({
                 className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
               >
                 Sí
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historialAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40"
+            onClick={() => setHistorialAbierto(null)}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative flex max-h-[80vh] w-full max-w-md flex-col rounded-xl bg-white p-6 shadow-xl"
+          >
+            <h2 className="text-base font-semibold text-slate-900">
+              Historial de {historialAbierto.data.numeroFactura}
+            </h2>
+            <div className="mt-4 flex-1 overflow-y-auto pr-1">
+              {historialAbierto.historial &&
+              historialAbierto.historial.length > 0 ? (
+                <ol className="relative border-l border-slate-200 pl-4">
+                  {[...historialAbierto.historial]
+                    .reverse()
+                    .map((entrada, i) => (
+                      <li key={i} className="mb-5 last:mb-0">
+                        <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                        <p className="text-sm font-medium text-slate-900">
+                          {describirEntrada(entrada)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {nombreOCorreo(entrada.quien)} ·{" "}
+                          {formatFechaHora(entrada.fecha)}
+                        </p>
+                      </li>
+                    ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Esta cotización no tiene historial registrado.
+                </p>
+              )}
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setHistorialAbierto(null)}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+              >
+                Cerrar
               </button>
             </div>
           </div>

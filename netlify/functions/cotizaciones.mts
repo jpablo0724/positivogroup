@@ -38,12 +38,22 @@ import {
  * ese momento, para pasárselo a otra persona del equipo.
  */
 
+/** Un movimiento en la vida de la cotización, para el timeline del historial. */
+interface HistorialEntrada {
+  fecha: string;
+  accion: "creada" | "editada" | "reasignada";
+  quien: string;
+  nuevoDueno?: string;
+}
+
 interface CotizacionGuardada {
   guardadoEn: string;
   /** Quién la creó. Es un dato fijo para mostrar; no decide quién la ve. */
   creadoPor?: string;
   /** A quién se le pasó el acceso. Mientras esté puesto, manda sobre creadoPor. */
   reasignadoA?: string;
+  /** Creación, ediciones y reasignaciones, en orden. */
+  historial?: HistorialEntrada[];
   data: { numeroFactura?: unknown };
 }
 
@@ -140,7 +150,19 @@ export default async (req: Request) => {
       // Vacío quita la reasignación: vuelve a verla solo quien la creó (y un
       // administrador, que siempre puede).
       if (texto === "") {
-        const { reasignadoA: _quitado, ...registro } = guardada;
+        const { reasignadoA: _quitado, ...resto } = guardada;
+        const registro: CotizacionGuardada = {
+          ...resto,
+          historial: [
+            ...(guardada.historial ?? []),
+            {
+              fecha: new Date().toISOString(),
+              accion: "reasignada",
+              quien: quien.email,
+              nuevoDueno: "",
+            },
+          ],
+        };
         await almacen.setJSON(claveCotizacion(numero), registro);
         return json({ cotizacion: registro });
       }
@@ -152,6 +174,15 @@ export default async (req: Request) => {
       const registro: CotizacionGuardada = {
         ...guardada,
         reasignadoA: nuevoDueno,
+        historial: [
+          ...(guardada.historial ?? []),
+          {
+            fecha: new Date().toISOString(),
+            accion: "reasignada",
+            quien: quien.email,
+            nuevoDueno,
+          },
+        ],
       };
 
       await almacen.setJSON(claveCotizacion(numero), registro);
@@ -222,6 +253,14 @@ export default async (req: Request) => {
         // reasignar, así que no debe quitarle el acceso a quien se lo dieron.
         ...(previa?.reasignadoA ? { reasignadoA: previa.reasignadoA } : {}),
         guardadoEn: new Date().toISOString(),
+        historial: [
+          ...(previa?.historial ?? []),
+          {
+            fecha: new Date().toISOString(),
+            accion: previa ? "editada" : "creada",
+            quien: quien.email,
+          },
+        ],
       };
 
       await almacen.setJSON(claveCotizacion(numero), registro);
