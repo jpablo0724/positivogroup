@@ -218,11 +218,15 @@ function estaDeclaradoAdmin(email: string): boolean {
 }
 
 /**
- * Los permisos efectivos de una cuenta. Un administrador lo puede todo; a una
- * cuenta básica se le aplican sus ajustes sobre los permisos por defecto.
+ * Los permisos efectivos de una cuenta. Un administrador lo puede todo,
+ * salvo informes: esa pestaña se le puede quitar igual que a una cuenta
+ * básica. A una cuenta básica se le aplican sus ajustes sobre los permisos
+ * por defecto.
  */
 export function permisosDe(usuario: Usuario): Permisos {
-  if (esAdmin(usuario)) return { ...PERMISOS_TODOS };
+  if (esAdmin(usuario)) {
+    return { ...PERMISOS_TODOS, informes: usuario.permisos?.informes !== false };
+  }
   return { ...PERMISOS_BASICO, ...(usuario.permisos ?? {}) };
 }
 
