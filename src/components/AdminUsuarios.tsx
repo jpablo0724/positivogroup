@@ -465,13 +465,18 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
 
                   {/* Un administrador lo ve todo por su rol, así que sus
                       casillas van marcadas y bloqueadas: no hay nada que
-                      ajustarle. */}
+                      ajustarle, salvo informes, que se le puede quitar igual
+                      que a una cuenta básica. */}
                   {SECCIONES.map((seccion) => (
                     <td key={seccion.clave} className="px-3 py-3 text-center">
                       <input
                         type="checkbox"
                         checked={usuario.permisos[seccion.clave]}
-                        disabled={esAdmin || ocupado || !puedoAdministrar}
+                        disabled={
+                          (esAdmin && seccion.clave !== "informes") ||
+                          ocupado ||
+                          !puedoAdministrar
+                        }
                         onChange={(e) =>
                           cambiarPermiso(usuario, seccion.clave, e.target.checked)
                         }
@@ -627,10 +632,30 @@ export default function AdminUsuarios({ yo, onError }: AdminUsuariosProps) {
           </div>
 
           {formulario.rol === "admin" ? (
-            <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              Un administrador entra a todas las secciones y ve las cotizaciones
-              de todo el equipo.
-            </p>
+            <>
+              <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                Un administrador entra a todas las secciones y ve las
+                cotizaciones de todo el equipo, salvo informes, que se puede
+                quitar igual que a una cuenta básica.
+              </p>
+              <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={formulario.permisos.informes}
+                  onChange={(e) =>
+                    setFormulario({
+                      ...formulario,
+                      permisos: {
+                        ...formulario.permisos,
+                        informes: e.target.checked,
+                      },
+                    })
+                  }
+                  className="h-4 w-4 accent-emerald-600"
+                />
+                Informes
+              </label>
+            </>
           ) : (
             <>
               <p className="mt-4 text-xs font-medium text-slate-600">
