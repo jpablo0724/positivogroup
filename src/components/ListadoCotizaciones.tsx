@@ -123,6 +123,9 @@ export default function ListadoCotizaciones({
   } | null>(null);
   const [historialAbierto, setHistorialAbierto] =
     useState<CotizacionGuardada | null>(null);
+  const [filtroCliente, setFiltroCliente] = useState("");
+  const [filtroFecha, setFiltroFecha] = useState("");
+  const [filtroCreador, setFiltroCreador] = useState("");
 
   // Solo hace falta para el selector de reasignar: si falla, el listado
   // sigue viéndose igual, nada más sin esa columna con nombres.
@@ -152,6 +155,33 @@ export default function ListadoCotizaciones({
       : "Se quitó la reasignación";
   }
 
+  const clientesDisponibles = Array.from(
+    new Set(
+      cotizaciones
+        .map((c) => c.data.cliente.razonSocial?.trim())
+        .filter((v): v is string => Boolean(v)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+
+  const creadoresDisponibles = Array.from(
+    new Set(cotizaciones.map((c) => c.creadoPor).filter(Boolean)),
+  ).sort((a, b) => nombreOCorreo(a).localeCompare(nombreOCorreo(b)));
+
+  const cotizacionesFiltradas = cotizaciones.filter((c) => {
+    if (filtroCliente && c.data.cliente.razonSocial !== filtroCliente) {
+      return false;
+    }
+    if (filtroFecha && c.data.fecha !== filtroFecha) {
+      return false;
+    }
+    if (filtroCreador && c.creadoPor !== filtroCreador) {
+      return false;
+    }
+    return true;
+  });
+
+  const hayFiltrosActivos = Boolean(filtroCliente || filtroFecha || filtroCreador);
+
   if (cotizaciones.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-6">
@@ -170,6 +200,82 @@ export default function ListadoCotizaciones({
 
   return (
     <div className="flex-1 overflow-auto p-6">
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="filtro-cliente"
+            className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
+            Cliente
+          </label>
+          <select
+            id="filtro-cliente"
+            value={filtroCliente}
+            onChange={(e) => setFiltroCliente(e.target.value)}
+            className="min-w-[180px] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+          >
+            <option value="">Todos los clientes</option>
+            {clientesDisponibles.map((cliente) => (
+              <option key={cliente} value={cliente}>
+                {cliente}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="filtro-fecha"
+            className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
+            Fecha de creación
+          </label>
+          <input
+            id="filtro-fecha"
+            type="date"
+            value={filtroFecha}
+            onChange={(e) => setFiltroFecha(e.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="filtro-creador"
+            className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
+            Creada por
+          </label>
+          <select
+            id="filtro-creador"
+            value={filtroCreador}
+            onChange={(e) => setFiltroCreador(e.target.value)}
+            className="min-w-[180px] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+          >
+            <option value="">Todos los creadores</option>
+            {creadoresDisponibles.map((correo) => (
+              <option key={correo} value={correo}>
+                {nombreOCorreo(correo)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {hayFiltrosActivos && (
+          <button
+            type="button"
+            onClick={() => {
+              setFiltroCliente("");
+              setFiltroFecha("");
+              setFiltroCreador("");
+            }}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-100"
+          >
+            Limpiar filtros
+          </button>
+        )}
+      </div>
+
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[820px] text-left text-sm">
           <thead>
@@ -181,11 +287,20 @@ export default function ListadoCotizaciones({
               <th className="px-4 py-3 text-right">Total antes de IVA</th>
               <th className="px-4 py-3">Creada por</th>
               <th className="px-4 py-3">Reasignar</th>
-              <th className="px-4 py-3 text-right">Acciones</th>
+              <th className="sticky right-0 z-10 bg-slate-50 px-4 py-3 text-right shadow-[-6px_0_6px_-6px_rgba(15,23,42,0.15)]">
+                Acciones
+              </th>
             </tr>
           </thead>
           <tbody>
-            {cotizaciones.map((c) => {
+            {cotizacionesFiltradas.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
+                  No hay cotizaciones que coincidan con los filtros.
+                </td>
+              </tr>
+            )}
+            {cotizacionesFiltradas.map((c) => {
               const totals = calcInvoiceTotals(
                 c.data.items,
                 c.data.ivaPorcentaje,
@@ -250,7 +365,7 @@ export default function ListadoCotizaciones({
                       <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="sticky right-0 z-10 bg-white px-4 py-3 shadow-[-6px_0_6px_-6px_rgba(15,23,42,0.15)]">
                     <div className="flex items-center justify-end gap-1">
                       <BotonIcono
                         titulo="Abrir para editar"
