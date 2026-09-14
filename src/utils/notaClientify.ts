@@ -115,22 +115,19 @@ export async function empresaDeLaCotizacion(
   return exactas.length === 1 ? exactas[0].id : null;
 }
 
-/** Cuerpo de la nota que deja en la ficha de la empresa el resultado de la cotización. */
-export function textoNotaEstado(
+/** Título de la nota: "Cotización - PG 0001/26 - Aprobada" o "... - Rechazada". */
+export function tituloNotaEstado(
   numeroFactura: string,
   estado: "ganada" | "perdida",
-  razon: string,
 ): string {
-  const lineas = [
-    escaparHtml(
-      `COTIZACIÓN N° ${numeroFactura} MARCADA COMO ${
-        estado === "ganada" ? "GANADA" : "PERDIDA"
-      }`,
-    ),
-  ];
-  const motivo = razon.trim();
-  if (motivo !== "") lineas.push(escaparHtml(`Motivo: ${motivo}`));
-  return lineas.join("<br>");
+  return `Cotización - ${numeroFactura} - ${
+    estado === "ganada" ? "Aprobada" : "Rechazada"
+  }`;
+}
+
+/** Cuerpo de la nota que deja en la ficha de la empresa: el motivo, debajo del título. */
+export function textoNotaEstado(razon: string): string {
+  return escaparHtml(razon.trim());
 }
 
 /** Anota en la ficha de la empresa en Clientify que la cotización se ganó o perdió, con el motivo. */
@@ -144,8 +141,8 @@ export async function enviarNotaEstado(
     metodo: "POST",
     cuerpo: {
       empresaId,
-      titulo: `Cotización ${estado === "ganada" ? "ganada" : "perdida"}`,
-      texto: textoNotaEstado(numeroFactura, estado, razon),
+      titulo: tituloNotaEstado(numeroFactura, estado),
+      texto: textoNotaEstado(razon),
     },
   });
 }

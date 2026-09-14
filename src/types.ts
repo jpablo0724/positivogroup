@@ -64,6 +64,16 @@ export interface HistorialEntrada {
 /** Resultado de la cotización: ganada, perdida, o sin definir todavía. */
 export type EstadoCotizacion = "ganada" | "perdida";
 
+/** Un archivo adjunto al marcar el resultado de una cotización, guardado tal cual en la base de datos. */
+export interface AdjuntoEstado {
+  nombre: string;
+  tipo: string;
+  /** Tamaño en bytes del archivo original (sin contar la codificación). */
+  tamano: number;
+  /** Contenido en base64 (sin el prefijo "data:...;base64,"). */
+  datos: string;
+}
+
 export interface CotizacionGuardada {
   guardadoEn: string;
   /** Correo de quién la creó. Las guardadas antes de que existiera este dato no lo traen. Nunca cambia al reasignar. */
@@ -74,6 +84,8 @@ export interface CotizacionGuardada {
   estado?: EstadoCotizacion;
   /** Motivo escrito al marcar el estado actual. Vacío si no se marcó ninguno. */
   razonEstado?: string;
+  /** Archivos adjuntados al marcar el estado actual. */
+  adjuntosEstado?: AdjuntoEstado[];
   /** Creación, ediciones y reasignaciones, en orden. Las guardadas antes de que existiera este dato no lo traen. */
   historial?: HistorialEntrada[];
   data: InvoiceData;

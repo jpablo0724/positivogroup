@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CotizacionGuardada, EstadoCotizacion } from "../types";
+import type { AdjuntoEstado, CotizacionGuardada, EstadoCotizacion } from "../types";
 import { calcInvoiceTotals, formatCurrency, formatDateLong } from "../utils/calculations";
 import { ErrorApi } from "../utils/api";
 import { nombreCompleto, type UsuarioPublico } from "../utils/auth";
@@ -18,7 +18,31 @@ interface ListadoCotizacionesProps {
     numeroFactura: string,
     estado: EstadoCotizacion | undefined,
     razon?: string,
+    adjuntos?: AdjuntoEstado[],
   ) => Promise<CotizacionGuardada>;
+}
+
+/** Límites del lado del navegador: dan un aviso rápido, antes de que el backend los rechace. */
+const ADJUNTO_MAX_BYTES = 4.5 * 1024 * 1024;
+const ADJUNTOS_MAX_CANTIDAD = 5;
+
+/** Lee un archivo y lo convierte a base64 puro (sin el prefijo "data:...;base64,"). */
+function archivoABase64(archivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => {
+      const resultado = String(lector.result ?? "");
+      resolve(resultado.slice(resultado.indexOf(",") + 1));
+    };
+    lector.onerror = () => reject(lector.error ?? new Error("No se pudo leer el archivo"));
+    lector.readAsDataURL(archivo);
+  });
+}
+
+function formatTamano(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -166,6 +190,7 @@ export default function ListadoCotizaciones({
     null,
   );
   const [razonEstado, setRazonEstado] = useState("");
+  const [archivosEstado, setArchivosEstado] = useState<File[]>([]);
   const [envioEstado, setEnvioEstado] = useState<
     "idle" | "guardando" | "guardado" | "guardado_sin_clientify" | "error"
   >("idle");
@@ -248,6 +273,7 @@ export default function ListadoCotizaciones({
     setPorMarcarEstado(c);
     setEstadoAMarcar(estado);
     setRazonEstado("");
+    setArchivosEstado([]);
     setEnvioEstado("idle");
     setErrorEstado("");
   }
@@ -255,26 +281,72 @@ export default function ListadoCotizaciones({
   function cerrarMarcarEstado() {
     setPorMarcarEstado(null);
     setEstadoAMarcar(null);
+    setArchivosEstado([]);
     setEnvioEstado("idle");
     setErrorEstado("");
   }
 
+  function agregarArchivosEstado(nuevos: FileList | null) {
+    if (!nuevos || nuevos.length === 0) return;
+    setArchivosEstado((previos) => {
+      const combinados = [...previos, ...Array.from(nuevos)];
+      if (combinados.length > ADJUNTOS_MAX_CANTIDAD) {
+        setErrorEstado(`Máximo ${ADJUNTOS_MAX_CANTIDAD} archivos.`);
+        return combinados.slice(0, ADJUNTOS_MAX_CANTIDAD);
+      }
+      const muyGrande = combinados.find((a) => a.size > ADJUNTO_MAX_BYTES);
+      if (muyGrande) {
+        setErrorEstado(
+          `"${muyGrande.name}" pesa más de ${formatTamano(ADJUNTO_MAX_BYTES)}.`,
+        );
+      }
+      return combinados;
+    });
+  }
+
+  function quitarArchivoEstado(indice: number) {
+    setArchivosEstado((previos) => previos.filter((_, i) => i !== indice));
+  }
+
   /**
-   * Guarda el estado con su motivo y, si la cotización está vinculada a una
-   * empresa de Clientify, deja la misma razón como anotación en su ficha. Si
-   * no hay empresa vinculada, el estado igual queda guardado — solo avisa
-   * que no se pudo anotar en el CRM.
+   * Guarda el estado con su motivo (obligatorio) y los adjuntos, y si la
+   * cotización está vinculada a una empresa de Clientify, deja el motivo
+   * como anotación en su ficha. Si no hay empresa vinculada, el estado igual
+   * queda guardado — solo avisa que no se pudo anotar en el CRM.
    */
   async function confirmarMarcarEstado() {
     if (!porMarcarEstado || !estadoAMarcar) return;
+
+    const motivo = razonEstado.trim();
+    if (motivo === "") {
+      setErrorEstado("Escribe el motivo antes de guardar.");
+      setEnvioEstado("error");
+      return;
+    }
+    if (archivosEstado.some((a) => a.size > ADJUNTO_MAX_BYTES)) {
+      setErrorEstado(`Hay un archivo que pesa más de ${formatTamano(ADJUNTO_MAX_BYTES)}.`);
+      setEnvioEstado("error");
+      return;
+    }
+
     setEnvioEstado("guardando");
     setErrorEstado("");
 
     try {
+      const adjuntos: AdjuntoEstado[] = await Promise.all(
+        archivosEstado.map(async (archivo) => ({
+          nombre: archivo.name,
+          tipo: archivo.type,
+          tamano: archivo.size,
+          datos: await archivoABase64(archivo),
+        })),
+      );
+
       await onMarcarEstado(
         porMarcarEstado.data.numeroFactura,
         estadoAMarcar,
-        razonEstado,
+        motivo,
+        adjuntos,
       );
 
       const empresaId = await empresaDeLaCotizacion(porMarcarEstado.data);
@@ -287,7 +359,7 @@ export default function ListadoCotizaciones({
         empresaId,
         porMarcarEstado.data.numeroFactura,
         estadoAMarcar,
-        razonEstado,
+        motivo,
       );
       setEnvioEstado("guardado");
     } catch (err) {
@@ -405,18 +477,19 @@ export default function ListadoCotizaciones({
         <table className="w-full table-fixed text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="w-[22%] px-3 py-3">Cotización</th>
-              <th className="w-[14%] px-3 py-3">Fechas</th>
-              <th className="w-[11%] px-3 py-3 text-right">Total antes de IVA</th>
-              <th className="w-[13%] px-3 py-3">Creada por</th>
-              <th className="w-[14%] px-3 py-3">Reasignar</th>
-              <th className="w-[26%] px-3 py-3 text-right">Acciones</th>
+              <th className="w-[20%] px-3 py-3">Cotización</th>
+              <th className="w-[12%] px-3 py-3">Fechas</th>
+              <th className="w-[10%] px-3 py-3 text-right">Total antes de IVA</th>
+              <th className="w-[11%] px-3 py-3">Creada por</th>
+              <th className="w-[13%] px-3 py-3">Reasignar</th>
+              <th className="w-[10%] px-3 py-3">Estado</th>
+              <th className="w-[24%] px-3 py-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
               {cotizacionesFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
                     No hay cotizaciones que coincidan con los filtros.
                   </td>
                 </tr>
@@ -443,20 +516,8 @@ export default function ListadoCotizaciones({
                     <div className="truncate font-semibold text-slate-900">
                       {c.data.numeroFactura}
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1 truncate text-xs text-slate-600">
-                      <span className="truncate">
-                        {c.data.cliente.razonSocial || "—"}
-                      </span>
-                      {c.estado === "ganada" && (
-                        <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                          Ganada
-                        </span>
-                      )}
-                      {c.estado === "perdida" && (
-                        <span className="inline-flex shrink-0 items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
-                          Perdida
-                        </span>
-                      )}
+                    <div className="mt-0.5 truncate text-xs text-slate-600">
+                      {c.data.cliente.razonSocial || "—"}
                     </div>
                   </td>
                   <td className="px-3 py-3 text-xs text-slate-600">
@@ -501,6 +562,39 @@ export default function ListadoCotizaciones({
                     ) : (
                       <span className="text-xs text-slate-400">—</span>
                     )}
+                  </td>
+                  <td className="px-3 py-3">
+                    {(() => {
+                      const enviada = (c.historial ?? []).some(
+                        (h) => h.accion === "enviada_clientify",
+                      );
+                      if (c.estado === "ganada") {
+                        return (
+                          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            Aceptada
+                          </span>
+                        );
+                      }
+                      if (c.estado === "perdida") {
+                        return (
+                          <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                            Rechazada
+                          </span>
+                        );
+                      }
+                      if (enviada) {
+                        return (
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                            Enviada
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          Creada
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-col items-end gap-1">
@@ -648,13 +742,14 @@ export default function ListadoCotizaciones({
               htmlFor="razon-estado"
               className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500"
             >
-              Motivo (opcional)
+              Motivo
             </label>
             <textarea
               id="razon-estado"
               value={razonEstado}
               onChange={(e) => setRazonEstado(e.target.value)}
               disabled={envioEstado === "guardando"}
+              required
               rows={3}
               placeholder={
                 estadoAMarcar === "ganada"
@@ -663,11 +758,49 @@ export default function ListadoCotizaciones({
               }
               className="mt-1 w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             />
-            <p className="mt-1 text-xs text-slate-400">
-              Queda como observación en el historial y, si la cotización está
-              vinculada a una empresa de Clientify, se anota también en su
-              ficha al enviar.
-            </p>
+
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Adjuntos
+            </label>
+            <input
+              type="file"
+              multiple
+              disabled={
+                envioEstado === "guardando" ||
+                archivosEstado.length >= ADJUNTOS_MAX_CANTIDAD
+              }
+              onChange={(e) => {
+                agregarArchivosEstado(e.target.files);
+                e.target.value = "";
+              }}
+              className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+            {archivosEstado.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {archivosEstado.map((archivo, i) => (
+                  <li
+                    key={`${archivo.name}-${i}`}
+                    className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700"
+                  >
+                    <span className="truncate">
+                      {archivo.name}{" "}
+                      <span className="text-slate-400">
+                        ({formatTamano(archivo.size)})
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => quitarArchivoEstado(i)}
+                      disabled={envioEstado === "guardando"}
+                      className="shrink-0 text-slate-400 hover:text-red-600"
+                      aria-label={`Quitar ${archivo.name}`}
+                    >
+                      {ICONOS.perdida}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {envioEstado === "guardado" && (
               <div className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
@@ -682,8 +815,7 @@ export default function ListadoCotizaciones({
             )}
             {envioEstado === "error" && (
               <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
-                <p className="font-medium">No se pudo guardar.</p>
-                <p className="mt-1 break-words text-xs">{errorEstado}</p>
+                {errorEstado}
               </div>
             )}
 
@@ -703,7 +835,9 @@ export default function ListadoCotizaciones({
                   <button
                     type="button"
                     onClick={confirmarMarcarEstado}
-                    disabled={envioEstado === "guardando"}
+                    disabled={
+                      envioEstado === "guardando" || razonEstado.trim() === ""
+                    }
                     className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {envioEstado === "guardando"

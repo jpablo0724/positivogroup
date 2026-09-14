@@ -59,6 +59,13 @@ interface HistorialEntrada {
 
 type EstadoCotizacion = "ganada" | "perdida";
 
+interface AdjuntoEstado {
+  nombre: string;
+  tipo: string;
+  tamano: number;
+  datos: string;
+}
+
 interface CotizacionGuardada {
   guardadoEn: string;
   /** Quién la creó. Es un dato fijo para mostrar; no decide quién la ve. */
@@ -69,10 +76,16 @@ interface CotizacionGuardada {
   estado?: EstadoCotizacion;
   /** Motivo escrito al marcar el estado actual. */
   razonEstado?: string;
+  /** Archivos adjuntados al marcar el estado actual. */
+  adjuntosEstado?: AdjuntoEstado[];
   /** Creación, ediciones y reasignaciones, en orden. */
   historial?: HistorialEntrada[];
   data: { numeroFactura?: unknown };
 }
+
+/** Máximo por archivo (en base64) y máximo de archivos por marca de estado. */
+const ADJUNTO_MAX_BASE64 = 6_000_000; // ~4.5 MB reales
+const ADJUNTOS_MAX_CANTIDAD = 5;
 
 function esCotizacion(valor: unknown): valor is CotizacionGuardada {
   if (typeof valor !== "object" || valor === null) return false;
@@ -252,6 +265,7 @@ export default async (req: Request) => {
       const cuerpo = (await req.json().catch(() => ({}))) as {
         estado?: unknown;
         razon?: unknown;
+        adjuntos?: unknown;
       };
       const texto = String(cuerpo.estado ?? "").trim();
       const razon = String(cuerpo.razon ?? "").trim();
@@ -261,11 +275,51 @@ export default async (req: Request) => {
       }
 
       const nuevoEstado = texto === "" ? undefined : (texto as EstadoCotizacion);
-      const { estado: _anterior, razonEstado: _razonAnterior, ...sinEstado } =
-        guardada;
+
+      // Al marcar (no al quitar la marca) el motivo es obligatorio.
+      if (nuevoEstado && razon === "") {
+        return json({ error: "falta_motivo" }, 400);
+      }
+
+      const adjuntos: AdjuntoEstado[] = [];
+      if (nuevoEstado) {
+        const crudos = Array.isArray(cuerpo.adjuntos) ? cuerpo.adjuntos : [];
+        if (crudos.length > ADJUNTOS_MAX_CANTIDAD) {
+          return json({ error: "demasiados_adjuntos" }, 400);
+        }
+        for (const crudo of crudos) {
+          if (typeof crudo !== "object" || crudo === null) continue;
+          const { nombre, tipo, datos } = crudo as Record<string, unknown>;
+          if (
+            typeof nombre !== "string" ||
+            typeof tipo !== "string" ||
+            typeof datos !== "string"
+          ) {
+            return json({ error: "adjunto_invalido" }, 400);
+          }
+          if (datos.length > ADJUNTO_MAX_BASE64) {
+            return json({ error: "adjunto_muy_grande" }, 400);
+          }
+          adjuntos.push({
+            nombre,
+            tipo,
+            tamano: Math.round((datos.length * 3) / 4),
+            datos,
+          });
+        }
+      }
+
+      const {
+        estado: _anterior,
+        razonEstado: _razonAnterior,
+        adjuntosEstado: _adjuntosAnteriores,
+        ...sinEstado
+      } = guardada;
       const registro: CotizacionGuardada = {
         ...sinEstado,
-        ...(nuevoEstado ? { estado: nuevoEstado, razonEstado: razon } : {}),
+        ...(nuevoEstado
+          ? { estado: nuevoEstado, razonEstado: razon, adjuntosEstado: adjuntos }
+          : {}),
         historial: [
           ...(guardada.historial ?? []),
           {

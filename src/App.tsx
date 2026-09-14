@@ -15,6 +15,7 @@ import PantallaAcceso from "./components/PantallaAcceso";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import {
   ID_BORRADOR,
+  type AdjuntoEstado,
   type CotizacionGuardada,
   type CreadorFirma,
   type EstadoCotizacion,
@@ -326,12 +327,14 @@ function App() {
     numeroFactura: string,
     estado: EstadoCotizacion | undefined,
     razon?: string,
+    adjuntos?: AdjuntoEstado[],
   ): Promise<CotizacionGuardada> {
     try {
       const actualizada = await marcarEstadoCotizacion(
         numeroFactura,
         estado,
         razon,
+        adjuntos,
       );
       setCotizaciones((previas) =>
         previas.map((c) =>

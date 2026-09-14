@@ -1,4 +1,9 @@
-import type { CotizacionGuardada, EstadoCotizacion, InvoiceData } from "../types";
+import type {
+  AdjuntoEstado,
+  CotizacionGuardada,
+  EstadoCotizacion,
+  InvoiceData,
+} from "../types";
 import { pedir } from "./api";
 
 /**
@@ -86,10 +91,14 @@ export async function marcarEstadoCotizacion(
   numeroFactura: string,
   estado: EstadoCotizacion | undefined,
   razon?: string,
+  adjuntos?: AdjuntoEstado[],
 ): Promise<CotizacionGuardada> {
   const { cotizacion } = await pedir<{ cotizacion: CotizacionGuardada }>(
     `/api/cotizaciones/${encodeURIComponent(numeroFactura)}/estado`,
-    { metodo: "POST", cuerpo: { estado: estado ?? "", razon: razon ?? "" } },
+    {
+      metodo: "POST",
+      cuerpo: { estado: estado ?? "", razon: razon ?? "", adjuntos: adjuntos ?? [] },
+    },
   );
   return cotizacion;
 }
