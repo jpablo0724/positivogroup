@@ -23,6 +23,7 @@ import {
  *   POST   /api/cotizaciones/enlace                -> enlace público para el cliente
  *   POST   /api/cotizaciones/PG 0001/26/reasignar -> le pasa el acceso a otra persona
  *   POST   /api/cotizaciones/PG 0001/26/enviada-clientify -> anota en el historial que se mandó
+ *   POST   /api/cotizaciones/PG 0001/26/estado    -> marca ganada, perdida, o quita la marca
  *   DELETE /api/cotizaciones/PG 0001/26           -> elimina una
  *
  * Quién ve qué se decide aquí y no en el navegador: un administrador ve las de
@@ -42,10 +43,19 @@ import {
 /** Un movimiento en la vida de la cotización, para el timeline del historial. */
 interface HistorialEntrada {
   fecha: string;
-  accion: "creada" | "editada" | "reasignada" | "enviada_clientify";
+  accion:
+    | "creada"
+    | "editada"
+    | "reasignada"
+    | "enviada_clientify"
+    | "marcada_ganada"
+    | "marcada_perdida"
+    | "estado_quitado";
   quien: string;
   nuevoDueno?: string;
 }
+
+type EstadoCotizacion = "ganada" | "perdida";
 
 interface CotizacionGuardada {
   guardadoEn: string;
@@ -53,6 +63,8 @@ interface CotizacionGuardada {
   creadoPor?: string;
   /** A quién se le pasó el acceso. Mientras esté puesto, manda sobre creadoPor. */
   reasignadoA?: string;
+  /** Ganada, perdida, o sin marcar todavía. */
+  estado?: EstadoCotizacion;
   /** Creación, ediciones y reasignaciones, en orden. */
   historial?: HistorialEntrada[];
   data: { numeroFactura?: unknown };
@@ -212,6 +224,51 @@ export default async (req: Request) => {
           {
             fecha: new Date().toISOString(),
             accion: "enviada_clientify",
+            quien: quien.email,
+          },
+        ],
+      };
+
+      await almacen.setJSON(claveCotizacion(numero), registro);
+      return json({ cotizacion: registro });
+    }
+
+    // --- Marca la cotización como ganada o perdida, o quita la marca ---
+    if (req.method === "POST" && resto.endsWith("/estado")) {
+      const numero = resto.replace(/\/estado$/, "");
+      const guardada = (await almacen.get(claveCotizacion(numero), {
+        type: "json",
+      })) as CotizacionGuardada | null;
+
+      if (!guardada) return json({ error: "cotizacion_no_existe" }, 404);
+      if (!esSuya(guardada, quien)) {
+        return json({ error: "cotizacion_de_otra_persona" }, 403);
+      }
+
+      const cuerpo = (await req.json().catch(() => ({}))) as {
+        estado?: unknown;
+      };
+      const texto = String(cuerpo.estado ?? "").trim();
+
+      if (texto !== "" && texto !== "ganada" && texto !== "perdida") {
+        return json({ error: "estado_invalido" }, 400);
+      }
+
+      const nuevoEstado = texto === "" ? undefined : (texto as EstadoCotizacion);
+      const { estado: _anterior, ...sinEstado } = guardada;
+      const registro: CotizacionGuardada = {
+        ...sinEstado,
+        ...(nuevoEstado ? { estado: nuevoEstado } : {}),
+        historial: [
+          ...(guardada.historial ?? []),
+          {
+            fecha: new Date().toISOString(),
+            accion:
+              nuevoEstado === "ganada"
+                ? "marcada_ganada"
+                : nuevoEstado === "perdida"
+                  ? "marcada_perdida"
+                  : "estado_quitado",
             quien: quien.email,
           },
         ],

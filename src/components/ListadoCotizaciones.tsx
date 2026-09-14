@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CotizacionGuardada } from "../types";
+import type { CotizacionGuardada, EstadoCotizacion } from "../types";
 import { calcInvoiceTotals, formatCurrency, formatDateLong } from "../utils/calculations";
 import { nombreCompleto, type UsuarioPublico } from "../utils/auth";
 import { listarEquipo, type MiembroEquipo } from "../utils/cotizacionesGuardadas";
@@ -12,6 +12,24 @@ interface ListadoCotizacionesProps {
   onEnviarClientify: (cotizacion: CotizacionGuardada) => void;
   onEliminar: (numeroFactura: string) => void;
   onReasignar: (numeroFactura: string, nuevoDueno: string) => void;
+  onMarcarEstado: (
+    numeroFactura: string,
+    estado: EstadoCotizacion | undefined,
+  ) => void;
+}
+
+/**
+ * Normaliza para comparar por coincidencia: sin tildes/diacríticos, sin
+ * caracteres que no sean letras o números, y en minúsculas. Así "Peña S.A."
+ * coincide al escribir "pena sa" o "peña".
+ */
+function normalizarBusqueda(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 const trazo = {
@@ -57,6 +75,16 @@ const ICONOS = {
       <path d="M12 7v5l3.5 2" />
     </svg>
   ),
+  ganada: (
+    <svg viewBox="0 0 24 24" {...trazo} className="h-4 w-4">
+      <path d="m5 13 4 4L19 7" />
+    </svg>
+  ),
+  perdida: (
+    <svg viewBox="0 0 24 24" {...trazo} className="h-4 w-4">
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  ),
 };
 
 function formatFechaHora(iso: string): string {
@@ -76,7 +104,11 @@ const TONOS = {
     "text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-slate-400",
   verde:
     "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-emerald-500",
+  "verde-activo":
+    "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 focus-visible:outline-emerald-500",
   rojo: "text-red-500 hover:bg-red-50 hover:text-red-600 focus-visible:outline-red-400",
+  "rojo-activo":
+    "bg-red-100 text-red-700 hover:bg-red-200 focus-visible:outline-red-400",
 };
 
 /**
@@ -115,6 +147,7 @@ export default function ListadoCotizaciones({
   onEnviarClientify,
   onEliminar,
   onReasignar,
+  onMarcarEstado,
 }: ListadoCotizacionesProps) {
   const [equipo, setEquipo] = useState<MiembroEquipo[]>([]);
   const [porReasignar, setPorReasignar] = useState<{
@@ -123,6 +156,7 @@ export default function ListadoCotizaciones({
   } | null>(null);
   const [historialAbierto, setHistorialAbierto] =
     useState<CotizacionGuardada | null>(null);
+  const [porEliminar, setPorEliminar] = useState<string | null>(null);
   const [filtroCliente, setFiltroCliente] = useState("");
   const [filtroFecha, setFiltroFecha] = useState("");
   const [filtroCreador, setFiltroCreador] = useState("");
@@ -150,18 +184,14 @@ export default function ListadoCotizaciones({
     if (entrada.accion === "editada") return "Editada";
     if (entrada.accion === "enviada_clientify")
       return "Cotización enviada a Clientify";
+    if (entrada.accion === "marcada_ganada") return "Marcada como ganada";
+    if (entrada.accion === "marcada_perdida") return "Marcada como perdida";
+    if (entrada.accion === "estado_quitado")
+      return "Se quitó la marca de ganada/perdida";
     return entrada.nuevoDueno
       ? `Reasignada a ${nombreOCorreo(entrada.nuevoDueno)}`
       : "Se quitó la reasignación";
   }
-
-  const clientesDisponibles = Array.from(
-    new Set(
-      cotizaciones
-        .map((c) => c.data.cliente.razonSocial?.trim())
-        .filter((v): v is string => Boolean(v)),
-    ),
-  ).sort((a, b) => a.localeCompare(b));
 
   const creadoresDisponibles = Array.from(
     new Set(
@@ -171,8 +201,15 @@ export default function ListadoCotizaciones({
     ),
   ).sort((a, b) => nombreOCorreo(a).localeCompare(nombreOCorreo(b)));
 
+  const filtroClienteNormalizado = normalizarBusqueda(filtroCliente);
+
   const cotizacionesFiltradas = cotizaciones.filter((c) => {
-    if (filtroCliente && c.data.cliente.razonSocial !== filtroCliente) {
+    if (
+      filtroClienteNormalizado &&
+      !normalizarBusqueda(c.data.cliente.razonSocial || "").includes(
+        filtroClienteNormalizado,
+      )
+    ) {
       return false;
     }
     if (filtroFecha && c.data.fecha !== filtroFecha) {
@@ -212,19 +249,14 @@ export default function ListadoCotizaciones({
           >
             Cliente
           </label>
-          <select
+          <input
             id="filtro-cliente"
+            type="text"
             value={filtroCliente}
             onChange={(e) => setFiltroCliente(e.target.value)}
-            className="min-w-[180px] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
-          >
-            <option value="">Todos los clientes</option>
-            {clientesDisponibles.map((cliente) => (
-              <option key={cliente} value={cliente}>
-                {cliente}
-              </option>
-            ))}
-          </select>
+            placeholder="Buscar por nombre de empresa..."
+            className="min-w-[220px] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+          />
         </div>
 
         <div className="flex flex-col gap-1">
@@ -393,8 +425,38 @@ export default function ListadoCotizaciones({
                         icono={ICONOS.historial}
                       />
                       <BotonIcono
+                        titulo={
+                          c.estado === "ganada"
+                            ? "Quitar marca de ganada"
+                            : "Marcar como ganada"
+                        }
+                        onClick={() =>
+                          onMarcarEstado(
+                            c.data.numeroFactura,
+                            c.estado === "ganada" ? undefined : "ganada",
+                          )
+                        }
+                        icono={ICONOS.ganada}
+                        tono={c.estado === "ganada" ? "verde-activo" : "verde"}
+                      />
+                      <BotonIcono
+                        titulo={
+                          c.estado === "perdida"
+                            ? "Quitar marca de perdida"
+                            : "Marcar como perdida"
+                        }
+                        onClick={() =>
+                          onMarcarEstado(
+                            c.data.numeroFactura,
+                            c.estado === "perdida" ? undefined : "perdida",
+                          )
+                        }
+                        icono={ICONOS.perdida}
+                        tono={c.estado === "perdida" ? "rojo-activo" : "rojo"}
+                      />
+                      <BotonIcono
                         titulo="Eliminar"
-                        onClick={() => onEliminar(c.data.numeroFactura)}
+                        onClick={() => setPorEliminar(c.data.numeroFactura)}
                         icono={ICONOS.eliminar}
                         tono="rojo"
                       />
@@ -406,6 +468,48 @@ export default function ListadoCotizaciones({
           </tbody>
         </table>
       </div>
+
+      {porEliminar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40"
+            onClick={() => setPorEliminar(null)}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+          >
+            <h2 className="text-base font-semibold text-slate-900">
+              Eliminar cotización
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              ¿Estás seguro de eliminar la cotización {porEliminar}? Esta
+              acción no se puede deshacer.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPorEliminar(null)}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onEliminar(porEliminar);
+                  setPorEliminar(null);
+                }}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {porReasignar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

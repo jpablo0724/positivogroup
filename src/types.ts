@@ -45,12 +45,22 @@ export interface InvoiceData {
 /** Un movimiento en la vida de la cotización, para el timeline del historial. */
 export interface HistorialEntrada {
   fecha: string;
-  accion: "creada" | "editada" | "reasignada" | "enviada_clientify";
+  accion:
+    | "creada"
+    | "editada"
+    | "reasignada"
+    | "enviada_clientify"
+    | "marcada_ganada"
+    | "marcada_perdida"
+    | "estado_quitado";
   /** Correo de quién hizo el movimiento. */
   quien: string;
   /** Solo en "reasignada": correo a quien se le dio el acceso, o "" si se quitó. */
   nuevoDueno?: string;
 }
+
+/** Resultado de la cotización: ganada, perdida, o sin definir todavía. */
+export type EstadoCotizacion = "ganada" | "perdida";
 
 export interface CotizacionGuardada {
   guardadoEn: string;
@@ -58,6 +68,8 @@ export interface CotizacionGuardada {
   creadoPor?: string;
   /** Correo de quién más tiene acceso, además de quien la creó. */
   reasignadoA?: string;
+  /** Ganada, perdida, o sin marcar todavía. */
+  estado?: EstadoCotizacion;
   /** Creación, ediciones y reasignaciones, en orden. Las guardadas antes de que existiera este dato no lo traen. */
   historial?: HistorialEntrada[];
   data: InvoiceData;

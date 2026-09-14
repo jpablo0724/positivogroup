@@ -17,6 +17,7 @@ import {
   ID_BORRADOR,
   type CotizacionGuardada,
   type CreadorFirma,
+  type EstadoCotizacion,
   type InvoiceData,
   type InvoiceItem,
 } from "./types";
@@ -29,6 +30,7 @@ import {
   guardarCotizacion,
   listarCotizaciones,
   listarEquipo,
+  marcarEstadoCotizacion,
   reasignarCotizacion,
   registrarEnvioClientify,
   type MiembroEquipo,
@@ -315,6 +317,22 @@ function App() {
     }
   }
 
+  async function handleMarcarEstado(
+    numeroFactura: string,
+    estado: EstadoCotizacion | undefined,
+  ) {
+    try {
+      const actualizada = await marcarEstadoCotizacion(numeroFactura, estado);
+      setCotizaciones((previas) =>
+        previas.map((c) =>
+          c.data.numeroFactura === numeroFactura ? actualizada : c,
+        ),
+      );
+    } catch (err) {
+      manejarError(err);
+    }
+  }
+
   /**
    * Anota en el historial que se mandó a Clientify. Se llama después de que
    * la nota ya quedó guardada allá, así que un fallo aquí no debe verse como
@@ -477,6 +495,7 @@ function App() {
             }}
             onEliminar={handleEliminar}
             onReasignar={handleReasignar}
+            onMarcarEstado={handleMarcarEstado}
           />
         </main>
       )}

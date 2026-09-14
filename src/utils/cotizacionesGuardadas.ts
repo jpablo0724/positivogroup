@@ -1,4 +1,4 @@
-import type { CotizacionGuardada, InvoiceData } from "../types";
+import type { CotizacionGuardada, EstadoCotizacion, InvoiceData } from "../types";
 import { pedir } from "./api";
 
 /**
@@ -79,6 +79,20 @@ export async function reasignarCotizacion(
  * (`/api/clientify/nota`): esto no manda nada allá, solo deja el registro
  * en el timeline.
  */
+/**
+ * Marca la cotización como ganada o perdida. Pasar undefined quita la marca.
+ */
+export async function marcarEstadoCotizacion(
+  numeroFactura: string,
+  estado: EstadoCotizacion | undefined,
+): Promise<CotizacionGuardada> {
+  const { cotizacion } = await pedir<{ cotizacion: CotizacionGuardada }>(
+    `/api/cotizaciones/${encodeURIComponent(numeroFactura)}/estado`,
+    { metodo: "POST", cuerpo: { estado: estado ?? "" } },
+  );
+  return cotizacion;
+}
+
 export async function registrarEnvioClientify(
   numeroFactura: string,
 ): Promise<CotizacionGuardada> {
