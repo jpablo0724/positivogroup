@@ -101,14 +101,14 @@ function formatFechaHora(iso: string): string {
 
 const TONOS = {
   neutro:
-    "text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm focus-visible:outline-slate-400",
+    "text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-slate-400",
   verde:
-    "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-sm focus-visible:outline-emerald-500",
+    "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-emerald-500",
   "verde-activo":
-    "bg-emerald-500 text-white shadow-sm hover:bg-emerald-600 focus-visible:outline-emerald-500",
-  rojo: "text-red-500 hover:bg-red-50 hover:text-red-600 hover:shadow-sm focus-visible:outline-red-400",
+    "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 focus-visible:outline-emerald-500",
+  rojo: "text-red-500 hover:bg-red-50 hover:text-red-600 focus-visible:outline-red-400",
   "rojo-activo":
-    "bg-red-500 text-white shadow-sm hover:bg-red-600 focus-visible:outline-red-400",
+    "bg-red-100 text-red-700 hover:bg-red-200 focus-visible:outline-red-400",
 };
 
 /**
@@ -132,7 +132,7 @@ function BotonIcono({
       title={titulo}
       aria-label={titulo}
       onClick={onClick}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 ${TONOS[tono]}`}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 ${TONOS[tono]}`}
     >
       {icono}
     </button>
@@ -424,9 +424,9 @@ export default function ListadoCotizaciones({
                       <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="sticky right-0 z-10 bg-inherit px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <div className="flex items-center gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
+                  <td className="sticky right-0 z-10 bg-inherit px-3 py-2 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1">
                         <BotonIcono
                           titulo="Abrir para editar"
                           onClick={() => onVer(c)}
@@ -449,8 +449,7 @@ export default function ListadoCotizaciones({
                           icono={ICONOS.historial}
                         />
                       </div>
-
-                      <div className="flex items-center gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
+                      <div className="flex items-center gap-1">
                         <BotonIcono
                           titulo={
                             c.estado === "ganada"
@@ -483,14 +482,13 @@ export default function ListadoCotizaciones({
                           icono={ICONOS.perdida}
                           tono={c.estado === "perdida" ? "rojo-activo" : "rojo"}
                         />
+                        <BotonIcono
+                          titulo="Eliminar"
+                          onClick={() => setPorEliminar(c.data.numeroFactura)}
+                          icono={ICONOS.eliminar}
+                          tono="rojo"
+                        />
                       </div>
-
-                      <BotonIcono
-                        titulo="Eliminar"
-                        onClick={() => setPorEliminar(c.data.numeroFactura)}
-                        icono={ICONOS.eliminar}
-                        tono="rojo"
-                      />
                     </div>
                   </td>
                 </tr>
