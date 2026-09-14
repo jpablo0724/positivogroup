@@ -164,7 +164,11 @@ export default function ListadoCotizaciones({
   ).sort((a, b) => a.localeCompare(b));
 
   const creadoresDisponibles = Array.from(
-    new Set(cotizaciones.map((c) => c.creadoPor).filter(Boolean)),
+    new Set(
+      cotizaciones
+        .map((c) => c.creadoPor)
+        .filter((v): v is string => Boolean(v)),
+    ),
   ).sort((a, b) => nombreOCorreo(a).localeCompare(nombreOCorreo(b)));
 
   const cotizacionesFiltradas = cotizaciones.filter((c) => {
