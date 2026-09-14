@@ -317,19 +317,31 @@ function App() {
     }
   }
 
+  /**
+   * Devuelve la cotización ya actualizada: quien llama (el modal de razón)
+   * la necesita para saber si guardó bien antes de mandar la nota a
+   * Clientify, así que el error se reporta arriba pero también se relanza.
+   */
   async function handleMarcarEstado(
     numeroFactura: string,
     estado: EstadoCotizacion | undefined,
-  ) {
+    razon?: string,
+  ): Promise<CotizacionGuardada> {
     try {
-      const actualizada = await marcarEstadoCotizacion(numeroFactura, estado);
+      const actualizada = await marcarEstadoCotizacion(
+        numeroFactura,
+        estado,
+        razon,
+      );
       setCotizaciones((previas) =>
         previas.map((c) =>
           c.data.numeroFactura === numeroFactura ? actualizada : c,
         ),
       );
+      return actualizada;
     } catch (err) {
       manejarError(err);
+      throw err;
     }
   }
 

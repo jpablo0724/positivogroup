@@ -85,10 +85,11 @@ export async function reasignarCotizacion(
 export async function marcarEstadoCotizacion(
   numeroFactura: string,
   estado: EstadoCotizacion | undefined,
+  razon?: string,
 ): Promise<CotizacionGuardada> {
   const { cotizacion } = await pedir<{ cotizacion: CotizacionGuardada }>(
     `/api/cotizaciones/${encodeURIComponent(numeroFactura)}/estado`,
-    { metodo: "POST", cuerpo: { estado: estado ?? "" } },
+    { metodo: "POST", cuerpo: { estado: estado ?? "", razon: razon ?? "" } },
   );
   return cotizacion;
 }

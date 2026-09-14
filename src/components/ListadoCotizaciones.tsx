@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import type { CotizacionGuardada, EstadoCotizacion } from "../types";
 import { calcInvoiceTotals, formatCurrency, formatDateLong } from "../utils/calculations";
+import { ErrorApi } from "../utils/api";
 import { nombreCompleto, type UsuarioPublico } from "../utils/auth";
 import { listarEquipo, type MiembroEquipo } from "../utils/cotizacionesGuardadas";
+import { empresaDeLaCotizacion, enviarNotaEstado } from "../utils/notaClientify";
 
 interface ListadoCotizacionesProps {
   cotizaciones: CotizacionGuardada[];
@@ -15,7 +17,8 @@ interface ListadoCotizacionesProps {
   onMarcarEstado: (
     numeroFactura: string,
     estado: EstadoCotizacion | undefined,
-  ) => void;
+    razon?: string,
+  ) => Promise<CotizacionGuardada>;
 }
 
 /**
@@ -157,6 +160,16 @@ export default function ListadoCotizaciones({
   const [historialAbierto, setHistorialAbierto] =
     useState<CotizacionGuardada | null>(null);
   const [porEliminar, setPorEliminar] = useState<string | null>(null);
+  const [porMarcarEstado, setPorMarcarEstado] =
+    useState<CotizacionGuardada | null>(null);
+  const [estadoAMarcar, setEstadoAMarcar] = useState<EstadoCotizacion | null>(
+    null,
+  );
+  const [razonEstado, setRazonEstado] = useState("");
+  const [envioEstado, setEnvioEstado] = useState<
+    "idle" | "guardando" | "guardado" | "guardado_sin_clientify" | "error"
+  >("idle");
+  const [errorEstado, setErrorEstado] = useState("");
   const [filtroCliente, setFiltroCliente] = useState("");
   const [filtroFecha, setFiltroFecha] = useState("");
   const [filtroCreador, setFiltroCreador] = useState("");
@@ -184,8 +197,16 @@ export default function ListadoCotizaciones({
     if (entrada.accion === "editada") return "Editada";
     if (entrada.accion === "enviada_clientify")
       return "Cotización enviada a Clientify";
-    if (entrada.accion === "marcada_ganada") return "Marcada como ganada";
-    if (entrada.accion === "marcada_perdida") return "Marcada como perdida";
+    if (entrada.accion === "marcada_ganada") {
+      return entrada.razon
+        ? `Marcada como ganada — ${entrada.razon}`
+        : "Marcada como ganada";
+    }
+    if (entrada.accion === "marcada_perdida") {
+      return entrada.razon
+        ? `Marcada como perdida — ${entrada.razon}`
+        : "Marcada como perdida";
+    }
     if (entrada.accion === "estado_quitado")
       return "Se quitó la marca de ganada/perdida";
     return entrada.nuevoDueno
@@ -222,6 +243,64 @@ export default function ListadoCotizaciones({
   });
 
   const hayFiltrosActivos = Boolean(filtroCliente || filtroFecha || filtroCreador);
+
+  function abrirMarcarEstado(c: CotizacionGuardada, estado: EstadoCotizacion) {
+    setPorMarcarEstado(c);
+    setEstadoAMarcar(estado);
+    setRazonEstado("");
+    setEnvioEstado("idle");
+    setErrorEstado("");
+  }
+
+  function cerrarMarcarEstado() {
+    setPorMarcarEstado(null);
+    setEstadoAMarcar(null);
+    setEnvioEstado("idle");
+    setErrorEstado("");
+  }
+
+  /**
+   * Guarda el estado con su motivo y, si la cotización está vinculada a una
+   * empresa de Clientify, deja la misma razón como anotación en su ficha. Si
+   * no hay empresa vinculada, el estado igual queda guardado — solo avisa
+   * que no se pudo anotar en el CRM.
+   */
+  async function confirmarMarcarEstado() {
+    if (!porMarcarEstado || !estadoAMarcar) return;
+    setEnvioEstado("guardando");
+    setErrorEstado("");
+
+    try {
+      await onMarcarEstado(
+        porMarcarEstado.data.numeroFactura,
+        estadoAMarcar,
+        razonEstado,
+      );
+
+      const empresaId = await empresaDeLaCotizacion(porMarcarEstado.data);
+      if (empresaId === null) {
+        setEnvioEstado("guardado_sin_clientify");
+        return;
+      }
+
+      await enviarNotaEstado(
+        empresaId,
+        porMarcarEstado.data.numeroFactura,
+        estadoAMarcar,
+        razonEstado,
+      );
+      setEnvioEstado("guardado");
+    } catch (err) {
+      const detalle =
+        err instanceof ErrorApi
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "No se pudo guardar";
+      setErrorEstado(detalle);
+      setEnvioEstado("error");
+    }
+  }
 
   if (cotizaciones.length === 0) {
     return (
@@ -326,17 +405,18 @@ export default function ListadoCotizaciones({
         <table className="w-full table-fixed text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="w-[26%] px-3 py-3">Cotización</th>
-              <th className="w-[18%] px-3 py-3">Fechas</th>
-              <th className="w-[13%] px-3 py-3 text-right">Total antes de IVA</th>
-              <th className="w-[20%] px-3 py-3">Creada por / Reasignar</th>
-              <th className="w-[23%] px-3 py-3 text-right">Acciones</th>
+              <th className="w-[22%] px-3 py-3">Cotización</th>
+              <th className="w-[14%] px-3 py-3">Fechas</th>
+              <th className="w-[11%] px-3 py-3 text-right">Total antes de IVA</th>
+              <th className="w-[13%] px-3 py-3">Creada por</th>
+              <th className="w-[14%] px-3 py-3">Reasignar</th>
+              <th className="w-[26%] px-3 py-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
               {cotizacionesFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
                     No hay cotizaciones que coincidan con los filtros.
                   </td>
                 </tr>
@@ -388,39 +468,39 @@ export default function ListadoCotizaciones({
                   <td className="whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums text-slate-900">
                     {formatCurrency(totals.subtotal)}
                   </td>
-                  <td className="px-3 py-3">
-                    <div className="truncate text-xs text-slate-600">
+                  <td className="px-3 py-3 text-xs text-slate-600">
+                    <div className="truncate">
                       {(c.creadoPor && nombresPorCorreo.get(c.creadoPor)) ||
                         c.creadoPor ||
                         "—"}
                     </div>
-                    <div className="mt-1">
-                      {puedeReasignar ? (
-                        <select
-                          aria-label={`Reasignar ${c.data.numeroFactura}`}
-                          className="w-full cursor-pointer rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                          value={c.reasignadoA ?? ""}
-                          onChange={(e) => {
-                            const nuevoValor = e.target.value;
-                            if (nuevoValor !== (c.reasignadoA ?? "")) {
-                              setPorReasignar({
-                                numeroFactura: c.data.numeroFactura,
-                                nuevoDueno: nuevoValor,
-                              });
-                            }
-                          }}
-                        >
-                          <option value="">Sin reasignar</option>
-                          {equipo.map((m) => (
-                            <option key={m.email} value={m.email}>
-                              {nombreCompleto(m)}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    {puedeReasignar ? (
+                      <select
+                        aria-label={`Reasignar ${c.data.numeroFactura}`}
+                        className="w-full cursor-pointer rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        value={c.reasignadoA ?? ""}
+                        onChange={(e) => {
+                          const nuevoValor = e.target.value;
+                          if (nuevoValor !== (c.reasignadoA ?? "")) {
+                            setPorReasignar({
+                              numeroFactura: c.data.numeroFactura,
+                              nuevoDueno: nuevoValor,
+                            });
+                          }
+                        }}
+                      >
+                        <option value="">Sin reasignar</option>
+                        {equipo.map((m) => (
+                          <option key={m.email} value={m.email}>
+                            {nombreCompleto(m)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-col items-end gap-1">
@@ -455,10 +535,12 @@ export default function ListadoCotizaciones({
                               : "Marcar como ganada"
                           }
                           onClick={() =>
-                            onMarcarEstado(
-                              c.data.numeroFactura,
-                              c.estado === "ganada" ? undefined : "ganada",
-                            )
+                            c.estado === "ganada"
+                              ? onMarcarEstado(
+                                  c.data.numeroFactura,
+                                  undefined,
+                                ).catch(() => {})
+                              : abrirMarcarEstado(c, "ganada")
                           }
                           icono={ICONOS.ganada}
                           tono={
@@ -472,10 +554,12 @@ export default function ListadoCotizaciones({
                               : "Marcar como perdida"
                           }
                           onClick={() =>
-                            onMarcarEstado(
-                              c.data.numeroFactura,
-                              c.estado === "perdida" ? undefined : "perdida",
-                            )
+                            c.estado === "perdida"
+                              ? onMarcarEstado(
+                                  c.data.numeroFactura,
+                                  undefined,
+                                ).catch(() => {})
+                              : abrirMarcarEstado(c, "perdida")
                           }
                           icono={ICONOS.perdida}
                           tono={c.estado === "perdida" ? "rojo-activo" : "rojo"}
@@ -533,6 +617,100 @@ export default function ListadoCotizaciones({
               >
                 Sí, eliminar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {porMarcarEstado && estadoAMarcar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40"
+            onClick={cerrarMarcarEstado}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+          >
+            <h2 className="text-base font-semibold text-slate-900">
+              Marcar como {estadoAMarcar === "ganada" ? "ganada" : "perdida"}
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Cotización {porMarcarEstado.data.numeroFactura}
+              {porMarcarEstado.data.cliente.razonSocial
+                ? ` · ${porMarcarEstado.data.cliente.razonSocial}`
+                : ""}
+            </p>
+
+            <label
+              htmlFor="razon-estado"
+              className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+            >
+              Motivo (opcional)
+            </label>
+            <textarea
+              id="razon-estado"
+              value={razonEstado}
+              onChange={(e) => setRazonEstado(e.target.value)}
+              disabled={envioEstado === "guardando"}
+              rows={3}
+              placeholder={
+                estadoAMarcar === "ganada"
+                  ? "Por qué se ganó la cotización..."
+                  : "Por qué se perdió la cotización..."
+              }
+              className="mt-1 w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              Queda como observación en el historial y, si la cotización está
+              vinculada a una empresa de Clientify, se anota también en su
+              ficha al enviar.
+            </p>
+
+            {envioEstado === "guardado" && (
+              <div className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                Guardado y anotado en la ficha de la empresa en Clientify.
+              </div>
+            )}
+            {envioEstado === "guardado_sin_clientify" && (
+              <div className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Se guardó el estado, pero esta cotización no está vinculada a
+                una empresa de Clientify: no se pudo anotar en su ficha.
+              </div>
+            )}
+            {envioEstado === "error" && (
+              <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+                <p className="font-medium">No se pudo guardar.</p>
+                <p className="mt-1 break-words text-xs">{errorEstado}</p>
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cerrarMarcarEstado}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100"
+              >
+                {envioEstado === "guardado" ||
+                envioEstado === "guardado_sin_clientify"
+                  ? "Cerrar"
+                  : "Cancelar"}
+              </button>
+              {envioEstado !== "guardado" &&
+                envioEstado !== "guardado_sin_clientify" && (
+                  <button
+                    type="button"
+                    onClick={confirmarMarcarEstado}
+                    disabled={envioEstado === "guardando"}
+                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {envioEstado === "guardando"
+                      ? "Enviando…"
+                      : "Guardar y enviar a Clientify"}
+                  </button>
+                )}
             </div>
           </div>
         </div>

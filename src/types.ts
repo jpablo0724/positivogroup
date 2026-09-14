@@ -57,6 +57,8 @@ export interface HistorialEntrada {
   quien: string;
   /** Solo en "reasignada": correo a quien se le dio el acceso, o "" si se quitó. */
   nuevoDueno?: string;
+  /** Solo en "marcada_ganada"/"marcada_perdida": el motivo que se escribió. */
+  razon?: string;
 }
 
 /** Resultado de la cotización: ganada, perdida, o sin definir todavía. */
@@ -70,6 +72,8 @@ export interface CotizacionGuardada {
   reasignadoA?: string;
   /** Ganada, perdida, o sin marcar todavía. */
   estado?: EstadoCotizacion;
+  /** Motivo escrito al marcar el estado actual. Vacío si no se marcó ninguno. */
+  razonEstado?: string;
   /** Creación, ediciones y reasignaciones, en orden. Las guardadas antes de que existiera este dato no lo traen. */
   historial?: HistorialEntrada[];
   data: InvoiceData;

@@ -53,6 +53,8 @@ interface HistorialEntrada {
     | "estado_quitado";
   quien: string;
   nuevoDueno?: string;
+  /** Solo en "marcada_ganada"/"marcada_perdida": el motivo que se escribió. */
+  razon?: string;
 }
 
 type EstadoCotizacion = "ganada" | "perdida";
@@ -65,6 +67,8 @@ interface CotizacionGuardada {
   reasignadoA?: string;
   /** Ganada, perdida, o sin marcar todavía. */
   estado?: EstadoCotizacion;
+  /** Motivo escrito al marcar el estado actual. */
+  razonEstado?: string;
   /** Creación, ediciones y reasignaciones, en orden. */
   historial?: HistorialEntrada[];
   data: { numeroFactura?: unknown };
@@ -247,18 +251,21 @@ export default async (req: Request) => {
 
       const cuerpo = (await req.json().catch(() => ({}))) as {
         estado?: unknown;
+        razon?: unknown;
       };
       const texto = String(cuerpo.estado ?? "").trim();
+      const razon = String(cuerpo.razon ?? "").trim();
 
       if (texto !== "" && texto !== "ganada" && texto !== "perdida") {
         return json({ error: "estado_invalido" }, 400);
       }
 
       const nuevoEstado = texto === "" ? undefined : (texto as EstadoCotizacion);
-      const { estado: _anterior, ...sinEstado } = guardada;
+      const { estado: _anterior, razonEstado: _razonAnterior, ...sinEstado } =
+        guardada;
       const registro: CotizacionGuardada = {
         ...sinEstado,
-        ...(nuevoEstado ? { estado: nuevoEstado } : {}),
+        ...(nuevoEstado ? { estado: nuevoEstado, razonEstado: razon } : {}),
         historial: [
           ...(guardada.historial ?? []),
           {
@@ -270,6 +277,7 @@ export default async (req: Request) => {
                   ? "marcada_perdida"
                   : "estado_quitado",
             quien: quien.email,
+            ...(nuevoEstado && razon ? { razon } : {}),
           },
         ],
       };

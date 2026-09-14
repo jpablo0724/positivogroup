@@ -115,6 +115,41 @@ export async function empresaDeLaCotizacion(
   return exactas.length === 1 ? exactas[0].id : null;
 }
 
+/** Cuerpo de la nota que deja en la ficha de la empresa el resultado de la cotización. */
+export function textoNotaEstado(
+  numeroFactura: string,
+  estado: "ganada" | "perdida",
+  razon: string,
+): string {
+  const lineas = [
+    escaparHtml(
+      `COTIZACIÓN N° ${numeroFactura} MARCADA COMO ${
+        estado === "ganada" ? "GANADA" : "PERDIDA"
+      }`,
+    ),
+  ];
+  const motivo = razon.trim();
+  if (motivo !== "") lineas.push(escaparHtml(`Motivo: ${motivo}`));
+  return lineas.join("<br>");
+}
+
+/** Anota en la ficha de la empresa en Clientify que la cotización se ganó o perdió, con el motivo. */
+export async function enviarNotaEstado(
+  empresaId: number,
+  numeroFactura: string,
+  estado: "ganada" | "perdida",
+  razon: string,
+): Promise<ResultadoNota> {
+  return pedir<ResultadoNota>("/api/clientify/nota", {
+    metodo: "POST",
+    cuerpo: {
+      empresaId,
+      titulo: `Cotización ${estado === "ganada" ? "ganada" : "perdida"}`,
+      texto: textoNotaEstado(numeroFactura, estado, razon),
+    },
+  });
+}
+
 export interface ResultadoNota {
   enviada: boolean;
   endpoint?: string;
