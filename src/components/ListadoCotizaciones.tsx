@@ -132,7 +132,7 @@ function BotonIcono({
       title={titulo}
       aria-label={titulo}
       onClick={onClick}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 ${TONOS[tono]}`}
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 ${TONOS[tono]}`}
     >
       {icono}
     </button>
@@ -323,24 +323,20 @@ export default function ListadoCotizaciones({
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-3 py-3">N.º</th>
-                <th className="px-3 py-3">Cliente</th>
-                <th className="px-3 py-3">Fecha</th>
-                <th className="px-3 py-3">Válida hasta</th>
-                <th className="px-3 py-3 text-right">Total antes de IVA</th>
-                <th className="px-3 py-3">Creada por</th>
-                <th className="px-3 py-3">Reasignar</th>
-                <th className="px-3 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
+        <table className="w-full table-fixed text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th className="w-[26%] px-3 py-3">Cotización</th>
+              <th className="w-[18%] px-3 py-3">Fechas</th>
+              <th className="w-[13%] px-3 py-3 text-right">Total antes de IVA</th>
+              <th className="w-[20%] px-3 py-3">Creada por / Reasignar</th>
+              <th className="w-[23%] px-3 py-3 text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
               {cotizacionesFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
                     No hay cotizaciones que coincidan con los filtros.
                   </td>
                 </tr>
@@ -363,64 +359,68 @@ export default function ListadoCotizaciones({
                   key={c.data.numeroFactura}
                   className="group border-b border-slate-100 last:border-0 odd:bg-white even:bg-slate-50/60 hover:bg-indigo-50/40"
                 >
-                  <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-900">
-                    {c.data.numeroFactura}
-                  </td>
-                  <td className="px-3 py-3 text-slate-700">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span>{c.data.cliente.razonSocial || "—"}</span>
+                  <td className="px-3 py-3">
+                    <div className="truncate font-semibold text-slate-900">
+                      {c.data.numeroFactura}
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1 truncate text-xs text-slate-600">
+                      <span className="truncate">
+                        {c.data.cliente.razonSocial || "—"}
+                      </span>
                       {c.estado === "ganada" && (
-                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                           Ganada
                         </span>
                       )}
                       {c.estado === "perdida" && (
-                        <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
                           Perdida
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-slate-600">
-                    {formatDateLong(c.data.fecha) || "—"}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-slate-600">
-                    {formatDateLong(c.data.validaHasta) || "—"}
+                  <td className="px-3 py-3 text-xs text-slate-600">
+                    <div>{formatDateLong(c.data.fecha) || "—"}</div>
+                    <div className="mt-0.5 text-slate-400">
+                      Válida: {formatDateLong(c.data.validaHasta) || "—"}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums text-slate-900">
                     {formatCurrency(totals.subtotal)}
                   </td>
-                  <td className="px-3 py-3 text-slate-700">
-                    {(c.creadoPor && nombresPorCorreo.get(c.creadoPor)) ||
-                      c.creadoPor ||
-                      "—"}
-                  </td>
                   <td className="px-3 py-3">
-                    {puedeReasignar ? (
-                      <select
-                        aria-label={`Reasignar ${c.data.numeroFactura}`}
-                        className="w-full min-w-[110px] max-w-[140px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                        value={c.reasignadoA ?? ""}
-                        onChange={(e) => {
-                          const nuevoValor = e.target.value;
-                          if (nuevoValor !== (c.reasignadoA ?? "")) {
-                            setPorReasignar({
-                              numeroFactura: c.data.numeroFactura,
-                              nuevoDueno: nuevoValor,
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Sin reasignar</option>
-                        {equipo.map((m) => (
-                          <option key={m.email} value={m.email}>
-                            {nombreCompleto(m)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
+                    <div className="truncate text-xs text-slate-600">
+                      {(c.creadoPor && nombresPorCorreo.get(c.creadoPor)) ||
+                        c.creadoPor ||
+                        "—"}
+                    </div>
+                    <div className="mt-1">
+                      {puedeReasignar ? (
+                        <select
+                          aria-label={`Reasignar ${c.data.numeroFactura}`}
+                          className="w-full cursor-pointer rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          value={c.reasignadoA ?? ""}
+                          onChange={(e) => {
+                            const nuevoValor = e.target.value;
+                            if (nuevoValor !== (c.reasignadoA ?? "")) {
+                              setPorReasignar({
+                                numeroFactura: c.data.numeroFactura,
+                                nuevoDueno: nuevoValor,
+                              });
+                            }
+                          }}
+                        >
+                          <option value="">Sin reasignar</option>
+                          {equipo.map((m) => (
+                            <option key={m.email} value={m.email}>
+                              {nombreCompleto(m)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-col items-end gap-1">
@@ -492,9 +492,8 @@ export default function ListadoCotizaciones({
                 </tr>
               );
             })}
-            </tbody>
-          </table>
-        </div>
+          </tbody>
+        </table>
       </div>
 
       {porEliminar && (
