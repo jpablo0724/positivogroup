@@ -101,14 +101,14 @@ function formatFechaHora(iso: string): string {
 
 const TONOS = {
   neutro:
-    "text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-slate-400",
+    "text-slate-500 hover:bg-white hover:text-slate-900 hover:shadow-sm focus-visible:outline-slate-400",
   verde:
-    "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-emerald-500",
+    "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-sm focus-visible:outline-emerald-500",
   "verde-activo":
-    "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 focus-visible:outline-emerald-500",
-  rojo: "text-red-500 hover:bg-red-50 hover:text-red-600 focus-visible:outline-red-400",
+    "bg-emerald-500 text-white shadow-sm hover:bg-emerald-600 focus-visible:outline-emerald-500",
+  rojo: "text-red-500 hover:bg-red-50 hover:text-red-600 hover:shadow-sm focus-visible:outline-red-400",
   "rojo-activo":
-    "bg-red-100 text-red-700 hover:bg-red-200 focus-visible:outline-red-400",
+    "bg-red-500 text-white shadow-sm hover:bg-red-600 focus-visible:outline-red-400",
 };
 
 /**
@@ -132,7 +132,7 @@ function BotonIcono({
       title={titulo}
       aria-label={titulo}
       onClick={onClick}
-      className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 ${TONOS[tono]}`}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 ${TONOS[tono]}`}
     >
       {icono}
     </button>
@@ -249,14 +249,24 @@ export default function ListadoCotizaciones({
           >
             Cliente
           </label>
-          <input
-            id="filtro-cliente"
-            type="text"
-            value={filtroCliente}
-            onChange={(e) => setFiltroCliente(e.target.value)}
-            placeholder="Buscar por nombre de empresa..."
-            className="min-w-[220px] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
-          />
+          <div className="relative">
+            <svg
+              viewBox="0 0 24 24"
+              {...trazo}
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              id="filtro-cliente"
+              type="text"
+              value={filtroCliente}
+              onChange={(e) => setFiltroCliente(e.target.value)}
+              placeholder="Buscar por nombre de empresa..."
+              className="min-w-[240px] rounded-md border border-slate-300 bg-white py-1.5 pl-8 pr-2 text-sm text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-1">
@@ -271,7 +281,7 @@ export default function ListadoCotizaciones({
             type="date"
             value={filtroFecha}
             onChange={(e) => setFiltroFecha(e.target.value)}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
         </div>
 
@@ -286,7 +296,7 @@ export default function ListadoCotizaciones({
             id="filtro-creador"
             value={filtroCreador}
             onChange={(e) => setFiltroCreador(e.target.value)}
-            className="min-w-[180px] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+            className="min-w-[180px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           >
             <option value="">Todos los creadores</option>
             {creadoresDisponibles.map((correo) => (
@@ -305,37 +315,38 @@ export default function ListadoCotizaciones({
               setFiltroFecha("");
               setFiltroCreador("");
             }}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-100"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50"
           >
             Limpiar filtros
           </button>
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full min-w-[820px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="px-4 py-3">N.º</th>
-              <th className="px-4 py-3">Cliente</th>
-              <th className="px-4 py-3">Fecha</th>
-              <th className="px-4 py-3">Válida hasta</th>
-              <th className="px-4 py-3 text-right">Total antes de IVA</th>
-              <th className="px-4 py-3">Creada por</th>
-              <th className="px-4 py-3">Reasignar</th>
-              <th className="sticky right-0 z-10 bg-slate-50 px-4 py-3 text-right shadow-[-6px_0_6px_-6px_rgba(15,23,42,0.15)]">
-                Acciones
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {cotizacionesFiltradas.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
-                  No hay cotizaciones que coincidan con los filtros.
-                </td>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-3">N.º</th>
+                <th className="px-4 py-3">Cliente</th>
+                <th className="px-4 py-3">Fecha</th>
+                <th className="px-4 py-3">Válida hasta</th>
+                <th className="px-4 py-3 text-right">Total antes de IVA</th>
+                <th className="px-4 py-3">Creada por</th>
+                <th className="px-4 py-3">Reasignar</th>
+                <th className="sticky right-0 z-10 bg-slate-50 px-4 py-3 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
+                  Acciones
+                </th>
               </tr>
-            )}
+            </thead>
+            <tbody>
+              {cotizacionesFiltradas.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
+                    No hay cotizaciones que coincidan con los filtros.
+                  </td>
+                </tr>
+              )}
             {cotizacionesFiltradas.map((c) => {
               const totals = calcInvoiceTotals(
                 c.data.items,
@@ -352,21 +363,33 @@ export default function ListadoCotizaciones({
               return (
                 <tr
                   key={c.data.numeroFactura}
-                  className="border-b border-slate-100 last:border-0"
+                  className="group border-b border-slate-100 last:border-0 odd:bg-white even:bg-slate-50/60 hover:bg-indigo-50/40"
                 >
-                  <td className="px-4 py-3 font-medium text-slate-900">
+                  <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">
                     {c.data.numeroFactura}
                   </td>
                   <td className="px-4 py-3 text-slate-700">
-                    {c.data.cliente.razonSocial || "—"}
+                    <div className="flex items-center gap-2">
+                      <span>{c.data.cliente.razonSocial || "—"}</span>
+                      {c.estado === "ganada" && (
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          Ganada
+                        </span>
+                      )}
+                      {c.estado === "perdida" && (
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                          Perdida
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                     {formatDateLong(c.data.fecha) || "—"}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                     {formatDateLong(c.data.validaHasta) || "—"}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-slate-900">
+                  <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
                     {formatCurrency(totals.subtotal)}
                   </td>
                   <td className="px-4 py-3 text-slate-700">
@@ -378,7 +401,7 @@ export default function ListadoCotizaciones({
                     {puedeReasignar ? (
                       <select
                         aria-label={`Reasignar ${c.data.numeroFactura}`}
-                        className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700"
+                        className="w-full min-w-[150px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                         value={c.reasignadoA ?? ""}
                         onChange={(e) => {
                           const nuevoValor = e.target.value;
@@ -401,59 +424,67 @@ export default function ListadoCotizaciones({
                       <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="sticky right-0 z-10 bg-white px-4 py-3 shadow-[-6px_0_6px_-6px_rgba(15,23,42,0.15)]">
-                    <div className="flex items-center justify-end gap-1">
-                      <BotonIcono
-                        titulo="Abrir para editar"
-                        onClick={() => onVer(c)}
-                        icono={ICONOS.editar}
-                      />
-                      <BotonIcono
-                        titulo="Guardar en PDF"
-                        onClick={() => onVerPdf(c)}
-                        icono={ICONOS.pdf}
-                      />
-                      <BotonIcono
-                        titulo="Enviar a Clientify"
-                        onClick={() => onEnviarClientify(c)}
-                        icono={ICONOS.enviar}
-                        tono="verde"
-                      />
-                      <BotonIcono
-                        titulo="Historial de cambios"
-                        onClick={() => setHistorialAbierto(c)}
-                        icono={ICONOS.historial}
-                      />
-                      <BotonIcono
-                        titulo={
-                          c.estado === "ganada"
-                            ? "Quitar marca de ganada"
-                            : "Marcar como ganada"
-                        }
-                        onClick={() =>
-                          onMarcarEstado(
-                            c.data.numeroFactura,
-                            c.estado === "ganada" ? undefined : "ganada",
-                          )
-                        }
-                        icono={ICONOS.ganada}
-                        tono={c.estado === "ganada" ? "verde-activo" : "verde"}
-                      />
-                      <BotonIcono
-                        titulo={
-                          c.estado === "perdida"
-                            ? "Quitar marca de perdida"
-                            : "Marcar como perdida"
-                        }
-                        onClick={() =>
-                          onMarcarEstado(
-                            c.data.numeroFactura,
-                            c.estado === "perdida" ? undefined : "perdida",
-                          )
-                        }
-                        icono={ICONOS.perdida}
-                        tono={c.estado === "perdida" ? "rojo-activo" : "rojo"}
-                      />
+                  <td className="sticky right-0 z-10 bg-inherit px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
+                        <BotonIcono
+                          titulo="Abrir para editar"
+                          onClick={() => onVer(c)}
+                          icono={ICONOS.editar}
+                        />
+                        <BotonIcono
+                          titulo="Guardar en PDF"
+                          onClick={() => onVerPdf(c)}
+                          icono={ICONOS.pdf}
+                        />
+                        <BotonIcono
+                          titulo="Enviar a Clientify"
+                          onClick={() => onEnviarClientify(c)}
+                          icono={ICONOS.enviar}
+                          tono="verde"
+                        />
+                        <BotonIcono
+                          titulo="Historial de cambios"
+                          onClick={() => setHistorialAbierto(c)}
+                          icono={ICONOS.historial}
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-0.5 rounded-lg bg-slate-100/80 p-0.5">
+                        <BotonIcono
+                          titulo={
+                            c.estado === "ganada"
+                              ? "Quitar marca de ganada"
+                              : "Marcar como ganada"
+                          }
+                          onClick={() =>
+                            onMarcarEstado(
+                              c.data.numeroFactura,
+                              c.estado === "ganada" ? undefined : "ganada",
+                            )
+                          }
+                          icono={ICONOS.ganada}
+                          tono={
+                            c.estado === "ganada" ? "verde-activo" : "verde"
+                          }
+                        />
+                        <BotonIcono
+                          titulo={
+                            c.estado === "perdida"
+                              ? "Quitar marca de perdida"
+                              : "Marcar como perdida"
+                          }
+                          onClick={() =>
+                            onMarcarEstado(
+                              c.data.numeroFactura,
+                              c.estado === "perdida" ? undefined : "perdida",
+                            )
+                          }
+                          icono={ICONOS.perdida}
+                          tono={c.estado === "perdida" ? "rojo-activo" : "rojo"}
+                        />
+                      </div>
+
                       <BotonIcono
                         titulo="Eliminar"
                         onClick={() => setPorEliminar(c.data.numeroFactura)}
@@ -465,8 +496,9 @@ export default function ListadoCotizaciones({
                 </tr>
               );
             })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {porEliminar && (
