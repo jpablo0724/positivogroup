@@ -324,19 +324,17 @@ export default function ListadoCotizaciones({
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3">N.º</th>
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3">Fecha</th>
-                <th className="px-4 py-3">Válida hasta</th>
-                <th className="px-4 py-3 text-right">Total antes de IVA</th>
-                <th className="px-4 py-3">Creada por</th>
-                <th className="px-4 py-3">Reasignar</th>
-                <th className="sticky right-0 z-10 bg-slate-50 px-4 py-3 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
-                  Acciones
-                </th>
+                <th className="px-3 py-3">N.º</th>
+                <th className="px-3 py-3">Cliente</th>
+                <th className="px-3 py-3">Fecha</th>
+                <th className="px-3 py-3">Válida hasta</th>
+                <th className="px-3 py-3 text-right">Total antes de IVA</th>
+                <th className="px-3 py-3">Creada por</th>
+                <th className="px-3 py-3">Reasignar</th>
+                <th className="px-3 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -365,11 +363,11 @@ export default function ListadoCotizaciones({
                   key={c.data.numeroFactura}
                   className="group border-b border-slate-100 last:border-0 odd:bg-white even:bg-slate-50/60 hover:bg-indigo-50/40"
                 >
-                  <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">
+                  <td className="whitespace-nowrap px-3 py-3 font-semibold text-slate-900">
                     {c.data.numeroFactura}
                   </td>
-                  <td className="px-4 py-3 text-slate-700">
-                    <div className="flex items-center gap-2">
+                  <td className="px-3 py-3 text-slate-700">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span>{c.data.cliente.razonSocial || "—"}</span>
                       {c.estado === "ganada" && (
                         <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
@@ -383,25 +381,25 @@ export default function ListadoCotizaciones({
                       )}
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                  <td className="whitespace-nowrap px-3 py-3 text-slate-600">
                     {formatDateLong(c.data.fecha) || "—"}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                  <td className="whitespace-nowrap px-3 py-3 text-slate-600">
                     {formatDateLong(c.data.validaHasta) || "—"}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-slate-900">
+                  <td className="whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums text-slate-900">
                     {formatCurrency(totals.subtotal)}
                   </td>
-                  <td className="px-4 py-3 text-slate-700">
+                  <td className="px-3 py-3 text-slate-700">
                     {(c.creadoPor && nombresPorCorreo.get(c.creadoPor)) ||
                       c.creadoPor ||
                       "—"}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     {puedeReasignar ? (
                       <select
                         aria-label={`Reasignar ${c.data.numeroFactura}`}
-                        className="w-full min-w-[150px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                        className="w-full min-w-[110px] max-w-[140px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                         value={c.reasignadoA ?? ""}
                         onChange={(e) => {
                           const nuevoValor = e.target.value;
@@ -424,7 +422,7 @@ export default function ListadoCotizaciones({
                       <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="sticky right-0 z-10 bg-inherit px-3 py-2 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
+                  <td className="px-3 py-2">
                     <div className="flex flex-col items-end gap-1">
                       <div className="flex items-center gap-1">
                         <BotonIcono
