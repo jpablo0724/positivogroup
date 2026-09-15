@@ -882,10 +882,6 @@ export default function ListadoCotizaciones({
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Adjuntos
             </label>
-            <p className="mt-1 text-xs text-slate-400">
-              PDF, Word, Excel, PowerPoint, imágenes o comprimidos — máx.{" "}
-              {formatTamano(ADJUNTO_MAX_BYTES)} c/u.
-            </p>
             <input
               type="file"
               multiple
