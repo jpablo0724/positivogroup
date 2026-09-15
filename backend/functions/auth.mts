@@ -7,12 +7,15 @@ import {
   buscarUsuario,
   cerrarSesion,
   comoPublico,
+  consumirTokenRestablecimiento,
   contrasenaCoincide,
   cookieBorrada,
   cookieSesion,
   cerrarSesionesDe,
+  crearTokenRestablecimiento,
   crearUsuario,
   derivarContrasena,
+  emailDeTokenRestablecimiento,
   guardarUsuario,
   leerCookie,
   listarUsuarios,
@@ -20,15 +23,18 @@ import {
   reclamarPrimerUsuario,
   usuarioDeSesion,
 } from "../lib/auth.mts";
+import { correoConfigurado, enviarCorreo } from "../lib/correo.mts";
 
 /**
  * Registro e inicio de sesión.
  *
- *   POST /api/auth/registro -> crea la cuenta y deja la sesión abierta
- *   POST /api/auth/entrar   -> inicia sesión
- *   POST /api/auth/salir    -> cierra la sesión
- *   GET  /api/auth/sesion   -> quién está dentro
- *   POST /api/auth/perfil   -> cambia el propio nombre, apellidos, teléfono y cargo
+ *   POST /api/auth/registro     -> crea la cuenta y deja la sesión abierta
+ *   POST /api/auth/entrar       -> inicia sesión
+ *   POST /api/auth/salir        -> cierra la sesión
+ *   GET  /api/auth/sesion       -> quién está dentro
+ *   POST /api/auth/perfil       -> cambia el propio nombre, apellidos, teléfono y cargo
+ *   POST /api/auth/olvide       -> manda un enlace por correo para restablecer la contraseña
+ *   POST /api/auth/restablecer -> pone la contraseña nueva con el testigo del enlace
  *
  * El registro está cerrado: las cuentas las crea un administrador desde la
  * sección de Usuarios. La única excepción es el arranque, cuando todavía no
@@ -159,6 +165,76 @@ export default async (req: Request) => {
 
       const testigo = await abrirSesion(email);
       return conCookie({ usuario: comoPublico(creado) }, cookieSesion(testigo));
+    }
+
+    // --- Olvidé mi contraseña: manda el enlace de restablecimiento ---
+    //
+    // Siempre responde igual, exista o no la cuenta: así no se puede
+    // averiguar qué correos tienen cuenta con solo mirar la respuesta.
+    if (accion === "olvide") {
+      if (!EMAIL_VALIDO.test(email)) return json({ error: "email_invalido" }, 400);
+
+      const usuario = await buscarUsuario(email);
+      if (usuario) {
+        const testigo = await crearTokenRestablecimiento(usuario.email);
+        const base = process.env.SITE_URL || url.origin;
+        const enlace = `${base}/restablecer?token=${testigo}`;
+
+        if (!correoConfigurado()) {
+          return json(
+            {
+              error: "correo_no_configurado",
+              mensaje:
+                "El backend no tiene definida la variable SMTP_HOST en el " +
+                "servidor, que es el servidor de correo con el que se manda " +
+                "el enlace de restablecimiento.",
+            },
+            503,
+          );
+        }
+
+        await enviarCorreo({
+          para: usuario.email,
+          asunto: "Restablecer tu contraseña — Sistema de cotizaciones",
+          html:
+            `<p>Alguien pidió restablecer la contraseña de esta cuenta.</p>` +
+            `<p><a href="${enlace}">Haz clic aquí para poner una nueva contraseña</a>.</p>` +
+            `<p>El enlace vale por una hora. Si no fuiste tú, ignora este correo.</p>`,
+        });
+      }
+
+      return json({ enviado: true });
+    }
+
+    // --- Restablecer la contraseña con el testigo del enlace ---
+    if (accion === "restablecer") {
+      const testigo = texto((cuerpo as never)["token"]);
+      const nueva = texto((cuerpo as never)["nueva"]);
+
+      const correoDeCuenta = await emailDeTokenRestablecimiento(testigo);
+      if (!correoDeCuenta) {
+        return json({ error: "token_invalido" }, 400);
+      }
+      if (nueva.length < MINIMO_CONTRASENA) {
+        return json({ error: "contrasena_corta", minimo: MINIMO_CONTRASENA }, 400);
+      }
+
+      const usuario = await buscarUsuario(correoDeCuenta);
+      if (!usuario) {
+        await consumirTokenRestablecimiento(testigo);
+        return json({ error: "token_invalido" }, 400);
+      }
+
+      const derivada = await derivarContrasena(nueva);
+      await guardarUsuario({ ...usuario, clave: derivada.clave, sal: derivada.sal });
+      await consumirTokenRestablecimiento(testigo);
+
+      // Igual que al cambiar la contraseña desde el perfil: se cierran todas
+      // las sesiones abiertas y se deja una nueva, ya restablecida.
+      await cerrarSesionesDe(usuario.email);
+      const testigoSesion = await abrirSesion(usuario.email);
+
+      return conCookie({ restablecida: true }, cookieSesion(testigoSesion));
     }
 
     // --- Cambiar los propios datos ---

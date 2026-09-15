@@ -23,7 +23,9 @@
     "prueba:ui": "node pruebas/frontend.mjs"
   },
   "dependencies": {
+    "@types/nodemailer": "^8.0.1",
     "mysql2": "^3.24.2",
+    "nodemailer": "^10.0.10",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

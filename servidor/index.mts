@@ -26,6 +26,12 @@ import publico from "../backend/functions/publico.mts";
  *   CLIENTIFY_API_TOKEN                      token del CRM
  *   ADMIN_EMAILS                             (opcional) administradores
  *   PORT                                     (opcional) puerto, por defecto 3000
+ *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS   servidor de correo, para el
+ *                                             enlace de "olvidé mi contraseña"
+ *   SMTP_FROM                                (opcional) remitente, por defecto SMTP_USER
+ *   SMTP_SECURE                              (opcional) "true" para TLS directo (puerto 465)
+ *   SITE_URL                                 (opcional) URL pública, para el enlace del
+ *                                             correo; si falta, se usa el origen de la petición
  */
 
 type Manejador = (req: Request) => Promise<Response>;

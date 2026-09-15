@@ -112,6 +112,10 @@ function almacenSesiones() {
   return getStore({ name: "sesiones", consistency: "strong" });
 }
 
+function almacenRestablecimientos() {
+  return getStore({ name: "restablecimientos", consistency: "strong" });
+}
+
 /** Los correos no distinguen mayúsculas: se normalizan antes de usarlos. */
 export function normalizarEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -395,4 +399,60 @@ export function cookieSesion(testigo: string): string {
 
 export function cookieBorrada(): string {
   return `${NOMBRE_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
+}
+
+// --- Restablecer contraseña ---
+
+interface Restablecimiento {
+  email: string;
+  expiraEn: string;
+}
+
+const VIGENCIA_RESTABLECIMIENTO_MS = 60 * 60 * 1000; // 1 hora
+
+/**
+ * Crea un enlace de un solo uso para restablecer la contraseña. El testigo en
+ * claro solo existe aquí y en el correo que se manda: lo que se guarda es su
+ * huella, igual que con las sesiones.
+ */
+export async function crearTokenRestablecimiento(
+  email: string,
+): Promise<string> {
+  const testigo = randomBytes(32).toString("base64url");
+  const ahora = Date.now();
+
+  const dato: Restablecimiento = {
+    email: normalizarEmail(email),
+    expiraEn: new Date(ahora + VIGENCIA_RESTABLECIMIENTO_MS).toISOString(),
+  };
+
+  await almacenRestablecimientos().setJSON(huella(testigo), dato);
+  return testigo;
+}
+
+/** El correo dueño del testigo, o null si no vale, ya venció o ya se usó. */
+export async function emailDeTokenRestablecimiento(
+  testigo: string,
+): Promise<string | null> {
+  if (!testigo) return null;
+
+  const almacen = almacenRestablecimientos();
+  const dato = (await almacen.get(huella(testigo), {
+    type: "json",
+  })) as Restablecimiento | null;
+
+  if (!dato) return null;
+  if (Date.parse(dato.expiraEn) < Date.now()) {
+    await almacen.delete(huella(testigo));
+    return null;
+  }
+
+  return dato.email;
+}
+
+/** Invalida el testigo: se usa una sola vez, se haya completado o no. */
+export async function consumirTokenRestablecimiento(
+  testigo: string,
+): Promise<void> {
+  await almacenRestablecimientos().delete(huella(testigo));
 }

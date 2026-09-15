@@ -30,6 +30,39 @@ interface ListadoCotizacionesProps {
 const ADJUNTO_MAX_BYTES = 3.3 * 1024 * 1024;
 const ADJUNTOS_MAX_CANTIDAD = 5;
 
+/** Tipos de archivo permitidos como adjunto: PDF, Excel, Word, PowerPoint e imágenes. */
+const ADJUNTOS_ACCEPT =
+  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp," +
+  "application/pdf," +
+  "application/msword," +
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
+  "application/vnd.ms-excel," +
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
+  "application/vnd.ms-powerpoint," +
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation," +
+  "image/*";
+
+const EXTENSIONES_ADJUNTO_PERMITIDAS = [
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+];
+
+function extensionPermitida(archivo: File): boolean {
+  const nombre = archivo.name.toLowerCase();
+  if (archivo.type.startsWith("image/")) return true;
+  return EXTENSIONES_ADJUNTO_PERMITIDAS.some((ext) => nombre.endsWith(ext));
+}
+
 /** Lee un archivo y lo convierte a base64 puro (sin el prefijo "data:...;base64,"). */
 function archivoABase64(archivo: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -209,6 +242,9 @@ export default function ListadoCotizaciones({
   );
   const [razonEstado, setRazonEstado] = useState("");
   const [archivosEstado, setArchivosEstado] = useState<File[]>([]);
+  const [progresoArchivos, setProgresoArchivos] = useState<
+    Record<number, "subiendo" | "listo" | "error">
+  >({});
   const [envioEstado, setEnvioEstado] = useState<
     "idle" | "guardando" | "guardado" | "guardado_sin_clientify" | "error"
   >("idle");
@@ -312,6 +348,7 @@ export default function ListadoCotizaciones({
     setEstadoAMarcar(estado);
     setRazonEstado("");
     setArchivosEstado([]);
+    setProgresoArchivos({});
     setEnvioEstado("idle");
     setErrorEstado("");
   }
@@ -320,6 +357,7 @@ export default function ListadoCotizaciones({
     setPorMarcarEstado(null);
     setEstadoAMarcar(null);
     setArchivosEstado([]);
+    setProgresoArchivos({});
     setEnvioEstado("idle");
     setErrorEstado("");
   }
@@ -327,7 +365,15 @@ export default function ListadoCotizaciones({
   function agregarArchivosEstado(nuevos: FileList | null) {
     if (!nuevos || nuevos.length === 0) return;
     setArchivosEstado((previos) => {
-      const combinados = [...previos, ...Array.from(nuevos)];
+      const seleccionados = Array.from(nuevos);
+      const noPermitido = seleccionados.find((a) => !extensionPermitida(a));
+      if (noPermitido) {
+        setErrorEstado(
+          `"${noPermitido.name}" no es un tipo permitido. Solo PDF, Word, Excel, PowerPoint o imágenes.`,
+        );
+        seleccionados.splice(seleccionados.indexOf(noPermitido), 1);
+      }
+      const combinados = [...previos, ...seleccionados];
       if (combinados.length > ADJUNTOS_MAX_CANTIDAD) {
         setErrorEstado(`Máximo ${ADJUNTOS_MAX_CANTIDAD} archivos.`);
         return combinados.slice(0, ADJUNTOS_MAX_CANTIDAD);
@@ -344,6 +390,15 @@ export default function ListadoCotizaciones({
 
   function quitarArchivoEstado(indice: number) {
     setArchivosEstado((previos) => previos.filter((_, i) => i !== indice));
+    setProgresoArchivos((previos) => {
+      const copia: Record<number, "subiendo" | "listo" | "error"> = {};
+      Object.entries(previos).forEach(([clave, valor]) => {
+        const i = Number(clave);
+        if (i === indice) return;
+        copia[i > indice ? i - 1 : i] = valor;
+      });
+      return copia;
+    });
   }
 
   /**
@@ -376,7 +431,9 @@ export default function ListadoCotizaciones({
       // marca de estado junto con los demás, es lo que puede fallar si pesa
       // de más, y el error dice cuál.
       const adjuntos: AdjuntoEstado[] = [];
-      for (const archivo of archivosEstado) {
+      for (let i = 0; i < archivosEstado.length; i++) {
+        const archivo = archivosEstado[i];
+        setProgresoArchivos((previos) => ({ ...previos, [i]: "subiendo" }));
         try {
           const datos = await archivoABase64(archivo);
           const subido = await subirAdjuntoEstado(numeroFactura, {
@@ -385,7 +442,9 @@ export default function ListadoCotizaciones({
             datos,
           });
           adjuntos.push(subido);
+          setProgresoArchivos((previos) => ({ ...previos, [i]: "listo" }));
         } catch (err) {
+          setProgresoArchivos((previos) => ({ ...previos, [i]: "error" }));
           const detalle =
             err instanceof ErrorApi
               ? err.message
@@ -817,9 +876,14 @@ export default function ListadoCotizaciones({
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">
               Adjuntos
             </label>
+            <p className="mt-1 text-xs text-slate-400">
+              PDF, Word, Excel, PowerPoint o imágenes — máx.{" "}
+              {formatTamano(ADJUNTO_MAX_BYTES)} c/u.
+            </p>
             <input
               type="file"
               multiple
+              accept={ADJUNTOS_ACCEPT}
               disabled={
                 envioEstado === "guardando" ||
                 archivosEstado.length >= ADJUNTOS_MAX_CANTIDAD
@@ -828,32 +892,69 @@ export default function ListadoCotizaciones({
                 agregarArchivosEstado(e.target.files);
                 e.target.value = "";
               }}
-              className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+              className="mt-1 block w-full cursor-pointer text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
             />
             {archivosEstado.length > 0 && (
-              <ul className="mt-2 space-y-1">
-                {archivosEstado.map((archivo, i) => (
-                  <li
-                    key={`${archivo.name}-${i}`}
-                    className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700"
-                  >
-                    <span className="truncate">
-                      {archivo.name}{" "}
-                      <span className="text-slate-400">
-                        ({formatTamano(archivo.size)})
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => quitarArchivoEstado(i)}
-                      disabled={envioEstado === "guardando"}
-                      className="shrink-0 text-slate-400 hover:text-red-600"
-                      aria-label={`Quitar ${archivo.name}`}
+              <ul className="mt-2 space-y-1.5">
+                {archivosEstado.map((archivo, i) => {
+                  const estadoArchivo = progresoArchivos[i];
+                  const porcentaje = estadoArchivo === "listo" ? 100 : estadoArchivo === "subiendo" ? 60 : 0;
+                  return (
+                    <li
+                      key={`${archivo.name}-${i}`}
+                      className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700"
                     >
-                      {ICONOS.perdida}
-                    </button>
-                  </li>
-                ))}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">
+                          {archivo.name}{" "}
+                          <span className="text-slate-400">
+                            ({formatTamano(archivo.size)})
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => quitarArchivoEstado(i)}
+                          disabled={envioEstado === "guardando"}
+                          className="shrink-0 text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Quitar ${archivo.name}`}
+                        >
+                          {ICONOS.perdida}
+                        </button>
+                      </div>
+                      {estadoArchivo && (
+                        <div className="mt-1.5">
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                estadoArchivo === "error"
+                                  ? "bg-red-500"
+                                  : estadoArchivo === "listo"
+                                    ? "bg-emerald-500"
+                                    : "animate-pulse bg-indigo-400"
+                              }`}
+                              style={{ width: `${porcentaje}%` }}
+                            />
+                          </div>
+                          <span
+                            className={`mt-0.5 block text-[11px] font-medium ${
+                              estadoArchivo === "error"
+                                ? "text-red-600"
+                                : estadoArchivo === "listo"
+                                  ? "text-emerald-600"
+                                  : "text-indigo-500"
+                            }`}
+                          >
+                            {estadoArchivo === "error"
+                              ? "Error al subir"
+                              : estadoArchivo === "listo"
+                                ? "Subido (100%)"
+                                : "Subiendo…"}
+                          </span>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
