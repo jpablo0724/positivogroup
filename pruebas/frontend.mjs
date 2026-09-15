@@ -1305,11 +1305,11 @@ console.log("\n== Botones del listado y enlace público ==");
   await page.click("text=Listado de Cotizaciones");
   await page.waitForSelector("th:has-text('Acciones')");
 
-  // Los botones son iconos, repartidos en dos filas: editar/PDF/Clientify/
-  // historial arriba, ganada/perdida/eliminar abajo.
+  // Los botones son iconos, repartidos en dos filas: editar/duplicar/PDF/
+  // Clientify/historial arriba, ganada/perdida/eliminar abajo.
   const fila = page.locator("tbody tr").first();
   const iconos = fila.locator("td:last-child button");
-  comprobar("siete botones de icono por fila", (await iconos.count()) === 7, `${await iconos.count()}`);
+  comprobar("ocho botones de icono por fila", (await iconos.count()) === 8, `${await iconos.count()}`);
 
   const nombres = await iconos.evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label")));
   comprobar("cada icono dice qué hace", nombres.every(Boolean), nombres.join(", "));

@@ -287,6 +287,29 @@ function App() {
     setActiveView("crear-factura");
   }
 
+  /**
+   * Abre el formulario con los mismos datos de una cotización guardada, pero
+   * como una nueva: sin su número (se aparta uno al guardar, igual que al
+   * crear desde cero), con la fecha de hoy, y sin arrastrar su estado
+   * ganada/perdida ni a quién se reasignó — eso es de la cotización
+   * original, no de la copia.
+   */
+  async function handleDuplicar(cotizacion: CotizacionGuardada) {
+    const items = cotizacion.data.items.map((item) => ({
+      ...item,
+      id: crypto.randomUUID(),
+    }));
+    setInvoice({
+      ...cotizacion.data,
+      numeroFactura: await numeroProvisional(),
+      fecha: todayIso(),
+      items,
+    });
+    setInvoiceCreadoPor(undefined);
+    setNumeroAsignado(false);
+    setActiveView("crear-factura");
+  }
+
   async function handleEliminar(numeroFactura: string) {
     try {
       setCotizaciones(await eliminarCotizacion(numeroFactura));
@@ -500,6 +523,7 @@ function App() {
             cotizaciones={cotizaciones}
             usuarioActual={usuario}
             onVer={handleVer}
+            onDuplicar={handleDuplicar}
             onVerPdf={(c) => {
               setParaImprimir(c.data);
               setParaImprimirCreadoPor(c.creadoPor);

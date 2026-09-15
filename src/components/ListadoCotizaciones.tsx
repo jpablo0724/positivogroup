@@ -14,6 +14,7 @@ interface ListadoCotizacionesProps {
   cotizaciones: CotizacionGuardada[];
   usuarioActual: UsuarioPublico;
   onVer: (cotizacion: CotizacionGuardada) => void;
+  onDuplicar: (cotizacion: CotizacionGuardada) => void;
   onVerPdf: (cotizacion: CotizacionGuardada) => void;
   onEnviarClientify: (cotizacion: CotizacionGuardada) => void;
   onEliminar: (numeroFactura: string) => void;
@@ -161,6 +162,12 @@ const ICONOS = {
       <path d="M6 6l12 12M18 6 6 18" />
     </svg>
   ),
+  duplicar: (
+    <svg viewBox="0 0 24 24" {...trazo} className="h-4 w-4">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  ),
 };
 
 function formatFechaHora(iso: string): string {
@@ -219,6 +226,7 @@ export default function ListadoCotizaciones({
   cotizaciones,
   usuarioActual,
   onVer,
+  onDuplicar,
   onVerPdf,
   onEnviarClientify,
   onEliminar,
@@ -710,6 +718,11 @@ export default function ListadoCotizaciones({
                           titulo="Abrir para editar"
                           onClick={() => onVer(c)}
                           icono={ICONOS.editar}
+                        />
+                        <BotonIcono
+                          titulo="Duplicar cotización"
+                          onClick={() => onDuplicar(c)}
+                          icono={ICONOS.duplicar}
                         />
                         <BotonIcono
                           titulo="Guardar en PDF"
