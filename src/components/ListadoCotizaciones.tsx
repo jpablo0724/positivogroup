@@ -880,10 +880,12 @@ export default function ListadoCotizaciones({
                 envioEstado === "guardando" ||
                 archivosEstado.length >= ADJUNTOS_MAX_CANTIDAD
               }
-              onChange={(e) => {
-                agregarArchivosEstado(e.target.files);
-                e.target.value = "";
-              }}
+              // A propósito NO se limpia e.target.value tras leer los
+              // archivos: si se hiciera, el propio navegador vuelve a
+              // mostrar "Ningún archivo seleccionado" junto al botón aunque
+              // la selección sí se haya tomado — deja la impresión de que no
+              // pasó nada. Se deja como el navegador lo muestra de por sí.
+              onChange={(e) => agregarArchivosEstado(e.target.files)}
               className="mt-1 block w-full cursor-pointer text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
             />
             {archivosEstado.length > 0 && (
