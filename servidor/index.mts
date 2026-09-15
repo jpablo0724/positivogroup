@@ -81,14 +81,18 @@ async function comoRequest(req: IncomingMessage): Promise<Request> {
   }
 
   const sinCuerpo = req.method === "GET" || req.method === "HEAD";
-  let cuerpo: string | undefined;
+  let cuerpo: Buffer | undefined;
 
   if (!sinCuerpo) {
     const trozos: Buffer[] = [];
     for await (const trozo of req) trozos.push(trozo as Buffer);
-    cuerpo = Buffer.concat(trozos).toString("utf8");
+    cuerpo = Buffer.concat(trozos);
   }
 
+  // Se manda el Buffer tal cual, sin pasar por toString("utf8"): un adjunto
+  // multipart/form-data lleva bytes binarios, y decodificarlos como texto y
+  // luego volver a codificarlos los corrompe. Request ya sabe decodificar el
+  // cuerpo como texto o JSON cuando hace falta.
   return new Request(url, {
     method: req.method,
     headers: cabeceras,

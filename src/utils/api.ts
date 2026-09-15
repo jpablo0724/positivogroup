@@ -27,6 +27,9 @@ export class BackendNoDisponible extends Error {}
 interface OpcionesPeticion {
   metodo?: "GET" | "POST" | "PUT" | "DELETE";
   cuerpo?: unknown;
+  /** Para subir archivos: se manda tal cual, sin JSON.stringify ni content-type
+   *  a mano, así el navegador pone el boundary del multipart él solo. */
+  formulario?: FormData;
 }
 
 function esperar(ms: number): Promise<void> {
@@ -39,7 +42,7 @@ function esperar(ms: number): Promise<void> {
  */
 async function intentar<T>(
   ruta: string,
-  { metodo = "GET", cuerpo }: OpcionesPeticion,
+  { metodo = "GET", cuerpo, formulario }: OpcionesPeticion,
 ): Promise<T> {
   let respuesta: Response;
 
@@ -50,9 +53,11 @@ async function intentar<T>(
       credentials: "same-origin",
       headers: {
         Accept: "application/json",
-        ...(cuerpo === undefined ? {} : { "content-type": "application/json" }),
+        ...(formulario || cuerpo === undefined
+          ? {}
+          : { "content-type": "application/json" }),
       },
-      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+      body: formulario ?? (cuerpo === undefined ? undefined : JSON.stringify(cuerpo)),
     });
   } catch {
     throw new BackendNoDisponible("No se pudo contactar el servidor");

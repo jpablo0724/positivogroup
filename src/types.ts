@@ -78,14 +78,6 @@ export interface AdjuntoEstado {
   testigo: string;
 }
 
-/** Lo que se manda al subir un archivo, antes de tener testigo. */
-export interface AdjuntoParaSubir {
-  nombre: string;
-  tipo: string;
-  /** Contenido en base64 (sin el prefijo "data:...;base64,"). */
-  datos: string;
-}
-
 export interface CotizacionGuardada {
   guardadoEn: string;
   /** Correo de quién la creó. Las guardadas antes de que existiera este dato no lo traen. Nunca cambia al reasignar. */

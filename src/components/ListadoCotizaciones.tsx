@@ -63,19 +63,6 @@ function extensionPermitida(archivo: File): boolean {
   return EXTENSIONES_ADJUNTO_PERMITIDAS.some((ext) => nombre.endsWith(ext));
 }
 
-/** Lee un archivo y lo convierte a base64 puro (sin el prefijo "data:...;base64,"). */
-function archivoABase64(archivo: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const lector = new FileReader();
-    lector.onload = () => {
-      const resultado = String(lector.result ?? "");
-      resolve(resultado.slice(resultado.indexOf(",") + 1));
-    };
-    lector.onerror = () => reject(lector.error ?? new Error("No se pudo leer el archivo"));
-    lector.readAsDataURL(archivo);
-  });
-}
-
 const ETIQUETAS_ESTADO = {
   creada: "Creada",
   aceptada: "Aceptada",
@@ -435,12 +422,7 @@ export default function ListadoCotizaciones({
         const archivo = archivosEstado[i];
         setProgresoArchivos((previos) => ({ ...previos, [i]: "subiendo" }));
         try {
-          const datos = await archivoABase64(archivo);
-          const subido = await subirAdjuntoEstado(numeroFactura, {
-            nombre: archivo.name,
-            tipo: archivo.type,
-            datos,
-          });
+          const subido = await subirAdjuntoEstado(numeroFactura, archivo);
           adjuntos.push(subido);
           setProgresoArchivos((previos) => ({ ...previos, [i]: "listo" }));
         } catch (err) {

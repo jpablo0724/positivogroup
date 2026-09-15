@@ -1,6 +1,5 @@
 import type {
   AdjuntoEstado,
-  AdjuntoParaSubir,
   CotizacionGuardada,
   EstadoCotizacion,
   InvoiceData,
@@ -90,14 +89,21 @@ export async function reasignarCotizacion(
  * referencia (con el testigo con el que arma su URL pública). Se sube antes
  * de marcarEstadoCotizacion: esta ruta solo guarda el archivo, no lo asocia
  * a ningún estado todavía.
+ *
+ * Va como multipart/form-data, no como JSON con el archivo en base64: así el
+ * archivo viaja en sus bytes reales (un 33% menos que en base64) y evita que
+ * el navegador y el proxy del servidor tengan que cargar en memoria una
+ * cadena de texto gigante antes de mandarla.
  */
 export async function subirAdjuntoEstado(
   numeroFactura: string,
-  archivo: AdjuntoParaSubir,
+  archivo: File,
 ): Promise<AdjuntoEstado> {
+  const formulario = new FormData();
+  formulario.append("archivo", archivo, archivo.name);
   return pedir<AdjuntoEstado>(
     `/api/cotizaciones/${encodeURIComponent(numeroFactura)}/adjuntos`,
-    { metodo: "POST", cuerpo: archivo },
+    { metodo: "POST", formulario },
   );
 }
 

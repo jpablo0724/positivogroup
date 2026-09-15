@@ -86,8 +86,8 @@ interface CotizacionGuardada {
   data: { numeroFactura?: unknown };
 }
 
-/** Máximo por archivo (en base64) y máximo de archivos por marca de estado. */
-const ADJUNTO_MAX_BASE64 = 4_400_000; // ~3.3 MB reales
+/** Máximo por archivo (bytes reales) y máximo de archivos por marca de estado. */
+const ADJUNTO_MAX_BYTES = 3.3 * 1024 * 1024;
 const ADJUNTOS_MAX_CANTIDAD = 5;
 const TESTIGO_ADJUNTO_RE = /^[A-Za-z0-9_-]{30,50}$/;
 
@@ -268,24 +268,29 @@ export default async (req: Request) => {
         return json({ error: "cotizacion_de_otra_persona" }, 403);
       }
 
-      const cuerpo = (await req.json().catch(() => ({}))) as {
-        nombre?: unknown;
-        tipo?: unknown;
-        datos?: unknown;
-      };
-      const nombre = String(cuerpo.nombre ?? "").trim();
-      const tipo = String(cuerpo.tipo ?? "").trim();
-      const datos = typeof cuerpo.datos === "string" ? cuerpo.datos : "";
+      // Llega como multipart/form-data, no como JSON con el archivo en
+      // base64: así el archivo viaja en sus bytes reales, sin la carga extra
+      // de codificarlo/decodificarlo dentro de una cadena de texto gigante.
+      const formulario = await req.formData().catch(() => null);
+      const campo = formulario?.get("archivo");
 
-      if (nombre === "" || datos === "") {
+      if (!(campo instanceof Blob)) {
         return json({ error: "adjunto_invalido" }, 400);
       }
-      if (datos.length > ADJUNTO_MAX_BASE64) {
+
+      const nombre = ("name" in campo ? String(campo.name) : "").trim();
+      const tipo = campo.type.trim();
+
+      if (nombre === "" || campo.size === 0) {
+        return json({ error: "adjunto_invalido" }, 400);
+      }
+      if (campo.size > ADJUNTO_MAX_BYTES) {
         return json({ error: "adjunto_muy_grande" }, 400);
       }
 
+      const datos = Buffer.from(await campo.arrayBuffer()).toString("base64");
+
       const testigo = randomBytes(24).toString("base64url");
-      const tamano = Math.round((datos.length * 3) / 4);
       await almacenAdjuntos().setJSON(testigo, {
         nombre,
         tipo: tipo || "application/octet-stream",
@@ -295,7 +300,7 @@ export default async (req: Request) => {
         creadoEn: new Date().toISOString(),
       });
 
-      return json({ testigo, nombre, tipo, tamano });
+      return json({ testigo, nombre, tipo, tamano: campo.size });
     }
 
     // --- Marca la cotización como ganada o perdida, o quita la marca ---
