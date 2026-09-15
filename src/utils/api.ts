@@ -72,9 +72,13 @@ async function intentar<T>(
   }
 
   if (!respuesta.ok) {
-    const cuerpoError = datos as { mensaje?: string; error?: string };
+    const cuerpoError = datos as {
+      mensaje?: string;
+      error?: string;
+      detalle?: string;
+    };
     throw new ErrorApi(
-      cuerpoError.mensaje ?? cuerpoError.error ?? `HTTP ${respuesta.status}`,
+      cuerpoError.mensaje ?? cuerpoError.detalle ?? cuerpoError.error ?? `HTTP ${respuesta.status}`,
       cuerpoError.error ?? "",
       respuesta.status,
     );
