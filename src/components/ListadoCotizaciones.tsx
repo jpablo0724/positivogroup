@@ -899,10 +899,26 @@ export default function ListadoCotizaciones({
                       className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate">
-                          {archivo.name}{" "}
-                          <span className="text-slate-400">
-                            ({formatTamano(archivo.size)})
+                        <span className="flex min-w-0 items-center gap-1.5 truncate">
+                          {(estadoArchivo === undefined || estadoArchivo === "listo") && (
+                            <span
+                              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
+                              title={
+                                estadoArchivo === "listo"
+                                  ? "Subido correctamente"
+                                  : "Listo para subir"
+                              }
+                            >
+                              <svg viewBox="0 0 24 24" {...trazo} strokeWidth={2.4} className="h-2.5 w-2.5">
+                                <path d="m5 13 4 4L19 7" />
+                              </svg>
+                            </span>
+                          )}
+                          <span className="truncate">
+                            {archivo.name}{" "}
+                            <span className="text-slate-400">
+                              ({formatTamano(archivo.size)})
+                            </span>
                           </span>
                         </span>
                         <button
