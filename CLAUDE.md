@@ -7,8 +7,10 @@ El sistema corre en **hosting web de Hostinger**, usando su función de
 Netlify. Para actualizar el servidor con cambios nuevos, el flujo típico
 dentro de esa sección del panel es:
 
-1. Traer los cambios del repositorio (Hostinger suele ofrecer un botón de
-   "Sincronizar"/Git, o si no, subir los archivos actualizados).
+1. Traer los cambios del repositorio: el panel de Hostinger para esta app
+   **está conectado directo con GitHub** (este mismo repositorio), así que
+   trae un botón de "Sincronizar" / "Pull" con el que se actualiza desde ahí
+   — no hace falta subir archivos a mano por FTP.
 2. Instalar dependencias (`npm install`) — el panel de Hostinger para
    Node.js normalmente tiene un botón "Ejecutar NPM Install".
 3. Compilar (`npm run build`), si el panel no lo hace solo.
