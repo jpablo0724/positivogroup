@@ -46,6 +46,16 @@ export function almacenEnlaces() {
 }
 
 /**
+ * Archivos adjuntados al marcar el estado de una cotización: testigo al azar
+ * -> {nombre, tipo, datos en base64, numeroFactura}. Guardarlos aparte de la
+ * cotización (en vez de dentro de su JSON) es lo que permite servirlos por
+ * una URL propia y clicable desde la nota de Clientify.
+ */
+export function almacenAdjuntos() {
+  return getStore({ name: "adjuntos", consistency: "strong" });
+}
+
+/**
  * Clave legible para un número de cotización: "PG 0001/26" → "pg-0001-26".
  * El formato lo genera el propio sistema, así que dos números distintos nunca
  * caen en la misma clave.

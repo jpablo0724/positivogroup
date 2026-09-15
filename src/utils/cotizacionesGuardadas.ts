@@ -1,5 +1,6 @@
 import type {
   AdjuntoEstado,
+  AdjuntoParaSubir,
   CotizacionGuardada,
   EstadoCotizacion,
   InvoiceData,
@@ -84,6 +85,22 @@ export async function reasignarCotizacion(
  * (`/api/clientify/nota`): esto no manda nada allá, solo deja el registro
  * en el timeline.
  */
+/**
+ * Sube UN archivo adjunto para una marca de ganada/perdida y devuelve su
+ * referencia (con el testigo con el que arma su URL pública). Se sube antes
+ * de marcarEstadoCotizacion: esta ruta solo guarda el archivo, no lo asocia
+ * a ningún estado todavía.
+ */
+export async function subirAdjuntoEstado(
+  numeroFactura: string,
+  archivo: AdjuntoParaSubir,
+): Promise<AdjuntoEstado> {
+  return pedir<AdjuntoEstado>(
+    `/api/cotizaciones/${encodeURIComponent(numeroFactura)}/adjuntos`,
+    { metodo: "POST", cuerpo: archivo },
+  );
+}
+
 /**
  * Marca la cotización como ganada o perdida. Pasar undefined quita la marca.
  */

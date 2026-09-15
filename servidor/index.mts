@@ -4,6 +4,7 @@ import { extname, join, normalize, resolve } from "node:path";
 
 import auth from "../backend/functions/auth.mts";
 import admin from "../backend/functions/admin.mts";
+import adjuntoPublico from "../backend/functions/adjuntoPublico.mts";
 import clientify from "../backend/functions/clientify.mts";
 import cotizaciones from "../backend/functions/cotizaciones.mts";
 import informes from "../backend/functions/informes.mts";
@@ -36,6 +37,7 @@ const RUTAS: { prefijo: string; manejador: Manejador }[] = [
   { prefijo: "/api/clientify/", manejador: clientify },
   { prefijo: "/api/informes/", manejador: informes },
   { prefijo: "/api/publico/", manejador: publico },
+  { prefijo: "/api/adjuntos/", manejador: adjuntoPublico },
   { prefijo: "/api/cotizaciones", manejador: cotizaciones },
   { prefijo: "/api/productos", manejador: productos },
   { prefijo: "/api/numero", manejador: numero },

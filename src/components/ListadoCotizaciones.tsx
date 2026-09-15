@@ -3,7 +3,11 @@ import type { AdjuntoEstado, CotizacionGuardada, EstadoCotizacion } from "../typ
 import { calcInvoiceTotals, formatCurrency, formatDateLong } from "../utils/calculations";
 import { ErrorApi } from "../utils/api";
 import { nombreCompleto, type UsuarioPublico } from "../utils/auth";
-import { listarEquipo, type MiembroEquipo } from "../utils/cotizacionesGuardadas";
+import {
+  listarEquipo,
+  subirAdjuntoEstado,
+  type MiembroEquipo,
+} from "../utils/cotizacionesGuardadas";
 import { empresaDeLaCotizacion, enviarNotaEstado } from "../utils/notaClientify";
 
 interface ListadoCotizacionesProps {
@@ -23,7 +27,7 @@ interface ListadoCotizacionesProps {
 }
 
 /** Límites del lado del navegador: dan un aviso rápido, antes de que el backend los rechace. */
-const ADJUNTO_MAX_BYTES = 4.5 * 1024 * 1024;
+const ADJUNTO_MAX_BYTES = 3.3 * 1024 * 1024;
 const ADJUNTOS_MAX_CANTIDAD = 5;
 
 /** Lee un archivo y lo convierte a base64 puro (sin el prefijo "data:...;base64,"). */
@@ -38,6 +42,20 @@ function archivoABase64(archivo: File): Promise<string> {
     lector.readAsDataURL(archivo);
   });
 }
+
+const ETIQUETAS_ESTADO = {
+  creada: "Creada",
+  aceptada: "Aceptada",
+  rechazada: "Rechazada",
+  enviada: "Enviada",
+} as const;
+
+const ESTILOS_ETIQUETA_ESTADO = {
+  creada: "bg-slate-100 text-slate-600",
+  aceptada: "bg-emerald-100 text-emerald-700",
+  rechazada: "bg-red-100 text-red-700",
+  enviada: "bg-blue-100 text-blue-700",
+} as const;
 
 function formatTamano(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -198,6 +216,9 @@ export default function ListadoCotizaciones({
   const [filtroCliente, setFiltroCliente] = useState("");
   const [filtroFecha, setFiltroFecha] = useState("");
   const [filtroCreador, setFiltroCreador] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState<
+    "" | "creada" | "aceptada" | "rechazada" | "enviada"
+  >("");
 
   // Solo hace falta para el selector de reasignar: si falla, el listado
   // sigue viéndose igual, nada más sin esa columna con nombres.
@@ -239,6 +260,18 @@ export default function ListadoCotizaciones({
       : "Se quitó la reasignación";
   }
 
+  /** Una sola etiqueta por cotización: aceptada/rechazada manda sobre enviada, y esa sobre creada. */
+  function etiquetaEstado(
+    c: CotizacionGuardada,
+  ): "creada" | "aceptada" | "rechazada" | "enviada" {
+    if (c.estado === "ganada") return "aceptada";
+    if (c.estado === "perdida") return "rechazada";
+    const enviada = (c.historial ?? []).some(
+      (h) => h.accion === "enviada_clientify",
+    );
+    return enviada ? "enviada" : "creada";
+  }
+
   const creadoresDisponibles = Array.from(
     new Set(
       cotizaciones
@@ -264,10 +297,15 @@ export default function ListadoCotizaciones({
     if (filtroCreador && c.creadoPor !== filtroCreador) {
       return false;
     }
+    if (filtroEstado && etiquetaEstado(c) !== filtroEstado) {
+      return false;
+    }
     return true;
   });
 
-  const hayFiltrosActivos = Boolean(filtroCliente || filtroFecha || filtroCreador);
+  const hayFiltrosActivos = Boolean(
+    filtroCliente || filtroFecha || filtroCreador || filtroEstado,
+  );
 
   function abrirMarcarEstado(c: CotizacionGuardada, estado: EstadoCotizacion) {
     setPorMarcarEstado(c);
@@ -331,23 +369,34 @@ export default function ListadoCotizaciones({
 
     setEnvioEstado("guardando");
     setErrorEstado("");
+    const numeroFactura = porMarcarEstado.data.numeroFactura;
 
     try {
-      const adjuntos: AdjuntoEstado[] = await Promise.all(
-        archivosEstado.map(async (archivo) => ({
-          nombre: archivo.name,
-          tipo: archivo.type,
-          tamano: archivo.size,
-          datos: await archivoABase64(archivo),
-        })),
-      );
+      // Cada archivo se sube en su propia petición: así uno solo, no toda la
+      // marca de estado junto con los demás, es lo que puede fallar si pesa
+      // de más, y el error dice cuál.
+      const adjuntos: AdjuntoEstado[] = [];
+      for (const archivo of archivosEstado) {
+        try {
+          const datos = await archivoABase64(archivo);
+          const subido = await subirAdjuntoEstado(numeroFactura, {
+            nombre: archivo.name,
+            tipo: archivo.type,
+            datos,
+          });
+          adjuntos.push(subido);
+        } catch (err) {
+          const detalle =
+            err instanceof ErrorApi
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : "No se pudo subir";
+          throw new Error(`"${archivo.name}": ${detalle}`);
+        }
+      }
 
-      await onMarcarEstado(
-        porMarcarEstado.data.numeroFactura,
-        estadoAMarcar,
-        motivo,
-        adjuntos,
-      );
+      await onMarcarEstado(numeroFactura, estadoAMarcar, motivo, adjuntos);
 
       const empresaId = await empresaDeLaCotizacion(porMarcarEstado.data);
       if (empresaId === null) {
@@ -357,9 +406,10 @@ export default function ListadoCotizaciones({
 
       await enviarNotaEstado(
         empresaId,
-        porMarcarEstado.data.numeroFactura,
+        numeroFactura,
         estadoAMarcar,
         motivo,
+        adjuntos,
       );
       setEnvioEstado("guardado");
     } catch (err) {
@@ -458,6 +508,36 @@ export default function ListadoCotizaciones({
           </select>
         </div>
 
+        <div className="flex flex-col gap-1">
+          <label
+            htmlFor="filtro-estado"
+            className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+          >
+            Estado
+          </label>
+          <select
+            id="filtro-estado"
+            value={filtroEstado}
+            onChange={(e) =>
+              setFiltroEstado(
+                e.target.value as
+                  | ""
+                  | "creada"
+                  | "aceptada"
+                  | "rechazada"
+                  | "enviada",
+              )
+            }
+            className="min-w-[160px] cursor-pointer rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          >
+            <option value="">Todos los estados</option>
+            <option value="creada">Creada</option>
+            <option value="aceptada">Aceptada</option>
+            <option value="rechazada">Rechazada</option>
+            <option value="enviada">Enviada</option>
+          </select>
+        </div>
+
         {hayFiltrosActivos && (
           <button
             type="button"
@@ -465,6 +545,7 @@ export default function ListadoCotizaciones({
               setFiltroCliente("");
               setFiltroFecha("");
               setFiltroCreador("");
+              setFiltroEstado("");
             }}
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50"
           >
@@ -564,37 +645,11 @@ export default function ListadoCotizaciones({
                     )}
                   </td>
                   <td className="px-3 py-3">
-                    {(() => {
-                      const enviada = (c.historial ?? []).some(
-                        (h) => h.accion === "enviada_clientify",
-                      );
-                      if (c.estado === "ganada") {
-                        return (
-                          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                            Aceptada
-                          </span>
-                        );
-                      }
-                      if (c.estado === "perdida") {
-                        return (
-                          <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-                            Rechazada
-                          </span>
-                        );
-                      }
-                      if (enviada) {
-                        return (
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                            Enviada
-                          </span>
-                        );
-                      }
-                      return (
-                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                          Creada
-                        </span>
-                      );
-                    })()}
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${ESTILOS_ETIQUETA_ESTADO[etiquetaEstado(c)]}`}
+                    >
+                      {ETIQUETAS_ESTADO[etiquetaEstado(c)]}
+                    </span>
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-col items-end gap-1">

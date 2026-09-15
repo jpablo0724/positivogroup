@@ -64,12 +64,24 @@ export interface HistorialEntrada {
 /** Resultado de la cotización: ganada, perdida, o sin definir todavía. */
 export type EstadoCotizacion = "ganada" | "perdida";
 
-/** Un archivo adjunto al marcar el resultado de una cotización, guardado tal cual en la base de datos. */
+/**
+ * Un archivo adjunto al marcar el resultado de una cotización. El contenido
+ * se sube aparte (POST .../adjuntos) y vive en su propio almacén; aquí solo
+ * queda la referencia — nombre, tipo, tamaño y el testigo con el que se
+ * arma la URL pública (/api/adjuntos/<testigo>) que se anota en Clientify.
+ */
 export interface AdjuntoEstado {
   nombre: string;
   tipo: string;
-  /** Tamaño en bytes del archivo original (sin contar la codificación). */
+  /** Tamaño en bytes del archivo original. */
   tamano: number;
+  testigo: string;
+}
+
+/** Lo que se manda al subir un archivo, antes de tener testigo. */
+export interface AdjuntoParaSubir {
+  nombre: string;
+  tipo: string;
   /** Contenido en base64 (sin el prefijo "data:...;base64,"). */
   datos: string;
 }

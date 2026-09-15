@@ -8,6 +8,7 @@ import {
   type Usuario,
 } from "../lib/auth.mts";
 import {
+  almacenAdjuntos,
   almacenCotizaciones,
   almacenEnlaces,
   claveCotizacion,
@@ -23,6 +24,7 @@ import {
  *   POST   /api/cotizaciones/enlace                -> enlace público para el cliente
  *   POST   /api/cotizaciones/PG 0001/26/reasignar -> le pasa el acceso a otra persona
  *   POST   /api/cotizaciones/PG 0001/26/enviada-clientify -> anota en el historial que se mandó
+ *   POST   /api/cotizaciones/PG 0001/26/adjuntos  -> sube UN archivo, devuelve su testigo
  *   POST   /api/cotizaciones/PG 0001/26/estado    -> marca ganada, perdida, o quita la marca
  *   DELETE /api/cotizaciones/PG 0001/26           -> elimina una
  *
@@ -59,11 +61,12 @@ interface HistorialEntrada {
 
 type EstadoCotizacion = "ganada" | "perdida";
 
+/** Referencia a un archivo ya subido (ver /adjuntos): el contenido vive aparte. */
 interface AdjuntoEstado {
   nombre: string;
   tipo: string;
   tamano: number;
-  datos: string;
+  testigo: string;
 }
 
 interface CotizacionGuardada {
@@ -84,8 +87,9 @@ interface CotizacionGuardada {
 }
 
 /** Máximo por archivo (en base64) y máximo de archivos por marca de estado. */
-const ADJUNTO_MAX_BASE64 = 6_000_000; // ~4.5 MB reales
+const ADJUNTO_MAX_BASE64 = 4_400_000; // ~3.3 MB reales
 const ADJUNTOS_MAX_CANTIDAD = 5;
+const TESTIGO_ADJUNTO_RE = /^[A-Za-z0-9_-]{30,50}$/;
 
 function esCotizacion(valor: unknown): valor is CotizacionGuardada {
   if (typeof valor !== "object" || valor === null) return false;
@@ -250,6 +254,50 @@ export default async (req: Request) => {
       return json({ cotizacion: registro });
     }
 
+    // --- Sube UN archivo adjunto y devuelve el testigo con el que armar su
+    // URL pública (/api/adjuntos/<testigo>). No lo asocia todavía a ningún
+    // estado: eso lo hace /estado, al mandar la lista de testigos subidos. ---
+    if (req.method === "POST" && resto.endsWith("/adjuntos")) {
+      const numero = resto.replace(/\/adjuntos$/, "");
+      const guardada = (await almacen.get(claveCotizacion(numero), {
+        type: "json",
+      })) as CotizacionGuardada | null;
+
+      if (!guardada) return json({ error: "cotizacion_no_existe" }, 404);
+      if (!esSuya(guardada, quien)) {
+        return json({ error: "cotizacion_de_otra_persona" }, 403);
+      }
+
+      const cuerpo = (await req.json().catch(() => ({}))) as {
+        nombre?: unknown;
+        tipo?: unknown;
+        datos?: unknown;
+      };
+      const nombre = String(cuerpo.nombre ?? "").trim();
+      const tipo = String(cuerpo.tipo ?? "").trim();
+      const datos = typeof cuerpo.datos === "string" ? cuerpo.datos : "";
+
+      if (nombre === "" || datos === "") {
+        return json({ error: "adjunto_invalido" }, 400);
+      }
+      if (datos.length > ADJUNTO_MAX_BASE64) {
+        return json({ error: "adjunto_muy_grande" }, 400);
+      }
+
+      const testigo = randomBytes(24).toString("base64url");
+      const tamano = Math.round((datos.length * 3) / 4);
+      await almacenAdjuntos().setJSON(testigo, {
+        nombre,
+        tipo: tipo || "application/octet-stream",
+        datos,
+        numeroFactura: numero,
+        creadoPor: quien.email,
+        creadoEn: new Date().toISOString(),
+      });
+
+      return json({ testigo, nombre, tipo, tamano });
+    }
+
     // --- Marca la cotización como ganada o perdida, o quita la marca ---
     if (req.method === "POST" && resto.endsWith("/estado")) {
       const numero = resto.replace(/\/estado$/, "");
@@ -281,6 +329,9 @@ export default async (req: Request) => {
         return json({ error: "falta_motivo" }, 400);
       }
 
+      // Los adjuntos ya se subieron por separado (POST .../adjuntos): aquí
+      // solo llegan sus referencias, y se confirma que cada testigo exista y
+      // sea de esta misma cotización antes de guardarlas.
       const adjuntos: AdjuntoEstado[] = [];
       if (nuevoEstado) {
         const crudos = Array.isArray(cuerpo.adjuntos) ? cuerpo.adjuntos : [];
@@ -289,23 +340,28 @@ export default async (req: Request) => {
         }
         for (const crudo of crudos) {
           if (typeof crudo !== "object" || crudo === null) continue;
-          const { nombre, tipo, datos } = crudo as Record<string, unknown>;
+          const { nombre, tipo, tamano, testigo } = crudo as Record<
+            string,
+            unknown
+          >;
           if (
             typeof nombre !== "string" ||
             typeof tipo !== "string" ||
-            typeof datos !== "string"
+            typeof tamano !== "number" ||
+            typeof testigo !== "string" ||
+            !TESTIGO_ADJUNTO_RE.test(testigo)
           ) {
             return json({ error: "adjunto_invalido" }, 400);
           }
-          if (datos.length > ADJUNTO_MAX_BASE64) {
-            return json({ error: "adjunto_muy_grande" }, 400);
+
+          const subido = (await almacenAdjuntos().get(testigo, {
+            type: "json",
+          })) as { numeroFactura?: string } | null;
+          if (!subido || subido.numeroFactura !== numero) {
+            return json({ error: "adjunto_invalido" }, 400);
           }
-          adjuntos.push({
-            nombre,
-            tipo,
-            tamano: Math.round((datos.length * 3) / 4),
-            datos,
-          });
+
+          adjuntos.push({ nombre, tipo, tamano, testigo });
         }
       }
 

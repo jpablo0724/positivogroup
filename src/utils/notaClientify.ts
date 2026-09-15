@@ -1,4 +1,4 @@
-import type { InvoiceData } from "../types";
+import type { AdjuntoEstado, InvoiceData } from "../types";
 import { pedir } from "./api";
 import { buscarEmpresas } from "./clientify";
 
@@ -125,24 +125,45 @@ export function tituloNotaEstado(
   }`;
 }
 
-/** Cuerpo de la nota que deja en la ficha de la empresa: el motivo, debajo del título. */
-export function textoNotaEstado(razon: string): string {
-  return escaparHtml(razon.trim());
+/** URL pública del archivo adjunto, para pegar en la nota de Clientify. */
+export function urlAdjuntoEstado(adjunto: AdjuntoEstado): string {
+  return `${window.location.origin}/api/adjuntos/${adjunto.testigo}`;
 }
 
-/** Anota en la ficha de la empresa en Clientify que la cotización se ganó o perdió, con el motivo. */
+/**
+ * Cuerpo de la nota que deja en la ficha de la empresa: el motivo, debajo del
+ * título, y un enlace clicable por cada archivo adjunto — igual que el
+ * enlace de la cotización, en HTML porque así lo renderiza Clientify.
+ */
+export function textoNotaEstado(
+  razon: string,
+  adjuntos: AdjuntoEstado[] = [],
+): string {
+  const lineas = [escaparHtml(razon.trim())];
+  for (const adjunto of adjuntos) {
+    const url = escaparHtml(urlAdjuntoEstado(adjunto));
+    const nombre = escaparHtml(adjunto.nombre);
+    lineas.push(
+      `<a href="${url}" target="_blank" rel="noopener noreferrer">${nombre}</a>`,
+    );
+  }
+  return lineas.join("<br>");
+}
+
+/** Anota en la ficha de la empresa en Clientify que la cotización se ganó o perdió, con el motivo y sus adjuntos. */
 export async function enviarNotaEstado(
   empresaId: number,
   numeroFactura: string,
   estado: "ganada" | "perdida",
   razon: string,
+  adjuntos: AdjuntoEstado[] = [],
 ): Promise<ResultadoNota> {
   return pedir<ResultadoNota>("/api/clientify/nota", {
     metodo: "POST",
     cuerpo: {
       empresaId,
       titulo: tituloNotaEstado(numeroFactura, estado),
-      texto: textoNotaEstado(razon),
+      texto: textoNotaEstado(razon, adjuntos),
     },
   });
 }
