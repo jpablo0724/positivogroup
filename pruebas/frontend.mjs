@@ -253,6 +253,16 @@ function armarApi(page) {
         else delete guardada.reasignadoA;
         return responder({ cotizacion: guardada });
       }
+      if (ruta.endsWith("/enviada-clientify") && req.method() === "POST") {
+        const numero = decodeURIComponent(ruta.replace("/api/cotizaciones/", "").replace(/\/enviada-clientify$/, ""));
+        const guardada = servidor.cotizaciones.get(numero);
+        if (!guardada) return responder({ error: "cotizacion_no_existe" }, 404);
+        guardada.historial = [
+          ...(guardada.historial ?? []),
+          { fecha: new Date().toISOString(), accion: "enviada_clientify", quien: email },
+        ];
+        return responder({ cotizacion: guardada });
+      }
       if (req.method() === "POST") {
         const cuerpo = JSON.parse(req.postData());
         const previa = servidor.cotizaciones.get(cuerpo.data.numeroFactura);
@@ -1102,9 +1112,12 @@ console.log("\n== Reasignar cotizaciones ==");
   const selector = filaAjena.locator('select[aria-label^="Reasignar"]');
   comprobar("el admin puede reasignar cualquiera", (await selector.count()) === 1);
   comprobar("sin creador registrado, la columna muestra una raya",
-    (await filaAjena.locator("td").nth(5).innerText()) === "—");
+    (await filaAjena.locator("td").nth(3).innerText()) === "—");
 
   await selector.selectOption({ label: "Sofía Restrepo" });
+  // Elegir en el desplegable solo abre la confirmación; hay que aceptarla.
+  await page.waitForSelector("text=¿Estás seguro de reasignar esta cotización?");
+  await page.click('[role="dialog"] button:has-text("Sí")');
   // El selector es controlado: el valor no se asienta hasta que vuelve la
   // respuesta del servidor y se refresca el listado.
   await page.waitForFunction(
@@ -1119,7 +1132,7 @@ console.log("\n== Reasignar cotizaciones ==");
     servidor.cotizaciones.get("PG 0009/26")?.creadoPor === undefined,
     servidor.cotizaciones.get("PG 0009/26")?.creadoPor);
   comprobar("la columna \"Creada por\" no cambia a Sofía",
-    (await filaAjena.locator("td").nth(5).innerText()) === "—");
+    (await filaAjena.locator("td").nth(3).innerText()) === "—");
   comprobar("el selector queda mostrando a quién se reasignó",
     (await selector.inputValue()) === "sofia@positivogroup.com");
   comprobar("y nada del contenido de la cotización cambió",
@@ -1129,6 +1142,8 @@ console.log("\n== Reasignar cotizaciones ==");
 
   // Se le quita la reasignación: vuelve a "Sin reasignar".
   await selector.selectOption({ label: "Sin reasignar" });
+  await page.waitForSelector("text=¿Estás seguro de reasignar esta cotización?");
+  await page.click('[role="dialog"] button:has-text("Sí")');
   await page.waitForFunction(
     (numero) => document.querySelector(`select[aria-label="Reasignar ${numero}"]`)?.value === "",
     "PG 0009/26",
@@ -1290,10 +1305,11 @@ console.log("\n== Botones del listado y enlace público ==");
   await page.click("text=Listado de Cotizaciones");
   await page.waitForSelector("th:has-text('Acciones')");
 
-  // Los botones ahora son iconos, en una sola fila.
+  // Los botones son iconos, repartidos en dos filas: editar/PDF/Clientify/
+  // historial arriba, ganada/perdida/eliminar abajo.
   const fila = page.locator("tbody tr").first();
   const iconos = fila.locator("td:last-child button");
-  comprobar("cuatro botones de icono por fila", (await iconos.count()) === 4, `${await iconos.count()}`);
+  comprobar("siete botones de icono por fila", (await iconos.count()) === 7, `${await iconos.count()}`);
 
   const nombres = await iconos.evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label")));
   comprobar("cada icono dice qué hace", nombres.every(Boolean), nombres.join(", "));
