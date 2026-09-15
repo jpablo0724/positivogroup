@@ -30,31 +30,42 @@ interface ListadoCotizacionesProps {
 const ADJUNTO_MAX_BYTES = 3.3 * 1024 * 1024;
 const ADJUNTOS_MAX_CANTIDAD = 5;
 
-/** Tipos de archivo permitidos como adjunto: PDF, Excel, Word, PowerPoint e imágenes. */
-const ADJUNTOS_ACCEPT =
-  ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp," +
-  "application/pdf," +
-  "application/msword," +
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document," +
-  "application/vnd.ms-excel," +
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet," +
-  "application/vnd.ms-powerpoint," +
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation," +
-  "image/*";
-
+/**
+ * Tipos de archivo permitidos como adjunto: documentos de oficina, PDF,
+ * comprimidos e imágenes. A propósito NO se usa el atributo `accept` del
+ * input: en varios sistemas operativos ese filtro hace que el cuadro de
+ * "Elegir archivos" solo MUESTRE los tipos indicados y esconda el resto sin
+ * ningún aviso, así que si el archivo que alguien quiere subir no calzaba
+ * exacto con la lista, ni siquiera aparecía para poder elegirlo — parecía
+ * que el botón no hacía nada. En su lugar se deja elegir cualquier archivo y
+ * se valida después, con un mensaje claro si no es un tipo permitido.
+ */
 const EXTENSIONES_ADJUNTO_PERMITIDAS = [
   ".pdf",
   ".doc",
   ".docx",
+  ".rtf",
+  ".odt",
   ".xls",
   ".xlsx",
+  ".ods",
+  ".csv",
   ".ppt",
   ".pptx",
+  ".odp",
+  ".txt",
+  ".zip",
+  ".rar",
   ".png",
   ".jpg",
   ".jpeg",
   ".gif",
   ".webp",
+  ".bmp",
+  ".tif",
+  ".tiff",
+  ".heic",
+  ".svg",
 ];
 
 function extensionPermitida(archivo: File): boolean {
@@ -356,7 +367,7 @@ export default function ListadoCotizaciones({
       const noPermitido = seleccionados.find((a) => !extensionPermitida(a));
       if (noPermitido) {
         setErrorEstado(
-          `"${noPermitido.name}" no es un tipo permitido. Solo PDF, Word, Excel, PowerPoint o imágenes.`,
+          `"${noPermitido.name}" no es un tipo permitido. Solo documentos de oficina, PDF, comprimidos o imágenes.`,
         );
         seleccionados.splice(seleccionados.indexOf(noPermitido), 1);
       }
@@ -859,13 +870,12 @@ export default function ListadoCotizaciones({
               Adjuntos
             </label>
             <p className="mt-1 text-xs text-slate-400">
-              PDF, Word, Excel, PowerPoint o imágenes — máx.{" "}
+              PDF, Word, Excel, PowerPoint, imágenes o comprimidos — máx.{" "}
               {formatTamano(ADJUNTO_MAX_BYTES)} c/u.
             </p>
             <input
               type="file"
               multiple
-              accept={ADJUNTOS_ACCEPT}
               disabled={
                 envioEstado === "guardando" ||
                 archivosEstado.length >= ADJUNTOS_MAX_CANTIDAD
