@@ -106,23 +106,3 @@ export async function cambiarContrasena(
 export async function salir(): Promise<void> {
   await pedir("/api/auth/salir", { metodo: "POST" });
 }
-
-/** Pide el enlace para restablecer la contraseña. Siempre resuelve igual, tenga o no cuenta el correo. */
-export async function pedirRestablecimiento(email: string): Promise<void> {
-  await pedir("/api/auth/olvide", { metodo: "POST", cuerpo: { email } });
-}
-
-/**
- * Pone la contraseña nueva con el testigo del enlace del correo. Deja la
- * sesión abierta con la cuenta ya restablecida: quien llama debe seguir con
- * `sesionActual()` para saber quién quedó dentro.
- */
-export async function restablecerContrasena(
-  token: string,
-  nueva: string,
-): Promise<void> {
-  await pedir("/api/auth/restablecer", {
-    metodo: "POST",
-    cuerpo: { token, nueva },
-  });
-}

@@ -12,7 +12,6 @@ import VistaImpresion from "./components/VistaImpresion";
 import ModalEnviarClientify from "./components/ModalEnviarClientify";
 import CotizacionPublica from "./components/CotizacionPublica";
 import PantallaAcceso from "./components/PantallaAcceso";
-import PantallaRestablecer from "./components/PantallaRestablecer";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import {
   ID_BORRADOR,
@@ -62,19 +61,10 @@ function testigoPublico(): string | null {
   return coincide ? coincide[1] : null;
 }
 
-/** Testigo del enlace para restablecer la contraseña, si la dirección es /restablecer?token=..., o null. */
-function testigoRestablecer(): string | null {
-  if (window.location.pathname.replace(/\/$/, "") !== "/restablecer") return null;
-  return new URLSearchParams(window.location.search).get("token");
-}
-
 function App() {
   // La cotización que ve el cliente no pasa por el login: quien recibe el
   // enlace no tiene cuenta. Se resuelve antes que nada.
   const [testigo] = useState<string | null>(testigoPublico);
-  const [testigoRestablecimiento, setTestigoRestablecimiento] = useState<
-    string | null
-  >(testigoRestablecer);
   // undefined = todavía se está preguntando al servidor; null = sin sesión.
   const [sinCuentas, setSinCuentas] = useState(false);
   const [usuario, setUsuario] = useState<UsuarioPublico | null | undefined>(
@@ -377,25 +367,6 @@ function App() {
   }
 
   if (testigo) return <CotizacionPublica testigo={testigo} />;
-
-  if (testigoRestablecimiento) {
-    return (
-      <PantallaRestablecer
-        token={testigoRestablecimiento}
-        onRestablecida={() => {
-          // La contraseña ya quedó restablecida y la sesión, abierta en el
-          // servidor: solo falta traer quién es y limpiar la URL del enlace,
-          // que ya se usó.
-          window.history.replaceState(null, "", "/");
-          setTestigoRestablecimiento(null);
-          sesionActual().then((estado) => {
-            setUsuario(estado.usuario);
-            setSinCuentas(estado.sinCuentas);
-          });
-        }}
-      />
-    );
-  }
 
   if (usuario === undefined) {
     return (
