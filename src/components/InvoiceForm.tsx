@@ -193,6 +193,30 @@ export default function InvoiceForm({
     updateCliente("razonSocial", razonSocial);
   }
 
+  /**
+   * Empresa elegida en Clientify, ya sea buscando por razón social o por
+   * NIT: en ambos casos se completan los mismos datos del cliente.
+   */
+  function elegirClienteDeClientify(cliente: {
+    razonSocial: string;
+    nit?: string;
+    contacto?: string;
+    email?: string;
+    clientifyId?: number;
+  }) {
+    onChange({
+      ...data,
+      cliente: {
+        ...data.cliente,
+        razonSocial: cliente.razonSocial,
+        ...(cliente.nit ? { nit: cliente.nit } : {}),
+        ...(cliente.contacto ? { contacto: cliente.contacto } : {}),
+        ...(cliente.email ? { email: cliente.email } : {}),
+        clientifyId: cliente.clientifyId,
+      },
+    });
+  }
+
   function elegirContacto(contacto: ContactoClientify) {
     setContactosCliente([]);
     onChange({
@@ -338,28 +362,18 @@ export default function InvoiceForm({
               value={data.cliente.razonSocial}
               onChange={cambiarRazonSocial}
               onContactosDisponibles={setContactosCliente}
-              onSeleccionar={(cliente) =>
-                onChange({
-                  ...data,
-                  cliente: {
-                    ...data.cliente,
-                    razonSocial: cliente.razonSocial,
-                    ...(cliente.nit ? { nit: cliente.nit } : {}),
-                    ...(cliente.contacto ? { contacto: cliente.contacto } : {}),
-                    ...(cliente.email ? { email: cliente.email } : {}),
-                    clientifyId: cliente.clientifyId,
-                  },
-                })
-              }
+              onSeleccionar={elegirClienteDeClientify}
             />
           </div>
           <div>
             <label className={labelClass}>NIT</label>
-            <input
-              className={inputClass}
+            <BuscadorCliente
+              campo="nit"
               value={data.cliente.nit}
-              onChange={(e) => updateCliente("nit", e.target.value)}
-              placeholder="900.000.000-1"
+              onChange={(nit) => updateCliente("nit", nit)}
+              onContactosDisponibles={setContactosCliente}
+              onSeleccionar={elegirClienteDeClientify}
+              placeholder="900.000.000-1 · busca en Clientify"
             />
           </div>
           <div>

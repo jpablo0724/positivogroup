@@ -5,7 +5,9 @@ import { extname, join, normalize, resolve } from "node:path";
 import auth from "../backend/functions/auth.mts";
 import admin from "../backend/functions/admin.mts";
 import adjuntoPublico from "../backend/functions/adjuntoPublico.mts";
-import clientify from "../backend/functions/clientify.mts";
+import clientify, {
+  precalentarCatalogos,
+} from "../backend/functions/clientify.mts";
 import cotizaciones from "../backend/functions/cotizaciones.mts";
 import informes from "../backend/functions/informes.mts";
 import numero from "../backend/functions/numero.mts";
@@ -195,4 +197,5 @@ servidor.listen(PUERTO, () => {
       "AVISO: sin DB_HOST ni SQLITE_FILE definidos, usará SQLite en memoria (se pierde todo al reiniciar)",
     );
   }
+  precalentarCatalogos();
 });

@@ -83,10 +83,17 @@ const MAXIMO_PAGINAS = 30;
 // El catálogo de empresas cambia poco durante una jornada de trabajo, así que
 // se conserva un buen rato: cada descarga completa son varias páginas.
 const VIGENCIA_CACHE_MS = 20 * 60 * 1000;
+// Páginas que se piden a la vez una vez se sabe cuántas hay. Pocas, para no
+// toparse con el límite de peticiones de Clientify.
+const PAGINAS_EN_PARALELO = 4;
 
 type Registro = Record<string, unknown>;
 
 const cache = new Map<string, { guardadoEn: number; registros: Registro[] }>();
+// Descargas en curso. Mientras el catálogo baja, cada tecla que escribe el
+// usuario (y cada otro usuario) espera esa misma descarga en vez de lanzar
+// otra completa por su cuenta.
+const enCurso = new Map<string, Promise<Registro[]>>();
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
@@ -149,44 +156,133 @@ function normalizar(valor: unknown): string {
     .trim();
 }
 
-/** Descarga el listado completo de un recurso, paginando y cacheando. */
+/** Solo los dígitos, para que "900.123.456-1" y "9001234561" coincidan. */
+function soloDigitos(valor: unknown): string {
+  return String(valor ?? "").replace(/\D/g, "");
+}
+
+interface PaginaClientify {
+  results?: Registro[];
+  next?: string | null;
+  count?: number;
+}
+
+async function pedirPagina(
+  recurso: string,
+  pagina: number,
+  token: string,
+): Promise<PaginaClientify> {
+  const url = new URL(`${CLIENTIFY_BASE}/${recurso}/`);
+  url.searchParams.set("fields", CAMPOS_POR_DEFECTO[recurso] ?? "id,name");
+  url.searchParams.set("page_size", String(TAMANO_PAGINA));
+  url.searchParams.set("page", String(pagina));
+
+  const respuesta = await pedirAClientify(url, token);
+  if (!respuesta.ok) {
+    throw new Error(`Clientify respondió ${respuesta.status} al pedir ${recurso}`);
+  }
+  return (await respuesta.json()) as PaginaClientify;
+}
+
+function lote(pagina: PaginaClientify): Registro[] {
+  return Array.isArray(pagina.results) ? pagina.results : [];
+}
+
+/**
+ * Descarga el listado completo de un recurso. La primera página dice cuántos
+ * registros hay en total, y con eso el resto se pide en paralelo en vez de
+ * una tras otra. Si Clientify no informa el total, se sigue página a página.
+ */
+async function descargarCatalogo(
+  recurso: string,
+  token: string,
+): Promise<Registro[]> {
+  const primera = await pedirPagina(recurso, 1, token);
+  const registros = [...lote(primera)];
+
+  if (!primera.next || registros.length === 0) return registros;
+
+  if (typeof primera.count === "number" && primera.count > 0) {
+    const totalPaginas = Math.min(
+      MAXIMO_PAGINAS,
+      Math.ceil(primera.count / registros.length),
+    );
+    const pendientes: number[] = [];
+    for (let p = 2; p <= totalPaginas; p++) pendientes.push(p);
+
+    const porPagina: Registro[][] = [];
+    for (let i = 0; i < pendientes.length; i += PAGINAS_EN_PARALELO) {
+      const tanda = pendientes.slice(i, i + PAGINAS_EN_PARALELO);
+      const paginas = await Promise.all(
+        tanda.map((p) => pedirPagina(recurso, p, token)),
+      );
+      paginas.forEach((pagina, j) => (porPagina[tanda[j]] = lote(pagina)));
+    }
+    for (const parte of porPagina) if (parte) registros.push(...parte);
+    return registros;
+  }
+
+  for (let pagina = 2; pagina <= MAXIMO_PAGINAS; pagina++) {
+    const cuerpo = await pedirPagina(recurso, pagina, token);
+    registros.push(...lote(cuerpo));
+    if (!cuerpo.next || lote(cuerpo).length === 0) break;
+  }
+  return registros;
+}
+
+/** Lanza (o reutiliza) la descarga del catálogo y la guarda en caché. */
+function refrescarCatalogo(recurso: string, token: string): Promise<Registro[]> {
+  const yaBajando = enCurso.get(recurso);
+  if (yaBajando) return yaBajando;
+
+  const inicio = Date.now();
+  const promesa = descargarCatalogo(recurso, token)
+    .then((registros) => {
+      cache.set(recurso, { guardadoEn: Date.now(), registros });
+      console.log(
+        `Clientify: ${recurso} descargado (${registros.length} registros, ${Date.now() - inicio} ms)`,
+      );
+      return registros;
+    })
+    .finally(() => enCurso.delete(recurso));
+
+  enCurso.set(recurso, promesa);
+  return promesa;
+}
+
+/**
+ * El catálogo de un recurso. Si el caché está vencido se responde igual con
+ * lo guardado y se renueva por detrás: así nadie se queda esperando la
+ * descarga completa salvo la primera vez tras arrancar el servidor (y eso lo
+ * evita precalentarCatalogos).
+ */
 async function catalogoCompleto(
   recurso: string,
   token: string,
 ): Promise<Registro[]> {
   const enCache = cache.get(recurso);
-  if (enCache && Date.now() - enCache.guardadoEn < VIGENCIA_CACHE_MS) {
-    return enCache.registros;
+  if (!enCache) return refrescarCatalogo(recurso, token);
+
+  if (Date.now() - enCache.guardadoEn >= VIGENCIA_CACHE_MS) {
+    refrescarCatalogo(recurso, token).catch((err) =>
+      console.error(`Clientify: no se pudo renovar ${recurso}`, err),
+    );
   }
+  return enCache.registros;
+}
 
-  const registros: Registro[] = [];
-
-  for (let pagina = 1; pagina <= MAXIMO_PAGINAS; pagina++) {
-    const url = new URL(`${CLIENTIFY_BASE}/${recurso}/`);
-    url.searchParams.set("fields", CAMPOS_POR_DEFECTO[recurso] ?? "id,name");
-    url.searchParams.set("page_size", String(TAMANO_PAGINA));
-    url.searchParams.set("page", String(pagina));
-
-    const respuesta = await pedirAClientify(url, token);
-    if (!respuesta.ok) {
-      throw new Error(
-        `Clientify respondió ${respuesta.status} al pedir ${recurso}`,
-      );
-    }
-
-    const cuerpo = (await respuesta.json()) as {
-      results?: Registro[];
-      next?: string | null;
-    };
-
-    const lote = Array.isArray(cuerpo.results) ? cuerpo.results : [];
-    registros.push(...lote);
-
-    if (!cuerpo.next || lote.length === 0) break;
+/**
+ * Descarga empresas y contactos al arrancar el servidor, para que la primera
+ * búsqueda del día no tenga que esperar a que bajen.
+ */
+export function precalentarCatalogos(): void {
+  const token = process.env.CLIENTIFY_API_TOKEN;
+  if (!token) return;
+  for (const recurso of ["companies", "contacts"]) {
+    refrescarCatalogo(recurso, token).catch((err) =>
+      console.error(`Clientify: no se pudo precargar ${recurso}`, err),
+    );
   }
-
-  cache.set(recurso, { guardadoEn: Date.now(), registros });
-  return registros;
 }
 
 export default async (req: Request) => {
@@ -311,8 +407,13 @@ export default async (req: Request) => {
   try {
     // --- Búsqueda de empresas por nombre, razón social o NIT ---
     if (recurso === "companies" && buscar !== null) {
-      const consulta = normalizar(buscar);
-      if (consulta.length < 2) return json({ count: 0, results: [] });
+      // Con ?por=nit solo se mira el NIT, y por dígitos: así da igual si se
+      // escribe con puntos y guion o sin ellos.
+      const porNit = entrante.searchParams.get("por") === "nit";
+      const consulta = porNit ? soloDigitos(buscar) : normalizar(buscar);
+      if (consulta.length < (porNit ? 3 : 2)) {
+        return json({ count: 0, results: [] });
+      }
 
       const [todas, contactos] = await Promise.all([
         catalogoCompleto("companies", token),
@@ -320,15 +421,20 @@ export default async (req: Request) => {
       ]);
       const contactosPorNombre = contactosPorNombreDeEmpresa(contactos);
 
-      const coincidencias = todas
-        .filter(
-          (registro) =>
+      const coincide = porNit
+        ? (registro: Registro) =>
+            soloDigitos(registro.taxpayer_identification_number).includes(
+              consulta,
+            )
+        : (registro: Registro) =>
             normalizar(registro.name).includes(consulta) ||
             normalizar(registro.business_name).includes(consulta) ||
             normalizar(registro.taxpayer_identification_number).includes(
               consulta,
-            ),
-        )
+            );
+
+      const coincidencias = todas
+        .filter(coincide)
         .slice(0, 20)
         .map((empresa) => ({
           ...empresa,

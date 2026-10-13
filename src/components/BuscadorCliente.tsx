@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   buscarEmpresas,
   ClientifyNoDisponible,
@@ -17,7 +17,7 @@ interface ClienteSeleccionado {
 
 interface BuscadorClienteProps {
   value: string;
-  onChange: (razonSocial: string) => void;
+  onChange: (valor: string) => void;
   onSeleccionar: (cliente: ClienteSeleccionado) => void;
   /**
    * Empleados de la empresa elegida cuando hay más de uno, para que el
@@ -25,32 +25,42 @@ interface BuscadorClienteProps {
    * empresa tiene uno solo (ya se autocompletó) o ninguno.
    */
   onContactosDisponibles: (contactos: ContactoClientify[]) => void;
+  /**
+   * Qué campo es: la razón social busca por nombre, razón social o NIT; el
+   * NIT busca solo por NIT (comparando dígitos).
+   */
+  campo?: "razonSocial" | "nit";
+  placeholder?: string;
 }
 
-const MINIMO_CARACTERES = 2;
-
 /**
- * Campo de razón social con búsqueda en Clientify. Se puede escribir
- * libremente; si hay coincidencias en el CRM se ofrecen como sugerencias y al
- * elegir una se completan también contacto y email.
+ * Campo de razón social (o de NIT) con búsqueda en Clientify. Se puede
+ * escribir libremente; si hay coincidencias en el CRM se ofrecen como
+ * sugerencias y al elegir una se completan también los demás datos del
+ * cliente.
  */
 export default function BuscadorCliente({
   value,
   onChange,
   onSeleccionar,
   onContactosDisponibles,
+  campo = "razonSocial",
+  placeholder = "Escribe para buscar en Clientify",
 }: BuscadorClienteProps) {
+  const porNit = campo === "nit";
+  const minimoCaracteres = porNit ? 3 : 2;
+
   const [sugerencias, setSugerencias] = useState<EmpresaClientify[]>([]);
   const [abierto, setAbierto] = useState(false);
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
   const contenedorRef = useRef<HTMLDivElement>(null);
-  // Último valor puesto por el propio componente al elegir una empresa. Sirve
-  // para no volver a buscar ese texto; se compara el valor en vez de usar una
-  // bandera, porque una bandera se comería la búsqueda siguiente que escriba
-  // el usuario.
-  const valorAutocompletado = useRef<string | null>(null);
+  // Último texto que el usuario escribió en ESTE campo. Solo se busca cuando
+  // el valor coincide con él: si el valor cambió desde fuera (al elegir una
+  // empresa aquí o en el otro buscador, o al abrir una cotización guardada)
+  // no se debe desplegar una búsqueda que nadie pidió.
+  const tecleado = useRef<string | null>(null);
 
   useEffect(() => {
     function fueraDelCampo(evento: MouseEvent) {
@@ -65,22 +75,27 @@ export default function BuscadorCliente({
     return () => document.removeEventListener("mousedown", fueraDelCampo);
   }, []);
 
-  useEffect(() => {
-    if (valorAutocompletado.current === value) return;
+  // Lo que realmente se busca: en el NIT solo los dígitos.
+  const consultaDe = useCallback(
+    (texto: string) => (porNit ? texto.replace(/\D/g, "") : texto.trim()),
+    [porNit],
+  );
 
-    const consulta = value.trim();
-    if (consulta.length < MINIMO_CARACTERES) {
-      setSugerencias([]);
-      setAviso(null);
-      return;
-    }
+  useEffect(() => {
+    if (tecleado.current !== value) return;
+
+    const consulta = consultaDe(value);
+    if (consulta.length < minimoCaracteres) return;
 
     let cancelado = false;
     // Espera a que el usuario deje de escribir antes de consultar el CRM.
     const temporizador = setTimeout(async () => {
       setBuscando(true);
       try {
-        const encontradas = await buscarEmpresas(consulta);
+        const encontradas = await buscarEmpresas(
+          consulta,
+          porNit ? "nit" : "texto",
+        );
         if (cancelado) return;
         setSugerencias(encontradas);
         setAviso(encontradas.length === 0 ? "Sin coincidencias en Clientify" : null);
@@ -97,16 +112,17 @@ export default function BuscadorCliente({
       } finally {
         if (!cancelado) setBuscando(false);
       }
-    }, 200);
+    }, 250);
 
     return () => {
       cancelado = true;
       clearTimeout(temporizador);
+      setBuscando(false);
     };
-  }, [value]);
+  }, [value, porNit, minimoCaracteres, consultaDe]);
 
   function elegir(empresa: EmpresaClientify) {
-    valorAutocompletado.current = empresa.razonSocial;
+    tecleado.current = null;
     setAbierto(false);
     setSugerencias([]);
 
@@ -133,9 +149,18 @@ export default function BuscadorCliente({
       <input
         className={selectTriggerClass}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          tecleado.current = e.target.value;
+          // Muy corto para buscar: se quitan las sugerencias de lo anterior.
+          if (consultaDe(e.target.value).length < minimoCaracteres) {
+            setSugerencias([]);
+            setAviso(null);
+            setAbierto(false);
+          }
+          onChange(e.target.value);
+        }}
         onFocus={() => sugerencias.length > 0 && setAbierto(true)}
-        placeholder="Escribe para buscar en Clientify"
+        placeholder={placeholder}
         autoComplete="off"
       />
 
@@ -156,11 +181,22 @@ export default function BuscadorCliente({
                     onClick={() => elegir(empresa)}
                     className="block w-full px-3 py-1.5 text-left text-slate-700 hover:bg-slate-100"
                   >
-                    <span className="block truncate">{empresa.razonSocial}</span>
-                    {empresa.nombre !== empresa.razonSocial && (
-                      <span className="block truncate text-xs text-slate-400">
-                        {empresa.nombre}
-                      </span>
+                    {porNit ? (
+                      <>
+                        <span className="block truncate">{empresa.nit}</span>
+                        <span className="block truncate text-xs text-slate-400">
+                          {empresa.razonSocial}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="block truncate">{empresa.razonSocial}</span>
+                        {empresa.nombre !== empresa.razonSocial && (
+                          <span className="block truncate text-xs text-slate-400">
+                            {empresa.nombre}
+                          </span>
+                        )}
+                      </>
                     )}
                   </button>
                 </li>

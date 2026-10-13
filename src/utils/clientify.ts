@@ -68,11 +68,17 @@ function texto(valor: unknown): string {
   return typeof valor === "string" ? valor : "";
 }
 
+/**
+ * Busca empresas en el CRM. Con `por: "nit"` solo compara el NIT, y por
+ * dígitos, para que dé igual escribirlo con o sin puntos y guion.
+ */
 export async function buscarEmpresas(
   consulta: string,
+  por: "texto" | "nit" = "texto",
 ): Promise<EmpresaClientify[]> {
   const cuerpo = await pedir(
-    `/api/clientify/companies?buscar=${encodeURIComponent(consulta)}`,
+    `/api/clientify/companies?buscar=${encodeURIComponent(consulta)}` +
+      (por === "nit" ? "&por=nit" : ""),
   );
 
   return comoLista(cuerpo)

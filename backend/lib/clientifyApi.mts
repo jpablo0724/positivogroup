@@ -14,9 +14,18 @@ interface OpcionesClientify {
   cuerpo?: unknown;
 }
 
+// Si Clientify no contesta en este tiempo se corta, en vez de dejar al
+// usuario mirando "Buscando…" indefinidamente.
+const LIMITE_ESPERA_MS = 20_000;
+
+// Esquema que funcionó la última vez. Sin recordarlo, si el bueno fuera
+// "Bearer", cada petición se haría dos veces (la primera, rechazada).
+let esquemaQueFunciona: "Token" | "Bearer" = "Token";
+
 /**
  * La v1 autentica con "Token <clave>"; si la v2 esperara "Bearer", el primer
- * intento devuelve 401 y se reintenta con el otro esquema.
+ * intento devuelve 401 y se reintenta con el otro esquema, y se recuerda cuál
+ * sirvió para las siguientes peticiones.
  */
 export async function pedirAClientify(
   url: URL,
@@ -31,12 +40,16 @@ export async function pedirAClientify(
       ...(cuerpo === undefined ? {} : { "content-type": "application/json" }),
     },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+    signal: AbortSignal.timeout(LIMITE_ESPERA_MS),
   });
 
-  let respuesta = await fetch(url, opciones("Token"));
+  const primero = esquemaQueFunciona;
+  let respuesta = await fetch(url, opciones(primero));
 
   if (respuesta.status === 401 || respuesta.status === 403) {
-    respuesta = await fetch(url, opciones("Bearer"));
+    const otro = primero === "Token" ? "Bearer" : "Token";
+    respuesta = await fetch(url, opciones(otro));
+    if (respuesta.ok) esquemaQueFunciona = otro;
   }
 
   return respuesta;
