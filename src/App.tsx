@@ -153,6 +153,38 @@ function App() {
   }, [manejarError]);
 
   /**
+   * Tras guardar el perfil: la firma de la cotización sale del equipo cargado
+   * en pantalla, así que se actualiza ahí mismo para que el nombre y el
+   * correo nuevos se vean sin recargar. Si cambió el correo, el servidor ya
+   * movió las cotizaciones al nuevo; aquí se hace lo mismo con lo que hay en
+   * memoria y se vuelve a pedir el listado.
+   */
+  function perfilGuardado(actualizado: UsuarioPublico, emailAnterior: string) {
+    setUsuario(actualizado);
+
+    const miembro: MiembroEquipo = {
+      email: actualizado.email,
+      nombre: actualizado.nombre,
+      apellidos: actualizado.apellidos,
+      telefono: actualizado.telefono,
+      cargo: actualizado.cargo,
+    };
+    setEquipo((previo) =>
+      previo.some((m) => m.email === emailAnterior)
+        ? previo.map((m) => (m.email === emailAnterior ? miembro : m))
+        : [...previo, miembro],
+    );
+
+    if (actualizado.email === emailAnterior) return;
+
+    const cambiar = (correo: string | undefined) =>
+      correo === emailAnterior ? actualizado.email : correo;
+    setInvoiceCreadoPor(cambiar);
+    setParaImprimirCreadoPor(cambiar);
+    listarCotizaciones().then(setCotizaciones).catch(manejarError);
+  }
+
+  /**
    * Quién firma la cotización en el documento: se busca en el equipo por
    * correo y, si no se encuentra (cotización nueva, o de antes de que
    * existiera este dato), firma quien tiene la sesión abierta.
@@ -613,7 +645,7 @@ function App() {
         <ModalPerfil
           usuario={usuario}
           onCerrar={() => setModalPerfil(false)}
-          onGuardado={setUsuario}
+          onGuardado={perfilGuardado}
           onCambiarContrasena={() => {
             setModalPerfil(false);
             setModalContrasena(true);

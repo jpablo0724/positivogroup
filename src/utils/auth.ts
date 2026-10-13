@@ -78,12 +78,18 @@ export async function registrarse(datos: {
   return usuario;
 }
 
-/** Cambia el nombre, los apellidos, el teléfono y el cargo propios. El correo no se toca. */
+/**
+ * Cambia los datos propios. Si el correo es distinto al actual hace falta la
+ * contraseña: el servidor pasa la cuenta, la sesión y las cotizaciones al
+ * correo nuevo.
+ */
 export async function actualizarPerfil(datos: {
   nombre: string;
   apellidos: string;
+  email: string;
   telefono: string;
   cargo: string;
+  contrasena?: string;
 }): Promise<UsuarioPublico> {
   const { usuario } = await pedir<{ usuario: UsuarioPublico }>(
     "/api/auth/perfil",

@@ -11,6 +11,7 @@ import {
   contrasenaCoincide,
   cookieBorrada,
   cookieSesion,
+  cambiarEmailDeCuenta,
   cerrarSesionesDe,
   crearTokenRestablecimiento,
   crearUsuario,
@@ -24,6 +25,7 @@ import {
   usuarioDeSesion,
 } from "../lib/auth.mts";
 import { correoConfigurado, enviarCorreo } from "../lib/correo.mts";
+import { reemplazarCorreoEnCotizaciones } from "../lib/almacen.mts";
 
 /**
  * Registro e inicio de sesión.
@@ -32,7 +34,7 @@ import { correoConfigurado, enviarCorreo } from "../lib/correo.mts";
  *   POST /api/auth/entrar       -> inicia sesión
  *   POST /api/auth/salir        -> cierra la sesión
  *   GET  /api/auth/sesion       -> quién está dentro
- *   POST /api/auth/perfil       -> cambia el propio nombre, apellidos, teléfono y cargo
+ *   POST /api/auth/perfil       -> cambia el propio nombre, apellidos, correo, teléfono y cargo
  *   POST /api/auth/olvide       -> manda un enlace por correo para restablecer la contraseña
  *   POST /api/auth/restablecer -> pone la contraseña nueva con el testigo del enlace
  *
@@ -239,19 +241,24 @@ export default async (req: Request) => {
 
     // --- Cambiar los propios datos ---
     //
-    // El correo no se toca aquí a propósito: es la clave con la que el
-    // sistema identifica la cuenta —la sesión, el autor de cada cotización,
-    // la marca de administrador—, así que cambiarlo es una operación aparte
-    // que hoy no existe. Cualquier cuenta con sesión puede cambiar sus
-    // propios datos, no solo un administrador: son suyos.
+    // Cualquier cuenta con sesión puede cambiar sus propios datos, no solo un
+    // administrador: son suyos.
+    //
+    // El correo también se puede cambiar, pero es la clave con la que el
+    // sistema identifica la cuenta —el inicio de sesión, el autor de cada
+    // cotización, a quién se reasignó—, así que cambiarlo mueve todo eso al
+    // correo nuevo (ver cambiarEmailDeCuenta). Por ser el dato con el que se
+    // entra, exige la contraseña actual, igual que cambiar la contraseña.
     if (accion === "perfil") {
       const usuario = await usuarioDeSesion(leerCookie(req, NOMBRE_COOKIE));
       if (!usuario) return json({ error: "sin_sesion" }, 401);
 
       const nombre = texto((cuerpo as never)["nombre"]).trim();
-      if (nombre === "") return json({ error: "falta_nombre" }, 400);
+      if (nombre === "") {
+        return json({ error: "falta_nombre", mensaje: "Escribe tu nombre." }, 400);
+      }
 
-      const actualizado = {
+      const datos = {
         ...usuario,
         nombre,
         apellidos: texto((cuerpo as never)["apellidos"]).trim(),
@@ -259,8 +266,45 @@ export default async (req: Request) => {
         cargo: texto((cuerpo as never)["cargo"]).trim(),
       };
 
-      await guardarUsuario(actualizado);
-      return json({ usuario: comoPublico(actualizado) });
+      const pedido = texto((cuerpo as never)["email"]);
+      const emailNuevo = pedido.trim() === "" ? usuario.email : normalizarEmail(pedido);
+
+      if (emailNuevo === usuario.email) {
+        await guardarUsuario(datos);
+        return json({ usuario: comoPublico(datos) });
+      }
+
+      if (!EMAIL_VALIDO.test(emailNuevo)) {
+        return json(
+          { error: "email_invalido", mensaje: "El correo nuevo no es válido." },
+          400,
+        );
+      }
+      const contrasena = texto((cuerpo as never)["contrasena"]);
+      if (!(await contrasenaCoincide(contrasena, usuario))) {
+        return json(
+          {
+            error: "contrasena_actual_incorrecta",
+            mensaje: "La contraseña actual no es correcta.",
+          },
+          403,
+        );
+      }
+
+      const movido = await cambiarEmailDeCuenta(datos, emailNuevo, async () => {
+        await reemplazarCorreoEnCotizaciones(usuario.email, emailNuevo);
+      });
+      if (!movido) {
+        return json(
+          {
+            error: "email_ya_registrado",
+            mensaje: "Ese correo ya pertenece a otra cuenta.",
+          },
+          409,
+        );
+      }
+
+      return json({ usuario: comoPublico(movido), emailAnterior: usuario.email });
     }
 
     // --- Cambiar la propia contraseña ---

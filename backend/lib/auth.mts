@@ -312,6 +312,81 @@ export async function eliminarUsuario(email: string): Promise<void> {
 }
 
 /**
+ * Pasa la cuenta a un correo nuevo. El correo es la clave del registro, así
+ * que no basta con editarlo: se crea el registro con la clave nueva, se
+ * llevan a él las sesiones abiertas (para que nadie quede fuera por cambiar
+ * su correo) y al final se borra el registro viejo.
+ *
+ * Devuelve null si el correo nuevo ya es de otra cuenta. `onlyIfNew` lo
+ * garantiza del lado de la base de datos, aunque dos personas lo intenten a
+ * la vez.
+ *
+ * Las cotizaciones que apuntan al correo viejo NO se tocan aquí: eso lo hace
+ * quien llama (ver reemplazarCorreoEnCotizaciones en almacen.mts), entre
+ * crear la cuenta nueva y borrar la vieja.
+ */
+export async function cambiarEmailDeCuenta(
+  usuario: Usuario,
+  emailNuevo: string,
+  antesDeBorrarLaVieja: () => Promise<void>,
+): Promise<Usuario | null> {
+  const viejo = normalizarEmail(usuario.email);
+  const nuevo = normalizarEmail(emailNuevo);
+
+  const movido: Usuario = {
+    ...usuario,
+    email: nuevo,
+    // Quien es administrador solo por estar en ADMIN_EMAILS lo perdería al
+    // cambiar de correo; se le deja escrito en la cuenta para que lo conserve.
+    rol: esAdmin(usuario) ? "admin" : rolDe(usuario),
+  };
+
+  const creado = await crearUsuario(movido);
+  if (!creado) return null;
+
+  await antesDeBorrarLaVieja();
+
+  // Sesiones: se cambia el correo dentro de cada una, sin cerrarlas.
+  const sesiones = almacenSesiones();
+  const { blobs } = await sesiones.list();
+  await Promise.all(
+    blobs.map(async (blob) => {
+      const sesion = (await sesiones.get(blob.key, {
+        type: "json",
+      })) as Sesion | null;
+      if (sesion?.email === viejo) {
+        await sesiones.setJSON(blob.key, { ...sesion, email: nuevo });
+      }
+    }),
+  );
+
+  // Un enlace de "olvidé mi contraseña" pendiente apuntaría a una cuenta que
+  // ya no existe: se invalida.
+  const restablecimientos = almacenRestablecimientos();
+  const pendientes = await restablecimientos.list();
+  await Promise.all(
+    pendientes.blobs.map(async (blob) => {
+      const dato = (await restablecimientos.get(blob.key, {
+        type: "json",
+      })) as Restablecimiento | null;
+      if (dato?.email === viejo) await restablecimientos.delete(blob.key);
+    }),
+  );
+
+  // La marca de "primera cuenta" guarda el correo como dato informativo.
+  const contadores = getStore({ name: "contadores", consistency: "strong" });
+  const marca = (await contadores.get(CLAVE_PRIMER_USUARIO, {
+    type: "json",
+  })) as { email?: string } | null;
+  if (marca?.email === viejo) {
+    await contadores.setJSON(CLAVE_PRIMER_USUARIO, { ...marca, email: nuevo });
+  }
+
+  await eliminarUsuario(viejo);
+  return movido;
+}
+
+/**
  * Cierra todas las sesiones abiertas de una cuenta. Es lo que le da sentido a
  * restablecer una contraseña: si las sesiones siguieran vivas, cambiarla no
  * sacaría a nadie.

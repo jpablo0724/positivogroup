@@ -77,6 +77,57 @@ export function claveProducto(nombre: string): string {
   return Buffer.from(nombre.trim(), "utf8").toString("base64url");
 }
 
+/**
+ * Cambia un correo por otro en todas las cotizaciones: autor (creadoPor),
+ * a quién se reasignó y el historial. Se usa cuando alguien cambia el correo
+ * de su cuenta, para que siga viendo sus cotizaciones y siga firmándolas.
+ * Devuelve cuántas se tocaron.
+ */
+export async function reemplazarCorreoEnCotizaciones(
+  viejo: string,
+  nuevo: string,
+): Promise<number> {
+  const almacen = almacenCotizaciones();
+  const mismo = (valor: unknown) =>
+    typeof valor === "string" && valor.trim().toLowerCase() === viejo;
+
+  const { blobs } = await almacen.list();
+  const tocadas = await Promise.all(
+    blobs.map(async (blob) => {
+      const registro = (await almacen.get(blob.key, { type: "json" })) as
+        | Record<string, unknown>
+        | null;
+      if (!registro) return false;
+
+      let cambio = false;
+      const copia: Record<string, unknown> = { ...registro };
+      for (const campo of ["creadoPor", "reasignadoA"]) {
+        if (mismo(copia[campo])) {
+          copia[campo] = nuevo;
+          cambio = true;
+        }
+      }
+      if (Array.isArray(copia.historial)) {
+        copia.historial = copia.historial.map((entrada: Record<string, unknown>) => {
+          const nueva = { ...entrada };
+          for (const campo of ["quien", "nuevoDueno"]) {
+            if (mismo(nueva[campo])) {
+              nueva[campo] = nuevo;
+              cambio = true;
+            }
+          }
+          return nueva;
+        });
+      }
+
+      if (cambio) await almacen.setJSON(blob.key, copia);
+      return cambio;
+    }),
+  );
+
+  return tocadas.filter(Boolean).length;
+}
+
 /** Lee todos los registros de un almacén, en paralelo. */
 export async function leerTodo<T>(
   almacen: ReturnType<typeof getStore>,
