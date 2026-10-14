@@ -362,16 +362,7 @@ export async function cambiarEmailDeCuenta(
 
   // Un enlace de "olvidé mi contraseña" pendiente apuntaría a una cuenta que
   // ya no existe: se invalida.
-  const restablecimientos = almacenRestablecimientos();
-  const pendientes = await restablecimientos.list();
-  await Promise.all(
-    pendientes.blobs.map(async (blob) => {
-      const dato = (await restablecimientos.get(blob.key, {
-        type: "json",
-      })) as Restablecimiento | null;
-      if (dato?.email === viejo) await restablecimientos.delete(blob.key);
-    }),
-  );
+  await descartarRestablecimientosDe(viejo);
 
   // La marca de "primera cuenta" guarda el correo como dato informativo.
   const contadores = getStore({ name: "contadores", consistency: "strong" });
@@ -530,4 +521,26 @@ export async function consumirTokenRestablecimiento(
   testigo: string,
 ): Promise<void> {
   await almacenRestablecimientos().delete(huella(testigo));
+}
+
+/**
+ * Anula todos los enlaces pendientes de una cuenta. Si alguien pidió el
+ * enlace dos veces y usó uno, el otro no debe seguir sirviendo para cambiar
+ * la contraseña que se acaba de poner.
+ */
+export async function descartarRestablecimientosDe(
+  email: string,
+): Promise<void> {
+  const almacen = almacenRestablecimientos();
+  const correo = normalizarEmail(email);
+  const { blobs } = await almacen.list();
+
+  await Promise.all(
+    blobs.map(async (blob) => {
+      const dato = (await almacen.get(blob.key, {
+        type: "json",
+      })) as Restablecimiento | null;
+      if (dato?.email === correo) await almacen.delete(blob.key);
+    }),
+  );
 }

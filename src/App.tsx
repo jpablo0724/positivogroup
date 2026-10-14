@@ -12,6 +12,7 @@ import VistaImpresion from "./components/VistaImpresion";
 import ModalEnviarClientify from "./components/ModalEnviarClientify";
 import CotizacionPublica from "./components/CotizacionPublica";
 import PantallaAcceso from "./components/PantallaAcceso";
+import PantallaRestablecer from "./components/PantallaRestablecer";
 import AvisoDatosLocales from "./components/AvisoDatosLocales";
 import {
   ID_BORRADOR,
@@ -61,10 +62,19 @@ function testigoPublico(): string | null {
   return coincide ? coincide[1] : null;
 }
 
+/** Testigo del enlace si la dirección es /restablecer?token=..., o null. */
+function testigoRestablecimiento(): string | null {
+  if (!/^\/restablecer\/?$/.test(window.location.pathname)) return null;
+  return new URLSearchParams(window.location.search).get("token") ?? "";
+}
+
 function App() {
   // La cotización que ve el cliente no pasa por el login: quien recibe el
   // enlace no tiene cuenta. Se resuelve antes que nada.
   const [testigo] = useState<string | null>(testigoPublico);
+  // Lo mismo el enlace de "olvidé mi contraseña": quien llega por ahí no
+  // puede entrar, por eso lo pidió.
+  const [testigoContrasena] = useState<string | null>(testigoRestablecimiento);
   // undefined = todavía se está preguntando al servidor; null = sin sesión.
   const [sinCuentas, setSinCuentas] = useState(false);
   const [usuario, setUsuario] = useState<UsuarioPublico | null | undefined>(
@@ -422,6 +432,9 @@ function App() {
   }
 
   if (testigo) return <CotizacionPublica testigo={testigo} />;
+  if (testigoContrasena !== null) {
+    return <PantallaRestablecer testigo={testigoContrasena} />;
+  }
 
   if (usuario === undefined) {
     return (

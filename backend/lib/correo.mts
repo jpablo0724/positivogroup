@@ -21,26 +21,42 @@ function obtenerTransportador() {
   const host = process.env.SMTP_HOST;
   if (!host) return null;
 
+  // Las contraseñas de aplicación de Google se muestran en grupos de cuatro
+  // letras separados por espacios. Copiadas tal cual al panel del hosting,
+  // Gmail las rechaza: se limpian aquí para que eso no vuelva a pasar.
+  const usuario = process.env.SMTP_USER?.trim();
+  const clave = process.env.SMTP_PASS?.replace(/\s/g, "");
+
   transportador = nodemailer.createTransport({
-    host,
+    host: host.trim(),
     port: Number(process.env.SMTP_PORT ?? 587),
-    secure: process.env.SMTP_SECURE === "true",
-    auth: process.env.SMTP_USER
-      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-      : undefined,
+    secure: process.env.SMTP_SECURE?.trim() === "true",
+    auth: usuario ? { user: usuario, pass: clave } : undefined,
   });
 
   return transportador;
 }
 
 export function correoConfigurado(): boolean {
-  return Boolean(process.env.SMTP_HOST);
+  return transportador !== null || Boolean(process.env.SMTP_HOST);
+}
+
+/**
+ * Solo para las pruebas: cambia el servidor SMTP por un transporte que no
+ * envía nada, para poder leer el correo que se habría mandado.
+ */
+export function usarTransportadorDePrueba(
+  prueba: ReturnType<typeof nodemailer.createTransport>,
+): void {
+  transportador = prueba;
 }
 
 export async function enviarCorreo(opciones: {
   para: string;
   asunto: string;
   html: string;
+  /** Versión en texto plano, para clientes que no muestran HTML. */
+  texto?: string;
 }): Promise<void> {
   const transporte = obtenerTransportador();
   if (!transporte) {
@@ -51,9 +67,10 @@ export async function enviarCorreo(opciones: {
   }
 
   await transporte.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    from: (process.env.SMTP_FROM || process.env.SMTP_USER)?.trim(),
     to: opciones.para,
     subject: opciones.asunto,
     html: opciones.html,
+    text: opciones.texto,
   });
 }

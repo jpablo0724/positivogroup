@@ -572,5 +572,100 @@ console.log("\n== Respaldo: exportar e importar ==");
   comprobar("un archivo que no es respaldo -> 400", basura.status === 400, basura.cuerpo.error);
 }
 
+console.log("\n== Olvidé mi contraseña ==");
+{
+  const correo = await import("../backend/lib/correo.mts");
+  const ANA = "ana@positivogroup.com";
+
+  // Sin servidor de correo, la respuesta es la misma exista o no la cuenta.
+  const sinSmtpExiste = await leer(await auth(req("/api/auth/olvide", { cuerpo: { email: ANA } })));
+  const sinSmtpNoExiste = await leer(await auth(req("/api/auth/olvide", { cuerpo: { email: "nadie@positivogroup.com" } })));
+  comprobar("sin SMTP -> 503", sinSmtpExiste.status === 503, sinSmtpExiste.cuerpo.error);
+  comprobar("sin SMTP no revela si la cuenta existe",
+    JSON.stringify(sinSmtpExiste) === JSON.stringify(sinSmtpNoExiste),
+    `${sinSmtpExiste.status} vs ${sinSmtpNoExiste.status}`);
+
+  // Desde aquí, los correos se capturan en vez de enviarse.
+  const enviados = [];
+  correo.usarTransportadorDePrueba({ sendMail: async (mensaje) => { enviados.push(mensaje); } });
+  const testigoDe = (mensaje) => /token=([A-Za-z0-9_-]+)/.exec(mensaje.text)?.[1] ?? "";
+
+  const malo = await leer(await auth(req("/api/auth/olvide", { cuerpo: { email: "no-es-correo" } })));
+  comprobar("correo inválido -> 400", malo.status === 400, malo.cuerpo.error);
+
+  const noExiste = await leer(await auth(req("/api/auth/olvide", { cuerpo: { email: "nadie@positivogroup.com" } })));
+  comprobar("correo sin cuenta -> 200 igual", noExiste.status === 200 && noExiste.cuerpo.enviado === true, JSON.stringify(noExiste.cuerpo));
+  comprobar("pero no manda nada", enviados.length === 0, `${enviados.length} enviados`);
+
+  const pedido = await leer(await auth(req("/api/auth/olvide", { cuerpo: { email: "ANA@positivogroup.com" } })));
+  comprobar("correo con cuenta -> 200", pedido.status === 200, `status ${pedido.status}`);
+  comprobar("responde exactamente igual que sin cuenta", JSON.stringify(pedido.cuerpo) === JSON.stringify(noExiste.cuerpo));
+  comprobar("manda un correo a la cuenta", enviados.length === 1 && enviados[0].to === ANA, enviados[0]?.to);
+  comprobar("el correo trae el enlace a /restablecer", /\/restablecer\?token=/.test(enviados[0]?.html ?? ""));
+  comprobar("y versión en texto plano", testigoDe(enviados[0]).length > 20);
+
+  const testigo1 = testigoDe(enviados[0]);
+
+  const valido = await leer(await auth(req("/api/auth/validar", { cuerpo: { token: testigo1 } })));
+  comprobar("validar un enlace vigente -> valido", valido.cuerpo.valido === true, JSON.stringify(valido.cuerpo));
+  const inventado = await leer(await auth(req("/api/auth/validar", { cuerpo: { token: "inventado" } })));
+  comprobar("validar uno inventado -> no valido", inventado.cuerpo.valido === false, JSON.stringify(inventado.cuerpo));
+
+  // Se pide otra vez: hay dos enlaces vivos.
+  await auth(req("/api/auth/olvide", { cuerpo: { email: ANA } }));
+  const testigo2 = testigoDe(enviados[1]);
+  comprobar("cada pedido trae un enlace distinto", testigo2 && testigo2 !== testigo1);
+
+  const sesionAntes = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: ANA, contrasena: "claveDelBasico9" } })));
+  const cookieAntes = comoCookie(sesionAntes.cookie);
+
+  const corta = await leer(await auth(req("/api/auth/restablecer", { cuerpo: { token: testigo2, nueva: "abc" } })));
+  comprobar("contraseña corta -> 400", corta.status === 400, corta.cuerpo.error);
+
+  const OLVIDADA = "laRecupereConElCorreo1";
+  const hecho = await leer(await auth(req("/api/auth/restablecer", { cuerpo: { token: testigo2, nueva: OLVIDADA } })));
+  comprobar("restablece -> 200", hecho.status === 200, `status ${hecho.status}`);
+  comprobar("deja la sesión abierta", hecho.cookie.includes("pg_sesion="));
+
+  const conNueva = await leer(await auth(req("/api/auth/entrar", { cuerpo: { email: ANA, contrasena: OLVIDADA } })));
+  comprobar("entra con la contraseña nueva", conNueva.status === 200, `status ${conNueva.status}`);
+
+  const sesionVieja = await leer(await cotizaciones(req("/api/cotizaciones", { metodo: "GET", cookie: cookieAntes })));
+  comprobar("cierra las sesiones que estaban abiertas", sesionVieja.status === 401, sesionVieja.cuerpo.error);
+
+  const repetido = await leer(await auth(req("/api/auth/restablecer", { cuerpo: { token: testigo2, nueva: "otraDistinta123" } })));
+  comprobar("el enlace no se puede usar dos veces", repetido.status === 400 && repetido.cuerpo.error === "token_invalido", repetido.cuerpo.error);
+
+  const elPrimero = await leer(await auth(req("/api/auth/restablecer", { cuerpo: { token: testigo1, nueva: "otraDistinta123" } })));
+  comprobar("y el otro enlace pendiente también queda anulado", elPrimero.status === 400, elPrimero.cuerpo.error);
+
+  // Límite por correo: 3 pedidos cada 15 minutos. Ya van 2.
+  await auth(req("/api/auth/olvide", { cuerpo: { email: ANA } }));
+  const antesDelCuarto = enviados.length;
+  const cuarto = await leer(await auth(req("/api/auth/olvide", { cuerpo: { email: ANA } })));
+  comprobar("pasado el límite responde igual", cuarto.status === 200 && cuarto.cuerpo.enviado === true, JSON.stringify(cuarto.cuerpo));
+  comprobar("pero ya no manda más correos", enviados.length === antesDelCuarto, `${enviados.length - antesDelCuarto} de más`);
+
+  // Límite por IP: 10 pedidos cada 15 minutos.
+  const desdeIp = () => new Request(`${BASE}/api/auth/olvide`, {
+    method: "POST",
+    headers: { "x-forwarded-for": "203.0.113.7, 10.0.0.1" },
+    body: JSON.stringify({ email: "nadie@positivogroup.com" }),
+  });
+  const respuestasIp = [];
+  for (let i = 0; i < 11; i++) respuestasIp.push((await auth(desdeIp())).status);
+  comprobar("10 pedidos desde la misma IP pasan", respuestasIp.slice(0, 10).every((s) => s === 200), respuestasIp.join(","));
+  comprobar("el 11 -> 429", respuestasIp[10] === 429, respuestasIp.join(","));
+
+  // Si el SMTP rechaza el envío, se avisa sin mostrar el detalle del servidor.
+  correo.usarTransportadorDePrueba({ sendMail: async () => { throw new Error("Invalid login: 535 clave secreta del smtp"); } });
+  const errorOriginal = console.error;
+  console.error = () => {};
+  const fallido = await leer(await auth(req("/api/auth/olvide", { cuerpo: { email: CUENTA.email } })));
+  console.error = errorOriginal;
+  comprobar("si el correo no sale -> 502", fallido.status === 502 && fallido.cuerpo.error === "correo_no_enviado", fallido.cuerpo.error);
+  comprobar("sin contar el detalle del SMTP", !JSON.stringify(fallido.cuerpo).includes("535"), JSON.stringify(fallido.cuerpo));
+}
+
 console.log(fallos === 0 ? "\nTODO OK\n" : `\n${fallos} FALLA(S)\n`);
 process.exit(fallos === 0 ? 0 : 1);

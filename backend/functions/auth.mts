@@ -16,6 +16,7 @@ import {
   crearTokenRestablecimiento,
   crearUsuario,
   derivarContrasena,
+  descartarRestablecimientosDe,
   emailDeTokenRestablecimiento,
   guardarUsuario,
   leerCookie,
@@ -36,6 +37,7 @@ import { reemplazarCorreoEnCotizaciones } from "../lib/almacen.mts";
  *   GET  /api/auth/sesion       -> quién está dentro
  *   POST /api/auth/perfil       -> cambia el propio nombre, apellidos, correo, teléfono y cargo
  *   POST /api/auth/olvide       -> manda un enlace por correo para restablecer la contraseña
+ *   POST /api/auth/validar      -> dice si el testigo del enlace sigue sirviendo
  *   POST /api/auth/restablecer -> pone la contraseña nueva con el testigo del enlace
  *
  * El registro está cerrado: las cuentas las crea un administrador desde la
@@ -48,6 +50,94 @@ const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function texto(valor: unknown): string {
   return typeof valor === "string" ? valor : "";
+}
+
+// --- Límite de pedidos de "olvidé mi contraseña" ---
+//
+// Sin límite, cualquiera podría llenarle el buzón a una persona pidiendo el
+// enlace en bucle, o gastar el cupo diario de envíos de la cuenta de Google.
+// Se lleva en memoria: el servidor es un solo proceso, y si se reinicia lo
+// peor que pasa es que el contador vuelve a cero.
+
+const VENTANA_LIMITE_MS = 15 * 60 * 1000;
+const MAXIMO_POR_CORREO = 3;
+const MAXIMO_POR_IP = 10;
+
+const pedidosPorClave = new Map<string, number[]>();
+
+/** Anota un pedido y dice si todavía está dentro del límite. */
+function dentroDelLimite(clave: string, maximo: number): boolean {
+  const ahora = Date.now();
+  const recientes = (pedidosPorClave.get(clave) ?? []).filter(
+    (momento) => ahora - momento < VENTANA_LIMITE_MS,
+  );
+
+  if (recientes.length >= maximo) {
+    pedidosPorClave.set(clave, recientes);
+    return false;
+  }
+
+  recientes.push(ahora);
+  pedidosPorClave.set(clave, recientes);
+  return true;
+}
+
+/** IP de quien pide. Detrás del proxy de Hostinger la dice x-forwarded-for. */
+function ipDe(req: Request): string {
+  const reenviada = req.headers.get("x-forwarded-for") ?? "";
+  return reenviada.split(",")[0].trim() || "desconocida";
+}
+
+function escaparHtml(valor: string): string {
+  return valor
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * El correo con el enlace. Va en tablas y estilos en línea porque es lo único
+ * que Gmail y Outlook respetan; el degradado de la marca lleva un color sólido
+ * detrás para los clientes que no lo pintan.
+ */
+function correoRestablecimiento(nombre: string, enlace: string) {
+  const saludo = nombre ? `Hola ${escaparHtml(nombre)},` : "Hola,";
+  const enlaceHtml = escaparHtml(enlace);
+
+  const html = `<!doctype html>
+<html lang="es">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr><td style="background:#141624;padding:24px 32px;color:#ffffff;font-size:18px;font-weight:bold;letter-spacing:1px;">
+          POSITIVO GROUP
+        </td></tr>
+        <tr><td style="padding:32px;color:#0f172a;font-size:15px;line-height:1.6;">
+          <p style="margin:0 0 16px;">${saludo}</p>
+          <p style="margin:0 0 24px;">Recibimos una solicitud para restablecer la contraseña de tu cuenta en la intranet. Haz clic en el botón para crear una nueva:</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;"><tr><td style="border-radius:8px;background:#ff0856;background-image:linear-gradient(90deg,#ff0856 0%,#c8007f 100%);">
+            <a href="${enlaceHtml}" style="display:inline-block;padding:12px 28px;color:#ffffff;font-weight:bold;text-decoration:none;font-size:15px;">Crear contraseña nueva</a>
+          </td></tr></table>
+          <p style="margin:0 0 8px;font-size:13px;color:#475569;">El enlace vale por <strong>1 hora</strong> y se puede usar una sola vez.</p>
+          <p style="margin:0 0 24px;font-size:13px;color:#475569;">Si no fuiste tú, ignora este correo: tu contraseña no cambia.</p>
+          <p style="margin:0;font-size:12px;color:#94a3b8;word-break:break-all;">Si el botón no funciona, copia esta dirección en el navegador:<br><a href="${enlaceHtml}" style="color:#64748b;">${enlaceHtml}</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const texto =
+    `${nombre ? `Hola ${nombre},` : "Hola,"}\n\n` +
+    "Recibimos una solicitud para restablecer la contraseña de tu cuenta en la intranet de Positivo Group.\n\n" +
+    `Abre este enlace para crear una nueva:\n${enlace}\n\n` +
+    "El enlace vale por 1 hora y se puede usar una sola vez.\n" +
+    "Si no fuiste tú, ignora este correo: tu contraseña no cambia.\n";
+
+  return { html, texto };
 }
 
 /** Respuesta con cookie de sesión adjunta. */
@@ -176,36 +266,83 @@ export default async (req: Request) => {
     if (accion === "olvide") {
       if (!EMAIL_VALIDO.test(email)) return json({ error: "email_invalido" }, 400);
 
-      const usuario = await buscarUsuario(email);
-      if (usuario) {
-        const testigo = await crearTokenRestablecimiento(usuario.email);
-        const base = process.env.SITE_URL || url.origin;
-        const enlace = `${base}/restablecer?token=${testigo}`;
+      // Antes de mirar si la cuenta existe: si el aviso de "sin servidor de
+      // correo" solo saliera para las cuentas que existen, delataría cuáles
+      // son.
+      if (!correoConfigurado()) {
+        return json(
+          {
+            error: "correo_no_configurado",
+            mensaje:
+              "El envío de correos no está configurado todavía. Pídele a un " +
+              "administrador que te restablezca la contraseña.",
+          },
+          503,
+        );
+      }
 
-        if (!correoConfigurado()) {
+      if (!dentroDelLimite(`ip:${ipDe(req)}`, MAXIMO_POR_IP)) {
+        return json(
+          {
+            error: "demasiados_intentos",
+            mensaje:
+              "Pediste el enlace demasiadas veces. Espera unos minutos y " +
+              "vuelve a intentarlo.",
+          },
+          429,
+        );
+      }
+
+      // Pasado el límite por correo no se avisa: se responde como siempre y
+      // simplemente no se manda nada más. Así no sirve para saber qué correos
+      // tienen cuenta ni para inundar un buzón.
+      const usuario = await buscarUsuario(email);
+      if (usuario && dentroDelLimite(`correo:${usuario.email}`, MAXIMO_POR_CORREO)) {
+        const testigo = await crearTokenRestablecimiento(usuario.email);
+        const base = (process.env.SITE_URL || url.origin).trim().replace(/\/+$/, "");
+        const enlace = `${base}/restablecer?token=${testigo}`;
+        const { html, texto: textoPlano } = correoRestablecimiento(
+          usuario.nombre,
+          enlace,
+        );
+
+        try {
+          await enviarCorreo({
+            para: usuario.email,
+            asunto: "Restablece tu contraseña — Intranet Positivo Group",
+            html,
+            texto: textoPlano,
+          });
+        } catch (err) {
+          // El detalle (usuario o clave del SMTP rechazados, etc.) queda en el
+          // registro del servidor, no en la pantalla de quien lo pidió.
+          console.error("No se pudo enviar el correo de restablecimiento:", err);
+          await consumirTokenRestablecimiento(testigo);
           return json(
             {
-              error: "correo_no_configurado",
+              error: "correo_no_enviado",
               mensaje:
-                "El backend no tiene definida la variable SMTP_HOST en el " +
-                "servidor, que es el servidor de correo con el que se manda " +
-                "el enlace de restablecimiento.",
+                "No se pudo enviar el correo en este momento. Inténtalo más " +
+                "tarde o pídele a un administrador que te restablezca la " +
+                "contraseña.",
             },
-            503,
+            502,
           );
         }
-
-        await enviarCorreo({
-          para: usuario.email,
-          asunto: "Restablecer tu contraseña — Sistema de cotizaciones",
-          html:
-            `<p>Alguien pidió restablecer la contraseña de esta cuenta.</p>` +
-            `<p><a href="${enlace}">Haz clic aquí para poner una nueva contraseña</a>.</p>` +
-            `<p>El enlace vale por una hora. Si no fuiste tú, ignora este correo.</p>`,
-        });
       }
 
       return json({ enviado: true });
+    }
+
+    // --- ¿El enlace todavía sirve? ---
+    //
+    // La página del enlace lo pregunta al abrirse, para decir de entrada que
+    // venció en vez de dejar que la persona escriba la contraseña para nada.
+    // No lo consume.
+    if (accion === "validar") {
+      const testigo = texto((cuerpo as never)["token"]);
+      const correoDeCuenta = await emailDeTokenRestablecimiento(testigo);
+      return json({ valido: correoDeCuenta !== null });
     }
 
     // --- Restablecer la contraseña con el testigo del enlace ---
@@ -229,7 +366,8 @@ export default async (req: Request) => {
 
       const derivada = await derivarContrasena(nueva);
       await guardarUsuario({ ...usuario, clave: derivada.clave, sal: derivada.sal });
-      await consumirTokenRestablecimiento(testigo);
+      // Este enlace y cualquier otro que hubiera pedido antes.
+      await descartarRestablecimientosDe(usuario.email);
 
       // Igual que al cambiar la contraseña desde el perfil: se cierran todas
       // las sesiones abiertas y se deja una nueva, ya restablecida.

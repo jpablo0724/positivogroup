@@ -109,6 +109,39 @@ export async function cambiarContrasena(
   });
 }
 
+/**
+ * Pide el enlace para restablecer la contraseña. El servidor responde igual
+ * exista o no la cuenta, así que esto no dice si el correo está registrado.
+ */
+export async function pedirRestablecimiento(email: string): Promise<void> {
+  await pedir("/api/auth/olvide", { metodo: "POST", cuerpo: { email } });
+}
+
+/** Si el enlace del correo todavía sirve (no venció ni se usó). */
+export async function enlaceRestablecimientoValido(
+  token: string,
+): Promise<boolean> {
+  const { valido } = await pedir<{ valido: boolean }>("/api/auth/validar", {
+    metodo: "POST",
+    cuerpo: { token },
+  });
+  return valido;
+}
+
+/**
+ * Pone la contraseña nueva con el enlace del correo. El servidor cierra las
+ * sesiones abiertas y deja una nueva, así que al terminar ya se está dentro.
+ */
+export async function restablecerConEnlace(
+  token: string,
+  nueva: string,
+): Promise<void> {
+  await pedir("/api/auth/restablecer", {
+    metodo: "POST",
+    cuerpo: { token, nueva },
+  });
+}
+
 export async function salir(): Promise<void> {
   await pedir("/api/auth/salir", { metodo: "POST" });
 }

@@ -4,6 +4,7 @@ import { BackendNoDisponible, ErrorApi, SinSesion } from "../utils/api";
 import {
   MINIMO_CONTRASENA,
   entrar,
+  pedirRestablecimiento,
   registrarse,
   type UsuarioPublico,
 } from "../utils/auth";
@@ -45,6 +46,10 @@ function mensajeDeError(err: unknown): string {
         return "Escribe un correo válido.";
       case "falta_nombre":
         return "Escribe tu nombre.";
+      case "demasiados_intentos":
+      case "correo_no_configurado":
+      case "correo_no_enviado":
+        return err.message;
       default:
         return err.message;
     }
@@ -52,6 +57,100 @@ function mensajeDeError(err: unknown): string {
 
   if (err instanceof BackendNoDisponible) return err.message;
   return "No se pudo completar la operación.";
+}
+
+/**
+ * "Olvidé mi contraseña": pide el correo y manda el enlace. Al terminar dice
+ * lo mismo exista o no la cuenta, igual que el servidor.
+ */
+function FormularioOlvide({
+  emailInicial,
+  onVolver,
+}: {
+  emailInicial: string;
+  onVolver: (email: string) => void;
+}) {
+  const [email, setEmail] = useState(emailInicial);
+  const [ocupado, setOcupado] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function enviar(evento: React.FormEvent) {
+    evento.preventDefault();
+    if (email.trim() === "" || ocupado) return;
+
+    setOcupado(true);
+    setError(null);
+
+    try {
+      await pedirRestablecimiento(email.trim());
+      setEnviado(true);
+    } catch (err) {
+      setError(mensajeDeError(err));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-marca p-4">
+      <form
+        onSubmit={enviar}
+        className="w-full max-w-sm rounded-xl bg-white p-8 shadow-xl"
+      >
+        <LogoEmpresa />
+        <h1 className="mt-6 text-lg font-semibold text-slate-900">
+          Recuperar contraseña
+        </h1>
+
+        {enviado ? (
+          <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            Si <strong>{email.trim()}</strong> tiene una cuenta, te llegará un
+            correo con un enlace para crear una contraseña nueva. Vale por una
+            hora. Revisa también la carpeta de spam.
+          </p>
+        ) : (
+          <>
+            <p className="mt-2 text-xs text-slate-500">
+              Escribe el correo con el que entras y te enviaremos un enlace
+              para crear una contraseña nueva.
+            </p>
+
+            <div className="mt-5">
+              <label className={labelClass}>Correo</label>
+              <input
+                type="email"
+                autoFocus
+                autoComplete="email"
+                className={selectTriggerClass}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nombre@positivogroup.com"
+              />
+            </div>
+
+            {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={email.trim() === "" || ocupado}
+              className="mt-5 w-full rounded-md boton-accion py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed"
+            >
+              {ocupado ? "Enviando…" : "Enviar enlace"}
+            </button>
+          </>
+        )}
+
+        <button
+          type="button"
+          onClick={() => onVolver(email)}
+          className="mt-4 w-full text-center text-xs font-medium text-slate-500 hover:text-slate-800"
+        >
+          ← Volver a iniciar sesión
+        </button>
+      </form>
+    </div>
+  );
 }
 
 export default function PantallaAcceso({
@@ -65,6 +164,7 @@ export default function PantallaAcceso({
   const [codigo, setCodigo] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [olvido, setOlvido] = useState(false);
 
   // Ya no hay pestaña de registro: o el sistema está vacío y hay que crear la
   // primera cuenta, o se inicia sesión con una que creó un administrador.
@@ -91,6 +191,19 @@ export default function PantallaAcceso({
       setError(mensajeDeError(err));
       setOcupado(false);
     }
+  }
+
+  if (olvido) {
+    return (
+      <FormularioOlvide
+        emailInicial={email}
+        onVolver={(correo) => {
+          setEmail(correo);
+          setError(null);
+          setOlvido(false);
+        }}
+      />
+    );
   }
 
   return (
@@ -156,6 +269,15 @@ export default function PantallaAcceso({
                 registrando ? `Mínimo ${MINIMO_CONTRASENA} caracteres` : ""
               }
             />
+            {!registrando && (
+              <button
+                type="button"
+                onClick={() => setOlvido(true)}
+                className="mt-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-800 hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            )}
           </div>
 
           {registrando && (
