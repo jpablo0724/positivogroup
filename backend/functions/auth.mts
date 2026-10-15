@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { json } from "../lib/acceso.mts";
 import {
   MINIMO_CONTRASENA,
@@ -24,6 +25,7 @@ import {
   normalizarEmail,
   reclamarPrimerUsuario,
   usuarioDeSesion,
+  type Usuario,
 } from "../lib/auth.mts";
 import { correoConfigurado, enviarCorreo } from "../lib/correo.mts";
 import { reemplazarCorreoEnCotizaciones } from "../lib/almacen.mts";
@@ -80,6 +82,59 @@ function dentroDelLimite(clave: string, maximo: number): boolean {
   recientes.push(ahora);
   pedidosPorClave.set(clave, recientes);
   return true;
+}
+
+// --- Límite de intentos fallidos de inicio de sesión ---
+//
+// Sin límite se pueden probar contraseñas sin parar hasta dar con la buena.
+// Se cuenta por cuenta (no por IP, que detrás del proxy se puede falsear):
+// pasados 10 intentos fallidos en 15 minutos, esa cuenta no acepta más hasta
+// que pase la ventana. Quien sí sabe la contraseña casi nunca falla 10 veces
+// seguidas, y entrar bien no suma.
+
+const MAXIMO_FALLOS_LOGIN = 10;
+const fallosLogin = new Map<string, number[]>();
+
+function fallosRecientes(email: string): number[] {
+  const ahora = Date.now();
+  const recientes = (fallosLogin.get(email) ?? []).filter(
+    (momento) => ahora - momento < VENTANA_LIMITE_MS,
+  );
+  if (recientes.length === 0) fallosLogin.delete(email);
+  else fallosLogin.set(email, recientes);
+  return recientes;
+}
+
+function anotarFallo(email: string) {
+  // Tope de memoria: si alguien prueba miles de correos inventados, se
+  // descartan los más viejos en vez de crecer sin fin.
+  if (fallosLogin.size > 10_000) {
+    const masViejo = fallosLogin.keys().next().value;
+    if (masViejo !== undefined) fallosLogin.delete(masViejo);
+  }
+  fallosLogin.set(email, [...fallosRecientes(email), Date.now()]);
+}
+
+// Contraseña de nadie, para gastar el mismo tiempo cuando el correo no
+// existe. Si no, la respuesta rápida delataría qué correos tienen cuenta.
+const usuarioFicticio: Promise<Usuario> = derivarContrasena(
+  randomBytes(16).toString("hex"),
+).then((derivada) => ({ email: "", nombre: "", creadoEn: "", ...derivada }));
+
+/**
+ * Tope de largo de una contraseña. Derivar una de varios megas ocupa el
+ * procesador un buen rato; nadie usa una de más de 256 caracteres.
+ */
+const MAXIMO_CONTRASENA = 256;
+
+function contrasenaLarga() {
+  return json(
+    {
+      error: "contrasena_larga",
+      mensaje: `La contraseña no puede tener más de ${MAXIMO_CONTRASENA} caracteres.`,
+    },
+    400,
+  );
 }
 
 /** IP de quien pide. Detrás del proxy de Hostinger la dice x-forwarded-for. */
@@ -232,6 +287,7 @@ export default async (req: Request) => {
           400,
         );
       }
+      if (contrasena.length > MAXIMO_CONTRASENA) return contrasenaLarga();
       if (codigo !== codigoEmpresa) {
         return json({ error: "codigo_empresa_invalido" }, 403);
       }
@@ -357,6 +413,7 @@ export default async (req: Request) => {
       if (nueva.length < MINIMO_CONTRASENA) {
         return json({ error: "contrasena_corta", minimo: MINIMO_CONTRASENA }, 400);
       }
+      if (nueva.length > MAXIMO_CONTRASENA) return contrasenaLarga();
 
       const usuario = await buscarUsuario(correoDeCuenta);
       if (!usuario) {
@@ -459,6 +516,7 @@ export default async (req: Request) => {
       if (nueva.length < MINIMO_CONTRASENA) {
         return json({ error: "contrasena_corta", minimo: MINIMO_CONTRASENA }, 400);
       }
+      if (nueva.length > MAXIMO_CONTRASENA) return contrasenaLarga();
 
       const derivada = await derivarContrasena(nueva);
       await guardarUsuario({ ...usuario, clave: derivada.clave, sal: derivada.sal });
@@ -473,30 +531,45 @@ export default async (req: Request) => {
 
     // --- Inicio de sesión ---
     if (accion === "entrar") {
-      const usuario = await buscarUsuario(email);
+      if (fallosRecientes(email).length >= MAXIMO_FALLOS_LOGIN) {
+        return json(
+          {
+            error: "demasiados_intentos",
+            mensaje:
+              "Demasiados intentos fallidos con este correo. Espera 15 " +
+              "minutos o usa \"¿Olvidaste tu contraseña?\".",
+          },
+          429,
+        );
+      }
+
+      const usuario =
+        contrasena.length <= MAXIMO_CONTRASENA ? await buscarUsuario(email) : null;
 
       // El mismo mensaje si el correo no existe o si la contraseña está mal:
       // así no se puede averiguar qué correos tienen cuenta.
       const valida = usuario
         ? await contrasenaCoincide(contrasena, usuario)
-        : false;
+        : await contrasenaCoincide(
+            contrasena.slice(0, MAXIMO_CONTRASENA),
+            await usuarioFicticio,
+          ).then(() => false);
 
       if (!usuario || !valida) {
+        anotarFallo(email);
         return json({ error: "credenciales_invalidas" }, 401);
       }
 
+      fallosLogin.delete(email);
       const testigo = await abrirSesion(usuario.email);
       return conCookie({ usuario: comoPublico(usuario) }, cookieSesion(testigo));
     }
 
     return json({ error: "accion_desconocida", accion }, 404);
   } catch (err) {
-    return json(
-      {
-        error: "fallo_autenticacion",
-        detalle: err instanceof Error ? err.message : String(err),
-      },
-      502,
-    );
+    // El detalle queda en el registro del servidor, no en la pantalla:
+    // puede traer datos internos de la base de datos o del sistema.
+    console.error("fallo_autenticacion:", err);
+    return json({ error: "fallo_autenticacion" }, 502);
   }
 };

@@ -212,6 +212,12 @@ export default async (req: Request) => {
       if (contrasena.length < MINIMO_CONTRASENA) {
         return json({ error: "contrasena_corta", minimo: MINIMO_CONTRASENA }, 400);
       }
+      if (contrasena.length > 256) {
+        return json(
+          { error: "contrasena_larga", mensaje: "La contraseña no puede tener más de 256 caracteres." },
+          400,
+        );
+      }
       if (telefono === "") return json({ error: "falta_telefono" }, 400);
       if (cargo === "") return json({ error: "falta_cargo" }, 400);
 
@@ -308,6 +314,12 @@ export default async (req: Request) => {
           400,
         );
       }
+      if (nueva.length > 256) {
+        return json(
+          { error: "contrasena_larga", mensaje: "La contraseña no puede tener más de 256 caracteres." },
+          400,
+        );
+      }
 
       const cuenta = await buscarUsuario(correo);
       if (!cuenta) return json({ error: "usuario_no_existe" }, 404);
@@ -321,12 +333,9 @@ export default async (req: Request) => {
 
     return json({ error: "ruta_desconocida", recurso, metodo: req.method }, 404);
   } catch (err) {
-    return json(
-      {
-        error: "fallo_administracion",
-        detalle: err instanceof Error ? err.message : String(err),
-      },
-      502,
-    );
+    // El detalle queda en el registro del servidor, no en la pantalla:
+    // puede traer datos internos de la base de datos o del sistema.
+    console.error("fallo_administracion:", err);
+    return json({ error: "fallo_administracion" }, 502);
   }
 };

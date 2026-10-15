@@ -50,7 +50,7 @@ export default async (req: Request) => {
     const cotizacion = (await almacenCotizaciones().get(
       claveCotizacion(enlace.numeroFactura),
       { type: "json" },
-    )) as { creadoPor?: string } | null;
+    )) as { creadoPor?: string; data?: unknown; guardadoEn?: string } | null;
 
     // El enlace puede seguir vivo aunque la cotización ya se haya eliminado.
     if (!cotizacion) return json({ error: "cotizacion_no_existe" }, 404);
@@ -67,14 +67,17 @@ export default async (req: Request) => {
         }
       : null;
 
-    return json({ cotizacion, creador });
+    // Solo lo que se ve en el documento. El registro guardado trae además
+    // datos internos —el motivo de ganada o perdida, el historial con los
+    // correos del equipo, a quién se reasignó, los enlaces a los adjuntos— que
+    // el cliente no debe poder leer, ni siquiera mirando la respuesta en las
+    // herramientas del navegador.
+    return json({
+      cotizacion: { data: cotizacion.data, guardadoEn: cotizacion.guardadoEn },
+      creador,
+    });
   } catch (err) {
-    return json(
-      {
-        error: "fallo_almacenamiento",
-        detalle: err instanceof Error ? err.message : String(err),
-      },
-      502,
-    );
+    console.error("Error en el enlace público:", err);
+    return json({ error: "fallo_almacenamiento" }, 502);
   }
 };

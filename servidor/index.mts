@@ -13,6 +13,14 @@ import informes from "../backend/functions/informes.mts";
 import numero from "../backend/functions/numero.mts";
 import productos from "../backend/functions/productos.mts";
 import publico from "../backend/functions/publico.mts";
+import {
+  CABECERAS_SEGURIDAD,
+  MAXIMO_CUERPO_BYTES,
+  MAXIMO_CUERPO_RESPALDO_BYTES,
+} from "./seguridad.mts";
+
+/** El cuerpo de la petición pasó el tope permitido. */
+class CuerpoDemasiadoGrande extends Error {}
 
 /**
  * Servidor propio, para alojar el sistema fuera de Netlify.
@@ -86,8 +94,22 @@ async function comoRequest(req: IncomingMessage): Promise<Request> {
   let cuerpo: Buffer | undefined;
 
   if (!sinCuerpo) {
+    const maximo = url.pathname.startsWith("/api/admin/importar")
+      ? MAXIMO_CUERPO_RESPALDO_BYTES
+      : MAXIMO_CUERPO_BYTES;
+
+    // Se corta apenas se pasa del tope, sin esperar a leerlo todo: así una
+    // petición gigante no alcanza a ocupar la memoria.
+    if (Number(req.headers["content-length"] ?? 0) > maximo) {
+      throw new CuerpoDemasiadoGrande();
+    }
     const trozos: Buffer[] = [];
-    for await (const trozo of req) trozos.push(trozo as Buffer);
+    let leidos = 0;
+    for await (const trozo of req) {
+      leidos += (trozo as Buffer).length;
+      if (leidos > maximo) throw new CuerpoDemasiadoGrande();
+      trozos.push(trozo as Buffer);
+    }
     cuerpo = Buffer.concat(trozos);
   }
 
@@ -103,11 +125,19 @@ async function comoRequest(req: IncomingMessage): Promise<Request> {
 }
 
 async function responder(res: ServerResponse, respuesta: Response) {
-  const cabeceras: Record<string, string | string[]> = {};
+  const cabeceras: Record<string, string | string[]> = {
+    ...CABECERAS_SEGURIDAD,
+  };
 
   respuesta.headers.forEach((valor, nombre) => {
     cabeceras[nombre] = valor;
   });
+
+  // El visor de PDF del navegador se niega a abrir bajo una CSP estricta: un
+  // PDF no ejecuta código en la página, así que no la necesita.
+  if (String(cabeceras["content-type"] ?? "").startsWith("application/pdf")) {
+    delete cabeceras["content-security-policy"];
+  }
 
   // Set-Cookie puede venir repetida y Headers la junta con comas, lo que
   // rompería la cookie. getSetCookie las devuelve separadas.
@@ -146,6 +176,7 @@ function servirArchivo(ruta: string, res: ServerResponse): boolean {
   const esAssetConHash = destino.startsWith(join(RAIZ_ESTATICOS, "assets"));
 
   res.writeHead(200, {
+    ...CABECERAS_SEGURIDAD,
     "content-type": TIPOS[extension] ?? "application/octet-stream",
     // Los assets llevan un hash en el nombre y cambian de nombre en cada
     // compilación; el index.html nunca se cachea, para que una versión nueva
@@ -179,8 +210,20 @@ const servidor = createServer(async (req, res) => {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end("No encontrado");
   } catch (error) {
+    if (error instanceof CuerpoDemasiadoGrande) {
+      res.writeHead(413, {
+        ...CABECERAS_SEGURIDAD,
+        "content-type": "application/json; charset=utf-8",
+        connection: "close",
+      });
+      res.end(JSON.stringify({ error: "cuerpo_demasiado_grande" }));
+      return;
+    }
     console.error("Error atendiendo", ruta, error);
-    res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+    res.writeHead(500, {
+      ...CABECERAS_SEGURIDAD,
+      "content-type": "application/json; charset=utf-8",
+    });
     res.end(JSON.stringify({ error: "fallo_interno" }));
   }
 });

@@ -138,12 +138,9 @@ export default async (req: Request) => {
 
     return json({ error: "metodo_no_permitido", metodo: req.method }, 405);
   } catch (err) {
-    return json(
-      {
-        error: "fallo_almacenamiento",
-        detalle: err instanceof Error ? err.message : String(err),
-      },
-      502,
-    );
+    // El detalle queda en el registro del servidor, no en la pantalla:
+    // puede traer datos internos de la base de datos o del sistema.
+    console.error("fallo_almacenamiento:", err);
+    return json({ error: "fallo_almacenamiento" }, 502);
   }
 };

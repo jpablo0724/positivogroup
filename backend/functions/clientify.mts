@@ -1,4 +1,5 @@
-import { revisarSesion } from "../lib/acceso.mts";
+import { quienPide } from "../lib/acceso.mts";
+import { esAdmin } from "../lib/auth.mts";
 import { CLIENTIFY_BASE, pedirAClientify } from "../lib/clientifyApi.mts";
 
 /**
@@ -286,27 +287,18 @@ export function precalentarCatalogos(): void {
 }
 
 export default async (req: Request) => {
-  const sinSesion = await revisarSesion(req);
-  if (sinSesion) return sinSesion;
+  const quien = await quienPide(req);
+  if (!quien) return json({ error: "sin_sesion" }, 401);
 
   const token = process.env.CLIENTIFY_API_TOKEN;
 
   if (!token) {
-    const nombresVisibles = Object.keys(process.env)
-      .filter((nombre) => /CLIENTIFY|CONTEXT|DEPLOY/i.test(nombre))
-      .sort();
-
     return json(
       {
         error: "falta_token",
         mensaje:
           "La función no puede leer CLIENTIFY_API_TOKEN. Si la variable ya " +
           "está creada en el servidor, hay que reiniciarlo para que entre.",
-        diagnostico: {
-          variableDefinida: "CLIENTIFY_API_TOKEN" in process.env,
-          contexto: process.env.CONTEXT ?? "(desconocido)",
-          variablesVisibles: nombresVisibles,
-        },
       },
       503,
     );
@@ -461,6 +453,16 @@ export default async (req: Request) => {
     }
 
     // --- Paso directo, útil para inspeccionar la API desde el navegador ---
+    //
+    // Solo para administradores. Deja pedir cualquier página y cualquier campo
+    // del CRM, así que en manos de cualquier cuenta serviría para descargar
+    // todos los contactos con sus correos y teléfonos, saltándose el permiso
+    // de informes. La aplicación no lo usa: la búsqueda de empresas y sus
+    // empleados van por las dos ramas de arriba.
+    if (!esAdmin(quien)) {
+      return json({ error: "requiere_admin" }, 403);
+    }
+
     const destino = new URL(`${CLIENTIFY_BASE}/${recurso}/`);
     entrante.searchParams.forEach((valor, clave) => {
       destino.searchParams.append(clave, valor);
@@ -495,12 +497,9 @@ export default async (req: Request) => {
       );
     }
   } catch (err) {
-    return json(
-      {
-        error: "fallo_consultando_clientify",
-        detalle: err instanceof Error ? err.message : String(err),
-      },
-      502,
-    );
+    // El detalle queda en el registro del servidor, no en la pantalla:
+    // puede traer datos internos de la base de datos o del sistema.
+    console.error("fallo_consultando_clientify:", err);
+    return json({ error: "fallo_consultando_clientify" }, 502);
   }
 };

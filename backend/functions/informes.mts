@@ -202,12 +202,9 @@ export default async (req: Request) => {
       },
     });
   } catch (err) {
-    return json(
-      {
-        error: "fallo_consultando_clientify",
-        detalle: err instanceof Error ? err.message : String(err),
-      },
-      502,
-    );
+    // El detalle queda en el registro del servidor, no en la pantalla:
+    // puede traer datos internos de la base de datos o del sistema.
+    console.error("fallo_consultando_clientify:", err);
+    return json({ error: "fallo_consultando_clientify" }, 502);
   }
 };

@@ -17,6 +17,30 @@ interface AdjuntoGuardado {
   datos: string;
 }
 
+/**
+ * Tipos que se pueden abrir directamente en el navegador. Ninguno puede
+ * ejecutar código en la página.
+ *
+ * Cualquier otro tipo (Word, Excel, ZIP, y sobre todo HTML o SVG) se entrega
+ * como descarga y con un tipo genérico. El tipo lo declara quien sube el
+ * archivo, así que no se puede confiar en él: un "adjunto" que dijera ser
+ * text/html se abriría como una página de la intranet, con la sesión de quien
+ * hiciera clic, y podría actuar en su nombre (crear cuentas, sacar datos).
+ */
+const TIPOS_EN_LINEA = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+/** Nombre del archivo apto para la cabecera, con la versión UTF-8 aparte. */
+function disposicion(modo: "inline" | "attachment", nombre: string): string {
+  const ascii = nombre.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "");
+  return `${modo}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nombre)}`;
+}
+
 function noEncontrado(): Response {
   return new Response("No encontrado", {
     status: 404,
@@ -47,13 +71,25 @@ export default async (req: Request): Promise<Response> => {
     if (!adjunto) return noEncontrado();
 
     const bytes = Buffer.from(adjunto.datos, "base64");
-    const nombre = (adjunto.nombre || "archivo").replace(/"/g, "");
+    const nombre = (adjunto.nombre || "archivo").replace(/[\r\n]/g, "");
+    const tipo = (adjunto.tipo || "").toLowerCase().split(";")[0].trim();
+    const enLinea = TIPOS_EN_LINEA.has(tipo);
 
     return new Response(bytes, {
       status: 200,
       headers: {
-        "content-type": adjunto.tipo || "application/octet-stream",
-        "content-disposition": `inline; filename="${nombre}"`,
+        "content-type": enLinea ? tipo : "application/octet-stream",
+        "content-disposition": disposicion(
+          enLinea ? "inline" : "attachment",
+          nombre,
+        ),
+        "x-content-type-options": "nosniff",
+        // Aunque el navegador intentara mostrarlo como página, no podría
+        // correr scripts ni tocar la sesión. El PDF queda fuera porque el
+        // visor de Chrome no abre dentro de un "sandbox".
+        ...(tipo === "application/pdf"
+          ? {}
+          : { "content-security-policy": "sandbox; default-src 'none'; img-src 'self'" }),
         // El testigo es al azar y de un solo archivo: el contenido de esta
         // URL nunca cambia, así que se puede cachear para siempre.
         "cache-control": "private, max-age=31536000, immutable",

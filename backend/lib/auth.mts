@@ -449,7 +449,14 @@ export function leerCookie(req: Request, nombre: string): string {
   const cabecera = req.headers.get("cookie") ?? "";
   for (const parte of cabecera.split(";")) {
     const [clave, ...resto] = parte.trim().split("=");
-    if (clave === nombre) return decodeURIComponent(resto.join("="));
+    if (clave !== nombre) continue;
+    // Una cookie mal formada se trata como si no hubiera sesión, en vez de
+    // reventar la petición con un error 500.
+    try {
+      return decodeURIComponent(resto.join("="));
+    } catch {
+      return "";
+    }
   }
   return "";
 }

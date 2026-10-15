@@ -455,8 +455,12 @@ export default async (req: Request) => {
         return json({ error: "cotizacion_de_otra_persona" }, 403);
       }
 
+      // Del cuerpo solo se toma el contenido de la cotización. Lo demás —estado,
+      // motivo, adjuntos, enlace público, autor, reasignación, historial— lo
+      // escriben las rutas propias de cada cosa, con sus validaciones, y no se
+      // puede colar aquí. La aplicación solo manda data y guardadoEn.
       const registro: CotizacionGuardada = {
-        ...cuerpo,
+        data: cuerpo.data,
         ...(previa?.enlace ? { enlace: previa.enlace } : {}),
         // El autor se conserva al reeditar y, si es nueva, es quien la guarda.
         // Sale de la sesión y no del cuerpo, para que nadie firme por otro.
@@ -496,12 +500,9 @@ export default async (req: Request) => {
 
     return json({ error: "metodo_no_permitido", metodo: req.method }, 405);
   } catch (err) {
-    return json(
-      {
-        error: "fallo_almacenamiento",
-        detalle: err instanceof Error ? err.message : String(err),
-      },
-      502,
-    );
+    // El detalle queda en el registro del servidor, no en la pantalla:
+    // puede traer datos internos de la base de datos o del sistema.
+    console.error("fallo_almacenamiento:", err);
+    return json({ error: "fallo_almacenamiento" }, 502);
   }
 };
