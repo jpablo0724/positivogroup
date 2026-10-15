@@ -202,6 +202,8 @@ export default function EditorObservaciones({
     // <font face="…">, que el saneado descarta y la fuente se perdería.
     document.execCommand("styleWithCSS", false, "true");
     document.execCommand("fontName", false, familia);
+    // Se devuelve a etiquetas para que un Ctrl+B posterior escriba <b>.
+    document.execCommand("styleWithCSS", false, "false");
 
     emitir();
     setFuentesAbiertas(false);
@@ -217,6 +219,7 @@ export default function EditorObservaciones({
     // una etiqueta que el saneado descarta, y el color se perdería al guardar.
     document.execCommand("styleWithCSS", false, "true");
     document.execCommand("foreColor", false, color);
+    document.execCommand("styleWithCSS", false, "false");
 
     emitir();
     setUltimoColor(color);
@@ -354,6 +357,15 @@ export default function EditorObservaciones({
           aria-multiline="true"
           aria-label={etiqueta}
           onInput={emitir}
+          onKeyDown={(e) => {
+            // Ctrl+B (o Cmd+B) pasa por el mismo camino que el botón, para que
+            // la negrilla siempre quede como <b> y no dependa del último modo
+            // que se le dejó puesto al navegador.
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+              e.preventDefault();
+              ejecutar("bold");
+            }
+          }}
           onBlur={emitir}
           className={`max-h-72 min-h-24 overflow-auto px-3 py-2 text-sm text-slate-900 outline-none ${CLASES_CONTENIDO} [&_hr]:my-3 [&_hr]:border-slate-300`}
         />

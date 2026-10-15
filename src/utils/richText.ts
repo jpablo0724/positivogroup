@@ -114,6 +114,25 @@ const ETIQUETAS_PERMITIDAS = new Set([
 
 const ALINEACIONES = new Set(["left", "center", "right", "justify"]);
 
+/**
+ * Devuelve "bold", "normal" o null según el grosor pedido.
+ *
+ * La negrilla no siempre llega como <b>: al pegar desde Word o Google Docs, o
+ * al usar Ctrl+B después de aplicar un color, el navegador escribe
+ * <span style="font-weight: 700">. Y al quitarle la negrilla a un pedazo de un
+ * texto en negrilla escribe <span style="font-weight: normal">. Si el saneado
+ * descartara ese estilo, la negrilla se perdería (o no se dejaría quitar) al
+ * guardar. Igual que con el color, solo se aceptan dos valores cerrados.
+ */
+function normalizarGrosor(valor: string): "bold" | "normal" | null {
+  const limpio = valor.trim().toLowerCase();
+  if (limpio === "bold" || limpio === "bolder") return "bold";
+  if (limpio === "normal" || limpio === "lighter") return "normal";
+  const numero = Number(limpio);
+  if (limpio === "" || !Number.isFinite(numero)) return null;
+  return numero >= 600 ? "bold" : "normal";
+}
+
 function escapar(texto: string): string {
   return texto
     .replace(/&/g, "&amp;")
@@ -167,6 +186,7 @@ function limpiar(padre: Element) {
     const fuente = normalizarFuente(
       elemento.style.fontFamily || elemento.getAttribute("face") || "",
     );
+    const grosor = normalizarGrosor(elemento.style.fontWeight);
 
     for (const atributo of Array.from(elemento.attributes)) {
       elemento.removeAttribute(atributo.name);
@@ -177,6 +197,7 @@ function limpiar(padre: Element) {
     if (color) estilos.push(`color: ${color}`);
     // Va entrecomillada porque los nombres llevan espacios.
     if (fuente) estilos.push(`font-family: "${fuente}"`);
+    if (grosor) estilos.push(`font-weight: ${grosor}`);
 
     if (estilos.length > 0) {
       elemento.setAttribute("style", estilos.join("; "));
@@ -211,4 +232,4 @@ export function estaVacio(valor: string): boolean {
 // Clases para que las listas y las líneas divisorias se vean igual en el
 // editor y en la cotización (Tailwind quita los estilos por defecto).
 export const CLASES_CONTENIDO =
-  "[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5";
+  "[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 [&_b]:font-bold [&_strong]:font-bold";

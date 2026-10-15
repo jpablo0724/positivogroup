@@ -111,5 +111,6 @@ export const FORMAS_PAGO = [
   "Crédito a 60 días",
   "Crédito a 90 días",
   "50 anticipo y 50 al finalizar",
+  "100% anticipado",
 ] as const;
 
