@@ -2,21 +2,21 @@
 
 ## Despliegue en producción
 
-El sistema corre en **hosting web de Hostinger**, usando su función de
-**"Aplicación Node.js"** del panel (hPanel) — no es un VPS con SSH libre ni
-Netlify. Para actualizar el servidor con cambios nuevos, el flujo típico
-dentro de esa sección del panel es:
+El sistema corre en **https://intranet.positivogroup.com**, en el hosting web
+de Hostinger, como **"App web de Node.js"** del panel (hPanel) — no es un VPS
+ni Netlify.
 
-1. Traer los cambios del repositorio: el panel de Hostinger para esta app
-   **está conectado directo con GitHub** (este mismo repositorio), así que
-   trae un botón de "Sincronizar" / "Pull" con el que se actualiza desde ahí
-   — no hace falta subir archivos a mano por FTP.
-2. Instalar dependencias (`npm install`) — el panel de Hostinger para
-   Node.js normalmente tiene un botón "Ejecutar NPM Install".
-3. Compilar (`npm run build`), si el panel no lo hace solo.
-4. **Reiniciar la aplicación** desde el panel (botón "Reiniciar" en la
-   sección de la app Node.js) para que cargue el código nuevo — esto es el
-   paso que más se olvida y sin el cual los cambios no se ven reflejados.
+**Se despliega solo con cada push a `main`**: la app está conectada a este
+repositorio de GitHub ("De empujes a: positivogroup") y cada push crea un
+despliegue nuevo (descarga, `npm install`, compila y reinicia). Se ve en
+hPanel → Sitios web → intranet.positivogroup.com → Despliegues, donde cada
+fila es un commit y la marcada "Actual" es la que está en línea.
+
+- "Redistribuir" vuelve a desplegar el commit actual, no trae uno nuevo.
+- Si un push no aparece en Despliegues, la conexión con GitHub se cayó
+  (pasó el 27-oct-2026): hay que reconectarla en el panel y hacer otro push.
+- Para confirmar qué versión está en línea sin entrar al panel: el nombre del
+  `/assets/index-*.js` que carga la página cambia con cada compilación.
 
 El servidor real es `servidor/index.mts` (arranca con
 `node servidor-dist/index.mjs` tras compilar, ver `package.json`), sobre
