@@ -373,6 +373,22 @@ export default function Informes({ onError }: InformesProps) {
         </div>
       </div>
 
+      {/* --- Desglose por comercial: justo bajo los indicadores, que es lo
+          primero que se revisa en el seguimiento del equipo --- */}
+      <section className="mb-6 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="px-5 pt-5">
+          <h2 className="text-sm font-semibold text-slate-800">Resultados por comercial</h2>
+          <p className="mt-1 text-xs text-slate-500">Con todos los filtros aplicados.</p>
+        </div>
+        <TablaDesglose
+          filas={filasComercial}
+          elegida={comercial}
+          onElegir={(clave) =>
+            clave !== "Sin asignar" && setComercial(clave === comercial ? "" : clave)
+          }
+        />
+      </section>
+
       {/* --- Embudo jerárquico --- */}
       <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4">
@@ -440,21 +456,6 @@ export default function Informes({ onError }: InformesProps) {
           agrupar
           elegida={origen}
           onElegir={(clave) => setOrigen(clave === origen ? ORIGEN_IDENTIFICADO : clave)}
-        />
-      </section>
-
-      {/* --- Desglose por comercial --- */}
-      <section className="mb-6 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="px-5 pt-5">
-          <h2 className="text-sm font-semibold text-slate-800">Resultados por comercial</h2>
-          <p className="mt-1 text-xs text-slate-500">Con todos los filtros aplicados.</p>
-        </div>
-        <TablaDesglose
-          filas={filasComercial}
-          elegida={comercial}
-          onElegir={(clave) =>
-            clave !== "Sin asignar" && setComercial(clave === comercial ? "" : clave)
-          }
         />
       </section>
 
