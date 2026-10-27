@@ -126,14 +126,24 @@ export const SUBESTADOS: { valor: string; estado: string; nombre: string }[] = [
 // --- Lectura de Clientify ---------------------------------------------------
 
 const CAMPOS = "id,full_name,contact_type,status,tags,custom_fields,company_name,owner,owner_name,created";
-const TAMANO_PAGINA = 500;
-const MAXIMO_PAGINAS = 40;
-// El CRM no cambia tan rápido como para pedirlo en cada visita a la pestaña.
+// Páginas chicas pedidas varias a la vez: una página de 500 con campos
+// personalizados podía pasar del límite de espera y tumbar el informe
+// entero, y en serie la descarga completa tardaba más de un minuto.
+const TAMANO_PAGINA = 100;
+const MAXIMO_PAGINAS = 200;
+const PAGINAS_SIMULTANEAS = 6;
+const REINTENTOS_PAGINA = 2;
+// Pasado este tiempo se renueva por detrás; mientras tanto se sigue
+// respondiendo con lo guardado, así nadie espera la descarga salvo la
+// primera vez tras un reinicio (y para eso está precalentarInformes).
 const VIGENCIA_CACHE_MS = 20 * 60 * 1000;
 
 type Registro = Record<string, unknown>;
 
 let cache: { guardadoEn: number; contactos: Registro[] } | null = null;
+// La descarga en curso, compartida: si llegan varias peticiones a la vez
+// (contactos y conversión salen juntas del navegador) bajan una sola vez.
+let descargaEnCurso: Promise<Registro[]> | null = null;
 
 export interface ContactoInforme {
   id: number;
@@ -248,37 +258,105 @@ export function comoContactoInforme(contacto: Registro): ContactoInforme {
   };
 }
 
-async function contactosCompletos(token: string): Promise<Registro[]> {
-  if (cache && Date.now() - cache.guardadoEn < VIGENCIA_CACHE_MS) {
-    return cache.contactos;
-  }
+interface PaginaContactos {
+  results?: Registro[];
+  next?: string | null;
+  count?: number;
+}
 
-  const contactos: Registro[] = [];
+async function paginaDeContactos(pagina: number, token: string): Promise<PaginaContactos> {
+  const url = new URL(`${CLIENTIFY_BASE}/contacts/`);
+  url.searchParams.set("fields", CAMPOS);
+  url.searchParams.set("page_size", String(TAMANO_PAGINA));
+  url.searchParams.set("page", String(pagina));
 
-  for (let pagina = 1; pagina <= MAXIMO_PAGINAS; pagina++) {
-    const url = new URL(`${CLIENTIFY_BASE}/contacts/`);
-    url.searchParams.set("fields", CAMPOS);
-    url.searchParams.set("page_size", String(TAMANO_PAGINA));
-    url.searchParams.set("page", String(pagina));
-
-    const respuesta = await pedirAClientify(url, token);
-    if (!respuesta.ok) {
-      throw new Error(`Clientify respondió ${respuesta.status} al pedir contactos`);
+  let ultimoError: unknown;
+  for (let intento = 0; intento <= REINTENTOS_PAGINA; intento++) {
+    try {
+      const respuesta = await pedirAClientify(url, token);
+      if (respuesta.ok) return (await respuesta.json()) as PaginaContactos;
+      ultimoError = new Error(`Clientify respondió ${respuesta.status} en la página ${pagina}`);
+      // Un 4xx no se arregla reintentando (salvo 429, que es "más despacio").
+      if (respuesta.status < 500 && respuesta.status !== 429) break;
+    } catch (err) {
+      ultimoError = err;
     }
+    await new Promise((r) => setTimeout(r, 800 * (intento + 1)));
+  }
+  throw ultimoError;
+}
 
-    const cuerpo = (await respuesta.json()) as {
-      results?: Registro[];
-      next?: string | null;
+/**
+ * Baja todos los contactos: la primera página dice cuántos hay ("count") y
+ * con eso el resto se pide en paralelo. Si Clientify no mandara el total,
+ * se sigue página a página hasta que no haya "next".
+ */
+export async function descargarContactos(token: string): Promise<Registro[]> {
+  const inicio = Date.now();
+  const primera = await paginaDeContactos(1, token);
+  const lotes: Registro[][] = [primera.results ?? []];
+
+  if (typeof primera.count === "number") {
+    const paginas = Math.min(MAXIMO_PAGINAS, Math.ceil(primera.count / TAMANO_PAGINA));
+    let siguiente = 2;
+    const trabajador = async () => {
+      while (siguiente <= paginas) {
+        const pagina = siguiente++;
+        lotes[pagina - 1] = (await paginaDeContactos(pagina, token)).results ?? [];
+      }
     };
-
-    const lote = Array.isArray(cuerpo.results) ? cuerpo.results : [];
-    contactos.push(...lote);
-
-    if (!cuerpo.next || lote.length === 0) break;
+    await Promise.all(Array.from({ length: PAGINAS_SIMULTANEAS }, trabajador));
+  } else {
+    let actual = primera;
+    for (let pagina = 2; actual.next && pagina <= MAXIMO_PAGINAS; pagina++) {
+      actual = await paginaDeContactos(pagina, token);
+      if (!actual.results?.length) break;
+      lotes.push(actual.results);
+    }
   }
 
-  cache = { guardadoEn: Date.now(), contactos };
+  // Un contacto puede repetirse si se crea uno nuevo mientras se pagina
+  // (corre los demás una posición): se deja una sola vez cada id.
+  const porId = new Map<unknown, Registro>();
+  for (const c of lotes.flat()) porId.set(c.id, c);
+  const contactos = [...porId.values()];
+  console.log(`Informes: ${contactos.length} contactos de Clientify en ${Date.now() - inicio} ms`);
   return contactos;
+}
+
+function renovarContactos(token: string): Promise<Registro[]> {
+  descargaEnCurso ??= descargarContactos(token)
+    .then((contactos) => {
+      cache = { guardadoEn: Date.now(), contactos };
+      return contactos;
+    })
+    .finally(() => {
+      descargaEnCurso = null;
+    });
+  return descargaEnCurso;
+}
+
+async function contactosCompletos(token: string): Promise<Registro[]> {
+  if (!cache) return renovarContactos(token);
+  if (Date.now() - cache.guardadoEn >= VIGENCIA_CACHE_MS) {
+    renovarContactos(token).catch((err) =>
+      console.error("Informes: no se pudo renovar los contactos", err),
+    );
+  }
+  return cache.contactos;
+}
+
+/**
+ * Descarga los contactos y el historial de los clientes al arrancar el
+ * servidor, para que la primera visita a Informes tras un despliegue no
+ * tenga que esperar.
+ */
+export function precalentarInformes(): void {
+  const token = process.env.CLIENTIFY_API_TOKEN;
+  if (!token) return;
+  renovarContactos(token)
+    .then(() => conversionesDeClientes(token))
+    .catch((err) => console.error("Informes: no se pudo precargar", err));
 }
 
 // --- Tiempo de conversión ---------------------------------------------------
@@ -327,8 +405,12 @@ export function fechasDeConversion(entradas: Registro[]): { aplicaEn: string; cl
  * La v2 debería exponer el muro igual que la v1; si no, se cae a la v1 (el
  * mismo token sirve para ambas).
  */
+// La versión de la API que respondió la última vez, para no probar las dos
+// en cada uno de los clientes.
+let baseHistorial = CLIENTIFY_BASE;
+
 async function historialDe(id: number, token: string): Promise<Registro[]> {
-  const bases = [CLIENTIFY_BASE, "https://api.clientify.net/v1"];
+  const bases = [...new Set([baseHistorial, CLIENTIFY_BASE, "https://api.clientify.net/v1"])];
   for (const base of bases) {
     const entradas: Registro[] = [];
     let ok = true;
@@ -347,7 +429,10 @@ async function historialDe(id: number, token: string): Promise<Registro[]> {
       entradas.push(...lote.filter((e) => !e.type || e.type === "logger"));
       if (!cuerpo.next || lote.length === 0) break;
     }
-    if (ok) return entradas;
+    if (ok) {
+      baseHistorial = base;
+      return entradas;
+    }
   }
   throw new Error(`No se pudo leer el historial del contacto ${id}`);
 }
@@ -370,7 +455,18 @@ async function conversionDe(contacto: Registro, token: string): Promise<Conversi
   return dato;
 }
 
-async function conversionesDeClientes(token: string): Promise<Conversion[]> {
+// Igual que con los contactos: la precarga y el navegador comparten un solo
+// recorrido por los clientes en vez de hacer cada uno el suyo.
+let conversionesEnCurso: Promise<Conversion[]> | null = null;
+
+function conversionesDeClientes(token: string): Promise<Conversion[]> {
+  conversionesEnCurso ??= recorrerClientes(token).finally(() => {
+    conversionesEnCurso = null;
+  });
+  return conversionesEnCurso;
+}
+
+async function recorrerClientes(token: string): Promise<Conversion[]> {
   const clientes = (await contactosCompletos(token)).filter(
     (c) => comoContactoInforme(c).estadoGeneral === "cliente",
   );

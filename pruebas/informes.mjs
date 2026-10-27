@@ -1,5 +1,6 @@
 import {
   comoContactoInforme,
+  descargarContactos,
   comoConocioDe,
   estadoGeneralDe,
   fechasDeConversion,
@@ -74,6 +75,45 @@ console.log("\n== Tiempo de conversión ==");
   comprobar("encuentra cuándo pasó a Cliente", clienteEn.startsWith("2026-10-15"));
   const dias = (Date.parse(clienteEn) - Date.parse(aplicaEn)) / 86_400_000;
   comprobar("Blaster tardó ~15 días", Math.round(dias) === 15, dias.toFixed(2));
+}
+
+console.log("\n== Descarga en paralelo ==");
+{
+  // Clientify simulado: 437 contactos, y la página 3 falla una vez (como un
+  // 502 pasajero) para comprobar el reintento.
+  const TOTAL = 437;
+  let peticiones = 0;
+  let enVuelo = 0;
+  let maximoEnVuelo = 0;
+  let fallo3 = false;
+  const fetchReal = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = new URL(String(url));
+    const pagina = Number(u.searchParams.get("page"));
+    const tamano = Number(u.searchParams.get("page_size"));
+    peticiones++;
+    enVuelo++;
+    maximoEnVuelo = Math.max(maximoEnVuelo, enVuelo);
+    await new Promise((r) => setTimeout(r, 20));
+    enVuelo--;
+    if (pagina === 3 && !fallo3) {
+      fallo3 = true;
+      return new Response("caído", { status: 502 });
+    }
+    const desde = (pagina - 1) * tamano;
+    const cuantos = Math.max(0, Math.min(tamano, TOTAL - desde));
+    const results = Array.from({ length: cuantos }, (_, i) => ({ id: desde + i + 1 }));
+    return Response.json({ count: TOTAL, next: desde + tamano < TOTAL ? "x" : null, results });
+  };
+  try {
+    const contactos = await descargarContactos("token-de-prueba");
+    comprobar("trae todos los contactos", contactos.length === TOTAL, String(contactos.length));
+    comprobar("sin repetidos", new Set(contactos.map((c) => c.id)).size === TOTAL);
+    comprobar("pide varias páginas a la vez", maximoEnVuelo > 1, `máximo simultáneas: ${maximoEnVuelo}`);
+    comprobar("reintenta la página que falló", fallo3 && peticiones === Math.ceil(TOTAL / 100) + 1, `${peticiones} peticiones`);
+  } finally {
+    globalThis.fetch = fetchReal;
+  }
 }
 
 console.log(fallos ? `\n${fallos} prueba(s) fallaron` : "\nTodo bien");

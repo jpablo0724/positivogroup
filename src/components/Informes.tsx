@@ -204,7 +204,12 @@ export default function Informes({ onError }: InformesProps) {
   if (cargando) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-slate-500">Cargando informe desde Clientify…</p>
+        <div className="text-center">
+          <p className="text-sm text-slate-500">Cargando informe desde Clientify…</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Justo después de una actualización del sistema puede tardar unos segundos; luego es inmediato.
+          </p>
+        </div>
       </div>
     );
   }

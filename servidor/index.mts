@@ -9,7 +9,9 @@ import clientify, {
   precalentarCatalogos,
 } from "../backend/functions/clientify.mts";
 import cotizaciones from "../backend/functions/cotizaciones.mts";
-import informes from "../backend/functions/informes.mts";
+import informes, {
+  precalentarInformes,
+} from "../backend/functions/informes.mts";
 import numero from "../backend/functions/numero.mts";
 import productos from "../backend/functions/productos.mts";
 import publico from "../backend/functions/publico.mts";
@@ -241,4 +243,5 @@ servidor.listen(PUERTO, () => {
     );
   }
   precalentarCatalogos();
+  precalentarInformes();
 });
