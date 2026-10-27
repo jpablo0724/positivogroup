@@ -20,6 +20,7 @@
     "prueba:auth": "node pruebas/auth.mjs",
     "prueba:backend": "node pruebas/backend.mjs",
     "prueba:clientify": "node pruebas/clientify.mjs",
+    "prueba:informes": "node pruebas/informes.mjs",
     "prueba:perfil": "node --experimental-sqlite pruebas/perfil.mjs",
     "prueba:ui": "node pruebas/frontend.mjs"
   },

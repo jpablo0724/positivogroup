@@ -635,8 +635,8 @@ function App() {
           <header className="border-b border-slate-200 bg-white px-8 py-5">
             <h1 className="text-xl font-semibold text-slate-900">Informes</h1>
             <p className="text-sm text-slate-500">
-              Contactos de Clientify por campaña, tipo, estado y estado de
-              gestión.
+              Embudo de leads de Clientify: origen, calificación, estado y
+              tiempo de conversión.
             </p>
           </header>
 

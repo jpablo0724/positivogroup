@@ -1,8 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  aplicarFiltros,
+  contarPor,
+  formatoDias,
+  obtenerConversiones,
   obtenerInformeContactos,
+  ORIGEN_IDENTIFICADO,
+  ORIGEN_NINGUNO,
+  ORIGEN_TODOS,
+  PERIODOS,
+  porcentaje,
+  rangoDePeriodo,
+  resumir,
+  resumirConversion,
   type CatalogosInforme,
   type ContactoInforme,
+  type Conversion,
+  type FilaDesglose,
+  type Periodo,
 } from "../utils/informes";
 import { selectTriggerClass } from "./SearchableSelect";
 
@@ -10,387 +25,685 @@ interface InformesProps {
   onError: (err: unknown) => void;
 }
 
-type Dimension = "etiqueta" | "tipoContacto" | "estado" | "estadoGestion";
-
-const DIMENSIONES: { clave: Dimension; etiqueta: string }[] = [
-  { clave: "etiqueta", etiqueta: "Etiqueta (campaña)" },
-  { clave: "tipoContacto", etiqueta: "Tipo de contacto" },
-  { clave: "estado", etiqueta: "Estado del contacto" },
-  { clave: "estadoGestion", etiqueta: "Estado de gestión" },
-];
-
-// Slot 1 de la paleta categórica validada (azul): un solo color porque el
-// gráfico es de una sola serie, la que elige "Agrupar por".
+// Slot 1 de la paleta categórica validada (azul). Cada gráfica del embudo es
+// de una sola serie, así que basta un color; la fila elegida se marca con el
+// fondo y el borde, no con otro tono.
 const COLOR_BARRA = "#2a78d6";
-const SIN_DATO = "Sin dato";
-const TOPE_BARRAS = 12;
-const TOPE_FILAS_TABLA = 500;
+const TOPE_FILAS_TABLA = 300;
+
+/** Qué grupo del embudo está abierto en el nivel 4 y en la tabla de contactos. */
+type Seleccion = { nivel: 2 | 3; clave: string };
 
 interface Barra {
   clave: string;
-  etiqueta: string;
+  nombre: string;
   valor: number;
-}
-
-/** Redondea hacia arriba a un número "bonito" para el techo de la gráfica. */
-function techoBonito(maximo: number): number {
-  if (maximo <= 0) return 1;
-  const exponente = Math.pow(10, Math.floor(Math.log10(maximo)));
-  const normalizado = maximo / exponente;
-  const paso = normalizado <= 1 ? 1 : normalizado <= 2 ? 2 : normalizado <= 5 ? 5 : 10;
-  return paso * exponente;
 }
 
 export default function Informes({ onError }: InformesProps) {
   const [contactos, setContactos] = useState<ContactoInforme[]>([]);
   const [catalogos, setCatalogos] = useState<CatalogosInforme | null>(null);
+  const [actualizadoEn, setActualizadoEn] = useState("");
   const [cargando, setCargando] = useState(true);
 
-  const [etiqueta, setEtiqueta] = useState("");
-  const [tipoContacto, setTipoContacto] = useState("");
-  const [estado, setEstado] = useState("");
-  const [estadoGestion, setEstadoGestion] = useState("");
-  const [dimension, setDimension] = useState<Dimension>("etiqueta");
-  const [resaltada, setResaltada] = useState<string | null>(null);
+  const [conversiones, setConversiones] = useState<Map<number, Conversion> | null>(null);
+  const [conversionFallo, setConversionFallo] = useState(false);
+
+  const [periodo, setPeriodo] = useState<Periodo>("este-mes");
+  const [desdeManual, setDesdeManual] = useState("");
+  const [hastaManual, setHastaManual] = useState("");
+  const [comercial, setComercial] = useState("");
+  const [origen, setOrigen] = useState(ORIGEN_IDENTIFICADO);
+  const [seleccion, setSeleccion] = useState<Seleccion>({ nivel: 3, clave: "gestion" });
 
   useEffect(() => {
     obtenerInformeContactos()
       .then((datos) => {
         setContactos(datos.contactos);
         setCatalogos(datos.catalogos);
+        setActualizadoEn(datos.actualizadoEn);
       })
       .catch(onError)
       .finally(() => setCargando(false));
+
+    // El tiempo de conversión lee el historial de cada cliente en Clientify,
+    // que tarda más: se pide aparte para no frenar el resto del panel.
+    obtenerConversiones()
+      .then((lista) => setConversiones(new Map(lista.map((c) => [c.id, c]))))
+      .catch(() => setConversionFallo(true));
   }, [onError]);
 
-  const etiquetaPorClave = useMemo(() => {
+  const { desde, hasta } =
+    periodo === "personalizado"
+      ? { desde: desdeManual, hasta: hastaManual }
+      : rangoDePeriodo(periodo);
+
+  const nombreDe = useMemo(() => {
     const mapa = new Map<string, string>();
-    catalogos?.etiquetas.forEach((e) => mapa.set(e.etiqueta, e.nombre));
-    return mapa;
+    catalogos?.calificaciones.forEach((c) => mapa.set(`cal:${c.clave}`, c.nombre));
+    catalogos?.estadosGenerales.forEach((e) => mapa.set(`est:${e.clave}`, e.nombre));
+    catalogos?.origenes.forEach((o) => mapa.set(`ori:${o.clave}`, o.nombre));
+    catalogos?.subestados.forEach((s) => mapa.set(`sub:${s.valor.toLowerCase()}`, s.nombre));
+    return (tipo: "cal" | "est" | "ori" | "sub", clave: string) =>
+      mapa.get(`${tipo}:${tipo === "sub" ? clave.toLowerCase() : clave}`) ?? clave;
   }, [catalogos]);
 
-  const estadoPorClave = useMemo(() => {
-    const mapa = new Map<string, string>();
-    catalogos?.estados.forEach((e) => mapa.set(e.clave, e.etiqueta));
-    return mapa;
-  }, [catalogos]);
+  // Período y comercial, sin el filtro de origen: la tabla "por origen"
+  // compara todos los orígenes entre sí, así que no puede quedarse con uno.
+  const enPeriodo = useMemo(
+    () =>
+      catalogos
+        ? aplicarFiltros(contactos, { desde, hasta, comercial, origen: ORIGEN_TODOS }, catalogos)
+        : [],
+    [contactos, catalogos, desde, hasta, comercial],
+  );
 
-  const filtrados = useMemo(() => {
-    return contactos.filter((c) => {
-      if (etiqueta && !c.etiquetas.includes(etiqueta)) return false;
-      if (tipoContacto && c.tipoContacto !== tipoContacto) return false;
-      if (estado && c.estado !== estado) return false;
-      if (estadoGestion && c.estadoGestion !== estadoGestion) return false;
-      return true;
-    });
-  }, [contactos, etiqueta, tipoContacto, estado, estadoGestion]);
+  const filtrados = useMemo(
+    () =>
+      catalogos
+        ? aplicarFiltros(enPeriodo, { desde: "", hasta: "", comercial: "", origen }, catalogos)
+        : [],
+    [enPeriodo, catalogos, origen],
+  );
 
-  const barras = useMemo<Barra[]>(() => {
+  const aplican = useMemo(() => filtrados.filter((c) => c.calificacion === "aplica"), [filtrados]);
+  const clientes = useMemo(() => aplican.filter((c) => c.estadoGeneral === "cliente"), [aplican]);
+  const enGestion = aplican.filter((c) => c.estadoGeneral === "gestion").length;
+
+  const conversion = useMemo(
+    () => (conversiones ? resumirConversion(clientes, conversiones) : null),
+    [clientes, conversiones],
+  );
+
+  // --- Niveles del embudo ---
+
+  const nivel2 = useMemo<Barra[]>(() => {
     if (!catalogos) return [];
+    const conteo = contarPor(filtrados, (c) => c.calificacion);
+    return catalogos.calificaciones
+      .map((c) => ({ clave: c.clave, nombre: c.nombre, valor: conteo.get(c.clave) ?? 0 }))
+      .filter((b) => b.valor > 0 || ["aplica", "no-aplica", "duplicado", "agencia"].includes(b.clave));
+  }, [catalogos, filtrados]);
 
-    // Por etiqueta se muestran siempre las 5 campañas conocidas, aunque
-    // tengan 0 contactos: así se ve de un vistazo cuál se está quedando
-    // atrás, no solo las que ya tienen resultados.
-    if (dimension === "etiqueta") {
-      const conteos = new Map(catalogos.etiquetas.map((e) => [e.etiqueta, 0]));
-      for (const c of filtrados) {
-        for (const t of c.etiquetas) {
-          if (conteos.has(t)) conteos.set(t, (conteos.get(t) ?? 0) + 1);
-        }
-      }
-      return catalogos.etiquetas
-        .map((e) => ({ clave: e.etiqueta, etiqueta: e.nombre, valor: conteos.get(e.etiqueta) ?? 0 }))
-        .sort((a, b) => b.valor - a.valor);
+  const nivel3 = useMemo<Barra[]>(() => {
+    if (!catalogos) return [];
+    const conteo = contarPor(aplican, (c) => c.estadoGeneral);
+    return catalogos.estadosGenerales
+      .map((e) => ({ clave: e.clave, nombre: e.nombre, valor: conteo.get(e.clave) ?? 0 }))
+      .filter((b) => b.valor > 0 || ["oportunidad", "gestion", "off", "cliente"].includes(b.clave));
+  }, [catalogos, aplican]);
+
+  const grupoSeleccionado = useMemo(
+    () =>
+      seleccion.nivel === 2
+        ? filtrados.filter((c) => c.calificacion === seleccion.clave)
+        : aplican.filter((c) => c.estadoGeneral === seleccion.clave),
+    [seleccion, filtrados, aplican],
+  );
+
+  const nombreSeleccion =
+    seleccion.nivel === 2 ? nombreDe("cal", seleccion.clave) : nombreDe("est", seleccion.clave);
+
+  const nivel4 = useMemo<Barra[]>(() => {
+    if (!catalogos) return [];
+    const conteo = contarPor(grupoSeleccionado, (c) => c.estadoGestion);
+    // Las opciones esperadas para este estado se muestran aunque estén en 0:
+    // un "0 en estudio de crédito" también es información.
+    const esperadas =
+      seleccion.nivel === 3
+        ? catalogos.subestados.filter((s) => s.estado === seleccion.clave && s.valor !== "Cliente")
+        : seleccion.clave === "no-aplica"
+          ? catalogos.subestados.filter((s) => s.estado === "no-aplica")
+          : [];
+    const barras = new Map<string, Barra>();
+    for (const s of esperadas) {
+      barras.set(s.valor.toLowerCase(), { clave: s.valor, nombre: s.nombre, valor: 0 });
     }
+    for (const [valor, n] of conteo) {
+      const llave = (valor || "").toLowerCase();
+      const nombre = valor ? nombreDe("sub", valor) : "Sin estado de gestión";
+      // "Cliente" (valor viejo) y "C - Cliente" se suman en una sola fila.
+      const existente = [...barras.values()].find((b) => b.nombre === nombre) ?? barras.get(llave);
+      if (existente) existente.valor += n;
+      else barras.set(llave, { clave: valor || "__vacio__", nombre, valor: n });
+    }
+    return [...barras.values()].sort((a, b) => b.valor - a.valor);
+  }, [catalogos, grupoSeleccionado, seleccion, nombreDe]);
 
-    const conteos = new Map<string, number>();
+  // --- Desgloses ---
+
+  const filasOrigen = useMemo<FilaDesglose[]>(() => {
+    if (!catalogos) return [];
+    const filas = catalogos.origenes.map((o) =>
+      resumir(o.clave, o.nombre, enPeriodo.filter((c) => c.origenes.includes(o.clave)), {
+        grupo: o.grupo,
+        nota: o.nota,
+      }),
+    );
+    const conocio = catalogos.comoConocio.map((o) =>
+      resumir(`conocio:${o.valor}`, o.nombre, enPeriodo.filter((c) => c.comoConocio.includes(o.valor)), {
+        grupo: "¿Cómo nos conoció? (formulario)",
+      }),
+    );
+    return [...filas, ...conocio];
+  }, [catalogos, enPeriodo]);
+
+  const sinOrigen = enPeriodo.filter((c) => c.origenes.length === 0 && c.comoConocio.length === 0).length;
+
+  const filasComercial = useMemo<FilaDesglose[]>(() => {
+    const porComercial = new Map<string, ContactoInforme[]>();
     for (const c of filtrados) {
-      const valor =
-        dimension === "tipoContacto"
-          ? c.tipoContacto
-          : dimension === "estado"
-            ? c.estado
-            : c.estadoGestion;
-      const clave = valor || SIN_DATO;
-      conteos.set(clave, (conteos.get(clave) ?? 0) + 1);
+      const k = c.comercial || "Sin asignar";
+      porComercial.set(k, [...(porComercial.get(k) ?? []), c]);
     }
-
-    let lista = [...conteos.entries()]
-      .map(([clave, valor]) => ({
-        clave,
-        etiqueta: dimension === "estado" ? (estadoPorClave.get(clave) ?? clave) : clave,
-        valor,
-      }))
-      .sort((a, b) => b.valor - a.valor);
-
-    // Con muchos valores distintos (tipo de contacto, estado de gestión) la
-    // gráfica se vuelve ilegible: se muestran los principales y el resto se
-    // agrupa en "Otros".
-    if (lista.length > TOPE_BARRAS) {
-      const principales = lista.slice(0, TOPE_BARRAS);
-      const resto = lista.slice(TOPE_BARRAS).reduce((acc, b) => acc + b.valor, 0);
-      lista = [...principales, { clave: "__otros__", etiqueta: "Otros", valor: resto }];
-    }
-
-    return lista;
-  }, [catalogos, filtrados, dimension, estadoPorClave]);
-
-  const maximo = Math.max(0, ...barras.map((b) => b.valor));
-  const techo = techoBonito(maximo);
-  const marcasEje = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(techo * f));
+    return [...porComercial.entries()]
+      .map(([nombre, lista]) => resumir(nombre, nombre, lista))
+      .sort((a, b) => b.leads - a.leads);
+  }, [filtrados]);
 
   if (cargando) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-slate-500">Cargando informe…</p>
+        <p className="text-sm text-slate-500">Cargando informe desde Clientify…</p>
       </div>
     );
   }
 
+  if (!catalogos) return null;
+
+  const grupos = [...new Set(catalogos.origenes.map((o) => o.grupo))];
+  const hayFiltros =
+    periodo !== "este-mes" || comercial !== "" || origen !== ORIGEN_IDENTIFICADO;
+
+  const diasPorContacto = new Map(conversion?.detalle.map((d) => [d.id, d.dias]) ?? []);
+
   return (
     <div className="flex-1 overflow-auto p-6">
-      {/* --- Filtros: una sola fila, arriba de todo lo demás --- */}
+      {/* --- Filtros globales: una fila, arriba de todo --- */}
       <div className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <Filtro etiqueta="Etiqueta (campaña)">
+        <Filtro etiqueta="Período (fecha de ingreso)">
           <select
             className={selectTriggerClass}
-            value={etiqueta}
-            onChange={(e) => setEtiqueta(e.target.value)}
+            value={periodo}
+            onChange={(e) => setPeriodo(e.target.value as Periodo)}
           >
-            <option value="">Todas</option>
-            {catalogos?.etiquetas.map((e) => (
-              <option key={e.etiqueta} value={e.etiqueta}>
-                {e.nombre}
+            {PERIODOS.map((p) => (
+              <option key={p.clave} value={p.clave}>
+                {p.nombre}
               </option>
             ))}
           </select>
         </Filtro>
 
-        <Filtro etiqueta="Tipo de contacto">
-          <select
-            className={selectTriggerClass}
-            value={tipoContacto}
-            onChange={(e) => setTipoContacto(e.target.value)}
-          >
-            <option value="">Todos</option>
-            {catalogos?.tiposContacto.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </Filtro>
+        {periodo === "personalizado" && (
+          <>
+            <Filtro etiqueta="Desde" angosto>
+              <input
+                type="date"
+                className={selectTriggerClass}
+                value={desdeManual}
+                onChange={(e) => setDesdeManual(e.target.value)}
+              />
+            </Filtro>
+            <Filtro etiqueta="Hasta" angosto>
+              <input
+                type="date"
+                className={selectTriggerClass}
+                value={hastaManual}
+                onChange={(e) => setHastaManual(e.target.value)}
+              />
+            </Filtro>
+          </>
+        )}
 
-        <Filtro etiqueta="Estado del contacto">
+        <Filtro etiqueta="Comercial asignado">
           <select
             className={selectTriggerClass}
-            value={estado}
-            onChange={(e) => setEstado(e.target.value)}
-          >
-            <option value="">Todos</option>
-            {catalogos?.estados.map((e) => (
-              <option key={e.clave} value={e.clave}>
-                {e.etiqueta}
-              </option>
-            ))}
-          </select>
-        </Filtro>
-
-        <Filtro etiqueta="Estado de gestión">
-          <select
-            className={selectTriggerClass}
-            value={estadoGestion}
-            onChange={(e) => setEstadoGestion(e.target.value)}
+            value={comercial}
+            onChange={(e) => setComercial(e.target.value)}
           >
             <option value="">Todos</option>
-            {catalogos?.estadosGestion.map((eg) => (
-              <option key={eg} value={eg}>
-                {eg}
+            {catalogos.comerciales.map((c) => (
+              <option key={c} value={c}>
+                {c}
               </option>
             ))}
           </select>
         </Filtro>
 
-        {(etiqueta || tipoContacto || estado || estadoGestion) && (
+        <Filtro etiqueta="Origen del lead">
+          <select
+            className={selectTriggerClass}
+            value={origen}
+            onChange={(e) => setOrigen(e.target.value)}
+          >
+            <option value={ORIGEN_IDENTIFICADO}>Todos los orígenes identificados</option>
+            {grupos.map((g) => (
+              <optgroup key={g} label={g}>
+                <option value={`grupo:${g}`}>{g} (todo el grupo)</option>
+                {catalogos.origenes
+                  .filter((o) => o.grupo === g)
+                  .map((o) => (
+                    <option key={o.clave} value={o.clave}>
+                      {o.nombre}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+            <optgroup label="¿Cómo nos conoció?">
+              {catalogos.comoConocio.map((o) => (
+                <option key={o.valor} value={`conocio:${o.valor}`}>
+                  {o.nombre}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Otros">
+              <option value={ORIGEN_NINGUNO}>Sin origen identificado</option>
+              <option value={ORIGEN_TODOS}>Todos los contactos del CRM</option>
+            </optgroup>
+          </select>
+        </Filtro>
+
+        {hayFiltros && (
           <button
             type="button"
             onClick={() => {
-              setEtiqueta("");
-              setTipoContacto("");
-              setEstado("");
-              setEstadoGestion("");
+              setPeriodo("este-mes");
+              setComercial("");
+              setOrigen(ORIGEN_IDENTIFICADO);
             }}
-            className="mb-0.5 text-xs font-medium text-slate-500 hover:text-slate-800"
+            className="mb-2 text-xs font-medium text-slate-500 hover:text-slate-800"
           >
             Quitar filtros
           </button>
         )}
-      </div>
 
-      {/* --- Gráfica --- */}
-      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-800">
-              Contactos por {DIMENSIONES.find((d) => d.clave === dimension)?.etiqueta.toLowerCase()}
-            </h2>
-            <p className="text-xs text-slate-500">
-              {filtrados.length} {filtrados.length === 1 ? "contacto" : "contactos"} con los filtros actuales.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1 rounded-md border border-slate-200 bg-slate-50 p-1">
-            {DIMENSIONES.map((d) => (
-              <button
-                key={d.clave}
-                type="button"
-                onClick={() => setDimension(d.clave)}
-                className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                  dimension === d.clave
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                {d.etiqueta}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {barras.every((b) => b.valor === 0) ? (
-          <p className="py-10 text-center text-sm text-slate-400">
-            No hay contactos que coincidan con estos filtros.
+        {actualizadoEn && (
+          <p className="mb-2 ml-auto text-[11px] text-slate-400">
+            Datos de Clientify de las{" "}
+            {new Date(actualizadoEn).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}{" "}
+            (se refrescan cada 20 min)
           </p>
-        ) : (
-          <div className="flex gap-3">
-            {/* Eje Y: valores de referencia */}
-            <div className="flex h-56 flex-col justify-between pb-6 text-right text-[11px] text-slate-400">
-              {marcasEje.map((m) => (
-                <span key={m}>{m.toLocaleString("es-CO")}</span>
-              ))}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="relative flex h-56 items-end gap-2 border-b border-slate-200">
-                {/* Líneas de referencia horizontales */}
-                <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
-                  {marcasEje.map((m) => (
-                    <div key={m} className="border-t border-slate-100" />
-                  ))}
-                </div>
-
-                {barras.map((b) => {
-                  const alturaPct = techo > 0 ? (b.valor / techo) * 100 : 0;
-                  return (
-                    <div
-                      key={b.clave}
-                      className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-end"
-                    >
-                      {resaltada === b.clave && (
-                        <div className="pointer-events-none absolute -top-8 z-10 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white shadow-lg">
-                          {b.valor.toLocaleString("es-CO")} {b.valor === 1 ? "contacto" : "contactos"}
-                        </div>
-                      )}
-                      {b.valor > 0 && (
-                        <span className="mb-1 text-xs font-semibold text-slate-700">
-                          {b.valor.toLocaleString("es-CO")}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onMouseEnter={() => setResaltada(b.clave)}
-                        onMouseLeave={() => setResaltada(null)}
-                        onFocus={() => setResaltada(b.clave)}
-                        onBlur={() => setResaltada(null)}
-                        aria-label={`${b.etiqueta}: ${b.valor} ${b.valor === 1 ? "contacto" : "contactos"}`}
-                        className="w-full max-w-10 rounded-t transition-opacity hover:opacity-80 focus:opacity-80 focus:outline-none"
-                        style={{
-                          height: `${Math.max(alturaPct, b.valor > 0 ? 2 : 0)}%`,
-                          backgroundColor: COLOR_BARRA,
-                        }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-2 flex gap-2">
-                {barras.map((b) => (
-                  <div key={b.clave} className="min-w-0 flex-1 text-center">
-                    <span
-                      className="block truncate text-[11px] text-slate-500"
-                      title={b.etiqueta}
-                    >
-                      {b.etiqueta}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         )}
       </div>
 
-      {/* --- Tabla --- */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full min-w-[760px] text-left text-sm">
+      {/* --- Indicadores principales --- */}
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Indicador titulo="Leads entrantes" valor={filtrados.length} detalle={textoRango(desde, hasta)} />
+        <Indicador
+          titulo="Aplican"
+          valor={aplican.length}
+          detalle={`${porcentaje(aplican.length, filtrados.length)} de los leads`}
+        />
+        <Indicador
+          titulo="En gestión"
+          valor={enGestion}
+          detalle={`${porcentaje(enGestion, aplican.length)} de los que aplican`}
+        />
+        <Indicador
+          titulo="Clientes"
+          valor={clientes.length}
+          detalle={`Conversión ${porcentaje(clientes.length, aplican.length)} sobre los que aplican`}
+        />
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500">Tiempo promedio a cliente</p>
+          {conversion === null ? (
+            <p className="mt-2 text-sm text-slate-400">
+              {conversionFallo ? "No se pudo leer el historial" : "Calculando…"}
+            </p>
+          ) : conversion.medidos === 0 ? (
+            <p className="mt-2 text-sm text-slate-400">Sin clientes medibles en este filtro</p>
+          ) : (
+            <>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {formatoDias(conversion.promedioDias)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Mediana {formatoDias(conversion.medianaDias)} · {conversion.medidos}{" "}
+                {conversion.medidos === 1 ? "cliente" : "clientes"}
+                {conversion.sinRegistro > 0 && ` · ${conversion.sinRegistro} sin historial`}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* --- Embudo jerárquico --- */}
+      <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-slate-800">Recorrido del lead</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            <strong className="text-slate-700">{filtrados.length.toLocaleString("es-CO")}</strong> leads
+            {" → "}
+            <strong className="text-slate-700">{aplican.length.toLocaleString("es-CO")}</strong> aplican
+            {seleccion.nivel === 3 && (
+              <>
+                {" → "}
+                <strong className="text-slate-700">{grupoSeleccionado.length.toLocaleString("es-CO")}</strong>{" "}
+                {nombreSeleccion.toLowerCase()}
+              </>
+            )}
+            . Haz clic en un estado para ver su detalle y sus contactos.
+          </p>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Nivel
+            numero={2}
+            titulo="Calificación del contacto"
+            subtitulo={`de ${filtrados.length.toLocaleString("es-CO")} leads · campo "Tipo"`}
+            barras={nivel2}
+            total={filtrados.length}
+            elegida={seleccion.nivel === 2 ? seleccion.clave : seleccion.nivel === 3 ? "aplica" : null}
+            onElegir={(clave) =>
+              setSeleccion(clave === "aplica" ? { nivel: 3, clave: "gestion" } : { nivel: 2, clave })
+            }
+          />
+          <Nivel
+            numero={3}
+            titulo="Estado general"
+            subtitulo={`solo los ${aplican.length.toLocaleString("es-CO")} que aplican`}
+            barras={nivel3}
+            total={aplican.length}
+            elegida={seleccion.nivel === 3 ? seleccion.clave : null}
+            onElegir={(clave) => setSeleccion({ nivel: 3, clave })}
+          />
+          <Nivel
+            numero={4}
+            titulo={`Detalle: ${nombreSeleccion}`}
+            subtitulo={`${grupoSeleccionado.length.toLocaleString("es-CO")} contactos · campo "Estado de gestión"`}
+            barras={nivel4}
+            total={grupoSeleccionado.length}
+            elegida={null}
+          />
+        </div>
+      </section>
+
+      {/* --- Desglose por origen --- */}
+      <section className="mb-6 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="px-5 pt-5">
+          <h2 className="text-sm font-semibold text-slate-800">Resultados por origen</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Con el período y el comercial elegidos, sin importar el filtro de origen. Un lead con
+            varias etiquetas cuenta en cada una.
+            {sinOrigen > 0 &&
+              ` ${sinOrigen.toLocaleString("es-CO")} contactos del período no tienen etiqueta de campaña ni "¿Cómo nos conoció?".`}
+          </p>
+        </div>
+        <TablaDesglose
+          filas={filasOrigen}
+          agrupar
+          elegida={origen}
+          onElegir={(clave) => setOrigen(clave === origen ? ORIGEN_IDENTIFICADO : clave)}
+        />
+      </section>
+
+      {/* --- Desglose por comercial --- */}
+      <section className="mb-6 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="px-5 pt-5">
+          <h2 className="text-sm font-semibold text-slate-800">Resultados por comercial</h2>
+          <p className="mt-1 text-xs text-slate-500">Con todos los filtros aplicados.</p>
+        </div>
+        <TablaDesglose
+          filas={filasComercial}
+          elegida={comercial}
+          onElegir={(clave) =>
+            clave !== "Sin asignar" && setComercial(clave === comercial ? "" : clave)
+          }
+        />
+      </section>
+
+      {/* --- Contactos del grupo elegido --- */}
+      <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="px-5 pt-5">
+          <h2 className="text-sm font-semibold text-slate-800">Contactos: {nombreSeleccion}</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            {grupoSeleccionado.length.toLocaleString("es-CO")}{" "}
+            {grupoSeleccionado.length === 1 ? "contacto" : "contactos"} con los filtros actuales.
+          </p>
+        </div>
+        <table className="mt-3 w-full min-w-[900px] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <tr className="border-y border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <th className="px-4 py-3">Nombre</th>
-              <th className="px-4 py-3">Empresa</th>
-              <th className="px-4 py-3">Tipo de contacto</th>
-              <th className="px-4 py-3">Estado del contacto</th>
+              <th className="px-4 py-3">Comercial</th>
+              <th className="px-4 py-3">Ingreso</th>
+              <th className="px-4 py-3">Origen</th>
+              <th className="px-4 py-3">Calificación</th>
               <th className="px-4 py-3">Estado de gestión</th>
-              <th className="px-4 py-3">Etiquetas</th>
+              {seleccion.clave === "cliente" && <th className="px-4 py-3 text-right">Días a cliente</th>}
             </tr>
           </thead>
           <tbody>
-            {filtrados.slice(0, TOPE_FILAS_TABLA).map((c) => (
-              <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                <td className="px-4 py-3 font-medium text-slate-900">
-                  {c.nombre || <span className="text-slate-400">—</span>}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {c.empresa || <span className="text-slate-400">—</span>}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {c.tipoContacto || <span className="text-slate-400">—</span>}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {c.estado ? (estadoPorClave.get(c.estado) ?? c.estado) : <span className="text-slate-400">—</span>}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {c.estadoGestion || <span className="text-slate-400">—</span>}
-                </td>
-                <td className="px-4 py-3 text-slate-600">
-                  {c.etiquetas
-                    .map((t) => etiquetaPorClave.get(t))
-                    .filter((n): n is string => Boolean(n))
-                    .join(", ") || <span className="text-slate-400">—</span>}
-                </td>
-              </tr>
-            ))}
+            {grupoSeleccionado.slice(0, TOPE_FILAS_TABLA).map((c) => {
+              const dias = diasPorContacto.get(c.id);
+              return (
+                <tr key={c.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-4 py-3">
+                    <span className="font-medium text-slate-900">{c.nombre || "—"}</span>
+                    {c.empresa && <span className="block text-xs text-slate-500">{c.empresa}</span>}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{c.comercial || <Vacio />}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">{fechaCorta(c.creado)}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {[
+                      ...c.origenes.map((o) => nombreDe("ori", o)),
+                      ...c.comoConocio.map((v) => `Conoció por: ${v}`),
+                    ].join(", ") || <Vacio />}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{nombreDe("cal", c.calificacion)}</td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {c.estadoGestion ? nombreDe("sub", c.estadoGestion) : <Vacio />}
+                  </td>
+                  {seleccion.clave === "cliente" && (
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-600">
+                      {dias === undefined ? <Vacio /> : formatoDias(dias)}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-        {filtrados.length === 0 && (
+        {grupoSeleccionado.length === 0 && (
           <p className="px-4 py-6 text-center text-sm text-slate-400">
-            No hay contactos que coincidan con estos filtros.
+            No hay contactos en este grupo con los filtros actuales.
           </p>
         )}
-        {filtrados.length > TOPE_FILAS_TABLA && (
+        {grupoSeleccionado.length > TOPE_FILAS_TABLA && (
           <p className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-400">
-            Mostrando {TOPE_FILAS_TABLA} de {filtrados.length} contactos. Usa los filtros para acotar la lista.
+            Mostrando {TOPE_FILAS_TABLA} de {grupoSeleccionado.length.toLocaleString("es-CO")}. Usa los
+            filtros para acotar la lista.
           </p>
         )}
-      </div>
+      </section>
     </div>
   );
 }
 
-function Filtro({ etiqueta, children }: { etiqueta: string; children: React.ReactNode }) {
+function Filtro({
+  etiqueta,
+  angosto,
+  children,
+}: {
+  etiqueta: string;
+  angosto?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="min-w-[180px]">
+    <div className={angosto ? "min-w-[150px]" : "min-w-[210px]"}>
       <label className="mb-1 block text-xs font-medium text-slate-600">{etiqueta}</label>
       {children}
     </div>
   );
+}
+
+function Indicador({ titulo, valor, detalle }: { titulo: string; valor: number; detalle: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-xs font-medium text-slate-500">{titulo}</p>
+      <p className="mt-1 text-2xl font-semibold text-slate-900">{valor.toLocaleString("es-CO")}</p>
+      <p className="mt-0.5 text-[11px] text-slate-500">{detalle}</p>
+    </div>
+  );
+}
+
+/** Una columna del embudo: barras horizontales con cantidad y porcentaje. */
+function Nivel({
+  numero,
+  titulo,
+  subtitulo,
+  barras,
+  total,
+  elegida,
+  onElegir,
+}: {
+  numero: number;
+  titulo: string;
+  subtitulo: string;
+  barras: Barra[];
+  total: number;
+  elegida: string | null;
+  onElegir?: (clave: string) => void;
+}) {
+  const maximo = Math.max(1, ...barras.map((b) => b.valor));
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Nivel {numero}</p>
+      <h3 className="text-sm font-semibold text-slate-800">{titulo}</h3>
+      <p className="mb-3 text-xs text-slate-500">{subtitulo}</p>
+      {barras.length === 0 ? (
+        <p className="py-6 text-center text-xs text-slate-400">Sin datos.</p>
+      ) : (
+        <ul className="space-y-1">
+          {barras.map((b) => {
+            const activa = elegida === b.clave;
+            const contenido = (
+              <>
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className={`truncate ${activa ? "font-semibold text-slate-900" : "text-slate-700"}`} title={b.nombre}>
+                    {b.nombre}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-slate-500">
+                    <strong className="font-semibold text-slate-800">{b.valor.toLocaleString("es-CO")}</strong>{" "}
+                    · {porcentaje(b.valor, total)}
+                  </span>
+                </div>
+                <div className="mt-1 h-2 rounded-full bg-slate-100">
+                  <div
+                    className="h-2 rounded-full"
+                    style={{
+                      width: `${(b.valor / maximo) * 100}%`,
+                      minWidth: b.valor > 0 ? 4 : 0,
+                      backgroundColor: COLOR_BARRA,
+                    }}
+                  />
+                </div>
+              </>
+            );
+            return (
+              <li key={b.clave}>
+                {onElegir ? (
+                  <button
+                    type="button"
+                    onClick={() => onElegir(b.clave)}
+                    aria-pressed={activa}
+                    className={`w-full rounded-md border px-2 py-1.5 text-left transition-colors ${
+                      activa ? "border-slate-300 bg-slate-50" : "border-transparent hover:bg-slate-50"
+                    }`}
+                  >
+                    {contenido}
+                  </button>
+                ) : (
+                  <div className="px-2 py-1.5">{contenido}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function TablaDesglose({
+  filas,
+  agrupar,
+  elegida,
+  onElegir,
+}: {
+  filas: FilaDesglose[];
+  agrupar?: boolean;
+  elegida: string;
+  onElegir: (clave: string) => void;
+}) {
+  const columnas = 7;
+  let grupoAnterior: string | undefined;
+  return (
+    <table className="mt-3 w-full min-w-[760px] text-left text-sm">
+      <thead>
+        <tr className="border-y border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <th className="px-4 py-3">{agrupar ? "Origen" : "Comercial"}</th>
+          <th className="px-4 py-3 text-right">Leads</th>
+          <th className="px-4 py-3 text-right">Aplican</th>
+          <th className="px-4 py-3 text-right">% aplica</th>
+          <th className="px-4 py-3 text-right">En gestión</th>
+          <th className="px-4 py-3 text-right">Clientes</th>
+          <th className="px-4 py-3 text-right">% conversión</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filas.map((f) => {
+          const encabezado =
+            agrupar && f.grupo !== grupoAnterior ? (
+              <tr key={`g-${f.grupo}`} className="bg-slate-50/60">
+                <td colSpan={columnas} className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  {f.grupo}
+                </td>
+              </tr>
+            ) : null;
+          grupoAnterior = f.grupo;
+          const activa = elegida === f.clave;
+          return [
+            encabezado,
+            <tr
+              key={f.clave}
+              onClick={() => onElegir(f.clave)}
+              className={`cursor-pointer border-b border-slate-100 last:border-0 ${
+                activa ? "bg-blue-50/60" : "hover:bg-slate-50"
+              } ${f.leads === 0 ? "text-slate-400" : "text-slate-700"}`}
+              title="Clic para filtrar el panel por esta fila"
+            >
+              <td className="px-4 py-2.5">
+                <span className={activa ? "font-semibold text-slate-900" : "font-medium"}>{f.nombre}</span>
+                {f.nota && <span className="ml-2 text-[11px] text-slate-400">{f.nota}</span>}
+              </td>
+              <td className="px-4 py-2.5 text-right tabular-nums">{f.leads.toLocaleString("es-CO")}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums">{f.aplica.toLocaleString("es-CO")}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums">{porcentaje(f.aplica, f.leads)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums">{f.gestion.toLocaleString("es-CO")}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums">{f.clientes.toLocaleString("es-CO")}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums">{porcentaje(f.clientes, f.aplica)}</td>
+            </tr>,
+          ];
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+function Vacio() {
+  return <span className="text-slate-400">—</span>;
+}
+
+function fechaCorta(fecha: string): string {
+  if (!fecha) return "—";
+  const [a, m, d] = fecha.split("-").map(Number);
+  return new Date(a, m - 1, d).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function textoRango(desde: string, hasta: string): string {
+  if (!desde && !hasta) return "Todo el histórico";
+  if (desde && hasta) return `${fechaCorta(desde)} – ${fechaCorta(hasta)}`;
+  return desde ? `Desde ${fechaCorta(desde)}` : `Hasta ${fechaCorta(hasta)}`;
 }
