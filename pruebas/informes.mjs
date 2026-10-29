@@ -49,8 +49,9 @@ console.log("\n== Contacto completo ==");
   comprobar("comercial por nombre", c.comercial === "Nohemí Calderín");
   comprobar("fecha de ingreso local", c.creado === "2026-10-12");
   comprobar(
-    "orígenes: #advantage sin el # y las dos campañas de Bogotá",
-    JSON.stringify(c.origenes.sort()) === JSON.stringify(["advantage", "bogota-abr", "bogota-oct"]),
+    "orígenes: #advantage sin el #, las dos campañas de Bogotá y facebook-ads-lead",
+    JSON.stringify(c.origenes.sort()) ===
+      JSON.stringify(["advantage", "bogota-abr", "bogota-oct", "facebook-ads-lead"]),
     JSON.stringify(c.origenes),
   );
   comprobar("cómo conoció: dos opciones, sin partir el referido por la coma", c.comoConocio.length === 2, JSON.stringify(c.comoConocio));

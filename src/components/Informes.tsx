@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   aplicarFiltros,
+  calcularKpi,
+  columnasKpi,
   contarPor,
+  FILAS_KPI,
   formatoDias,
   obtenerConversiones,
   obtenerInformeContactos,
@@ -14,10 +17,12 @@ import {
   resumir,
   resumirConversion,
   type CatalogosInforme,
+  type ColumnaKpi,
   type ContactoInforme,
   type Conversion,
   type FilaDesglose,
   type Periodo,
+  type TonoKpi,
 } from "../utils/informes";
 import { selectTriggerClass } from "./SearchableSelect";
 
@@ -87,7 +92,8 @@ export default function Informes({ onError }: InformesProps) {
       mapa.get(`${tipo}:${tipo === "sub" ? clave.toLowerCase() : clave}`) ?? clave;
   }, [catalogos]);
 
-  // Período y comercial primero; el filtro de origen se aplica aparte.
+  // Período y comercial, sin el filtro de origen: la tabla de KPI's compara
+  // todas las fuentes entre sí, así que no puede quedarse con una.
   const enPeriodo = useMemo(
     () =>
       catalogos
@@ -169,6 +175,12 @@ export default function Informes({ onError }: InformesProps) {
   }, [catalogos, grupoSeleccionado, seleccion, nombreDe]);
 
   // --- Desgloses ---
+
+  const columnasKpiActuales = useMemo(() => (catalogos ? columnasKpi(catalogos) : []), [catalogos]);
+  const valoresKpi = useMemo(
+    () => calcularKpi(enPeriodo, columnasKpiActuales),
+    [enPeriodo, columnasKpiActuales],
+  );
 
   const filasComercial = useMemo<FilaDesglose[]>(() => {
     const porComercial = new Map<string, ContactoInforme[]>();
@@ -417,6 +429,80 @@ export default function Informes({ onError }: InformesProps) {
           />
         </div>
       </section>
+
+      {/* --- KPI's por fuente: el formato de la hoja de seguimiento mensual --- */}
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="px-5 pt-5">
+          <h2 className="text-sm font-semibold text-slate-800">KPI's por fuente</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            {textoRango(desde, hasta)}
+            {comercial && ` · ${comercial}`}. Con el período y el comercial elegidos, sin importar el
+            filtro de origen. Un lead con varias fuentes cuenta en cada columna, pero una sola vez en
+            el total.
+          </p>
+        </div>
+        <TablaKpi columnas={columnasKpiActuales} valores={valoresKpi} />
+      </section>
+    </div>
+  );
+}
+
+const TONO_KPI: Record<TonoKpi, string> = {
+  neutro: "bg-white text-slate-700",
+  cliente: "bg-blue-600 text-white",
+  oportunidad: "bg-emerald-200 text-emerald-950",
+  gestion: "bg-yellow-200 text-yellow-950",
+  "no-aplica": "bg-orange-200 text-orange-950",
+  off: "bg-sky-300 text-sky-950",
+};
+
+function TablaKpi({ columnas, valores }: { columnas: ColumnaKpi[]; valores: number[][] }) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full min-w-[1400px] border-collapse text-sm">
+        <thead>
+          <tr className="text-[11px] text-slate-400">
+            <th className="sticky left-0 z-10 bg-white" />
+            {columnas.map((col) => (
+              <th key={col.clave} className="whitespace-nowrap px-3 pt-1 text-center font-normal">
+                {col.fuente}
+              </th>
+            ))}
+          </tr>
+          <tr className="border-y border-slate-200 bg-amber-50 text-xs font-semibold text-slate-700">
+            <th className="sticky left-0 z-10 bg-orange-400 px-4 py-2.5 text-left text-white">KPI's</th>
+            {columnas.map((col) => (
+              <th
+                key={col.clave}
+                className={`whitespace-nowrap px-3 py-2.5 text-center ${col.total ? "bg-amber-100" : ""}`}
+              >
+                {col.nombre}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {FILAS_KPI.map((fila, i) => (
+            <tr key={fila.clave} className="border-b border-slate-100 last:border-0">
+              <td
+                className={`sticky left-0 z-10 whitespace-nowrap px-4 py-1.5 text-xs font-medium ${TONO_KPI[fila.tono]}`}
+              >
+                {fila.nombre}
+              </td>
+              {valores[i].map((n, j) => (
+                <td
+                  key={columnas[j].clave}
+                  className={`px-3 py-1.5 text-center tabular-nums ${
+                    columnas[j].total ? "bg-amber-50/60 font-semibold" : ""
+                  } ${n === 0 ? "text-slate-300" : "text-slate-800"}`}
+                >
+                  {n.toLocaleString("es-CO")}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -226,6 +226,126 @@ export function porcentaje(parte: number, total: number): string {
   return `${valor.toLocaleString("es-CO", { maximumFractionDigits: valor < 10 ? 1 : 0 })}%`;
 }
 
+// --- Tabla de KPI's (formato de la hoja de seguimiento mensual) -------------------
+
+export interface ColumnaKpi {
+  clave: string;
+  nombre: string;
+  /** De dónde sale en el CRM: la etiqueta o "Campo" (¿Cómo nos conoció?). */
+  fuente: string;
+  /** Columnas de total, que se resaltan. */
+  total?: boolean;
+  pasa: (c: ContactoInforme) => boolean;
+}
+
+export type TonoKpi = "neutro" | "cliente" | "oportunidad" | "gestion" | "no-aplica" | "off";
+
+export interface FilaKpi {
+  clave: string;
+  nombre: string;
+  tono: TonoKpi;
+  cuenta: (c: ContactoInforme) => boolean;
+}
+
+const conOrigen =
+  (...claves: string[]) =>
+  (c: ContactoInforme) =>
+    c.origenes.some((o) => claves.includes(o));
+
+const conConocio = (valor: string) => (c: ContactoInforme) => c.comoConocio.includes(valor);
+
+/**
+ * Columnas en el orden de la hoja "KPI's MES". Las ciudades suman la campaña
+ * de abril y la de octubre; Pereira solo la de octubre (Pereira-Armenia),
+ * porque la de abril era Pereira-Manizales.
+ */
+export function columnasKpi(catalogos: CatalogosInforme): ColumnaKpi[] {
+  const meta = new Set(
+    catalogos.origenes.filter((o) => o.grupo.startsWith("Meta Ads")).map((o) => o.clave),
+  );
+  const columnas: ColumnaKpi[] = [
+    { clave: "medellin", nombre: "Medellín", fuente: "medellín-", pasa: conOrigen("medellin-abr", "medellin-oct") },
+    { clave: "bogota", nombre: "Bogotá", fuente: "bogotá-", pasa: conOrigen("bogota-abr", "bogota-oct") },
+    { clave: "cali", nombre: "Cali", fuente: "cali-", pasa: conOrigen("cali-abr", "cali-oct") },
+    { clave: "pereira", nombre: "Pereira Armenia", fuente: "pereira-armenia-oct2026", pasa: conOrigen("pereira-oct") },
+    { clave: "barranquilla", nombre: "Barranquilla", fuente: "barranquilla-", pasa: conOrigen("barranquilla-abr", "barranquilla-oct") },
+    { clave: "advantage", nombre: "Advantage", fuente: "advantage-", pasa: conOrigen("advantage") },
+    {
+      clave: "total-meta",
+      nombre: "Total Meta",
+      fuente: "facebook-ads-lead",
+      total: true,
+      pasa: (c) => c.origenes.some((o) => meta.has(o)),
+    },
+    { clave: "google-ads", nombre: "Google Ads", fuente: "positivo - pauta - google ads", pasa: conOrigen("google-ads") },
+    { clave: "facebook", nombre: "Facebook", fuente: "Campo", pasa: conConocio("Facebook") },
+    { clave: "instagram", nombre: "Instagram", fuente: "Campo", pasa: conConocio("Instagram") },
+    { clave: "linkedin", nombre: "LinkedIn", fuente: "Campo", pasa: conConocio("LinkedIn") },
+    { clave: "tiktok", nombre: "TikTok", fuente: "Campo", pasa: conConocio("TikTok") },
+    { clave: "youtube", nombre: "YouTube", fuente: "Campo", pasa: conConocio("YouTube") },
+    { clave: "sitio-web", nombre: "Sitio web", fuente: "positivo-organico", pasa: conOrigen("organico") },
+    { clave: "ascensor", nombre: "Ascensor", fuente: "Campo", pasa: conConocio("Ascensor") },
+  ];
+  // Un lead con varias fuentes (p. ej. etiqueta de Meta y "Conoció por:
+  // Facebook") cuenta una sola vez en el total, no una por columna.
+  const fuentes = columnas.filter((col) => !col.total);
+  columnas.push({
+    clave: "total",
+    nombre: "Total",
+    fuente: "Sin repetir",
+    total: true,
+    pasa: (c) => fuentes.some((col) => col.pasa(c)),
+  });
+  return columnas;
+}
+
+const conEstado =
+  (...valores: string[]) =>
+  (c: ContactoInforme) =>
+    valores.some((v) => v.toLowerCase() === c.estadoGestion.trim().toLowerCase());
+
+const estado = (valor: string, tono: TonoKpi): FilaKpi => ({
+  clave: valor,
+  nombre: valor,
+  tono,
+  cuenta: conEstado(valor),
+});
+
+/** Filas en el orden de la hoja, con los valores de "Estado de gestión" tal cual en Clientify. */
+export const FILAS_KPI: FilaKpi[] = [
+  { clave: "leads", nombre: "Leads Clientify", tono: "neutro", cuenta: () => true },
+  { clave: "aplica", nombre: "Aplica", tono: "neutro", cuenta: (c) => c.calificacion === "aplica" },
+  // "Cliente" a secas es el valor viejo de la misma opción.
+  { clave: "cliente", nombre: "C - Cliente", tono: "cliente", cuenta: conEstado("C - Cliente", "Cliente") },
+  estado("OP - Contactado por Email", "oportunidad"),
+  estado("OP - Contactado por WApp", "oportunidad"),
+  estado("OP - Interes de Compra Mayor a 3 Meses", "oportunidad"),
+  estado("G - Informacion Comercial Enviada", "gestion"),
+  estado("G - Cotizacion Enviada", "gestion"),
+  estado("G - Interes de Compra Menos a 3 Meses", "gestion"),
+  estado("G - En Espera de documentos para Creacion de cliente", "gestion"),
+  estado("G - Estudio de Credito", "gestion"),
+  estado("NA - Administrador de PH", "no-aplica"),
+  estado("NA - Descartado por Presupuesto", "no-aplica"),
+  estado("NA - No tenemos lo que busca", "no-aplica"),
+  estado("NA - Numero equivocado", "no-aplica"),
+  estado("NA - No Info No Contesta", "no-aplica"),
+  estado("OFF - Solo Busca Informacion", "off"),
+  estado("OFF - No contesta", "off"),
+  estado("Contacto Secundario", "neutro"),
+  estado("Duplicado", "neutro"),
+];
+
+/** Conteos [fila][columna] de la tabla de KPI's. */
+export function calcularKpi(
+  contactos: ContactoInforme[],
+  columnas: ColumnaKpi[],
+  filas: FilaKpi[] = FILAS_KPI,
+): number[][] {
+  const porColumna = columnas.map((col) => contactos.filter(col.pasa));
+  return filas.map((fila) => porColumna.map((lista) => lista.filter(fila.cuenta).length));
+}
+
 // --- Tiempo de conversión --------------------------------------------------------
 
 export interface ResumenConversion {

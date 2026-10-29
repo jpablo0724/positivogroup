@@ -59,6 +59,7 @@ export const ORIGENES: Origen[] = [
   { clave: "advantage", nombre: "Advantage (amplia)", grupo: "Meta Ads · General", etiquetas: ["advantage", "advantage-oct2026"] },
   { clave: "mas-pauta", nombre: "Más pauta", grupo: "Meta Ads · General", etiquetas: ["más-pauta", "mas-pauta"], nota: "Activa en julio y parte de agosto" },
   { clave: "sampling", nombre: "Sampling", grupo: "Meta Ads · General", etiquetas: ["sampling", "sampling-ajuste"], nota: "Activa en julio y parte de agosto" },
+  { clave: "facebook-ads-lead", nombre: "Facebook Ads (formulario)", grupo: "Meta Ads · General", etiquetas: ["facebook-ads-lead"] },
   { clave: "google-ads", nombre: "Google Ads", grupo: "Formularios web", etiquetas: ["positivo - pauta - google ads", "positivo-pauta-google-ads"] },
   { clave: "organico", nombre: "Orgánico web", grupo: "Formularios web", etiquetas: ["positvo-organico", "positivo-organico"] },
   { clave: "administradores", nombre: "Administradores web", grupo: "Formularios web", etiquetas: ["positivo - administradores - web", "positivo-administradores-web"] },
@@ -68,6 +69,9 @@ export const ORIGENES: Origen[] = [
 export const COMO_CONOCIO = [
   { valor: "Facebook", nombre: "Facebook" },
   { valor: "Instagram", nombre: "Instagram" },
+  { valor: "LinkedIn", nombre: "LinkedIn" },
+  { valor: "TikTok", nombre: "TikTok" },
+  { valor: "YouTube", nombre: "YouTube" },
   { valor: "Google", nombre: "Google" },
   { valor: "Referido (amigo,  cliente o aliado)", nombre: "Referido (amigo, cliente o aliado)" },
   { valor: "Ascensor", nombre: "Ascensor" },
