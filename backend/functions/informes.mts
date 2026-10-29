@@ -219,6 +219,11 @@ export function estadoGeneralDe(estadoGestion: string): string {
   return "sin-estado";
 }
 
+/** Solo letras y números, sin tildes: "Tik Tok", "TikTok" y "tiktok" se comparan igual. */
+function comparableConocio(valor: string): string {
+  return valor.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 /**
  * El multiselección puede llegar como lista o como texto. No se parte por
  * comas porque "Referido (amigo,  cliente o aliado)" lleva comas: se busca
@@ -227,10 +232,10 @@ export function estadoGeneralDe(estadoGestion: string): string {
 export function comoConocioDe(valor: unknown): string[] {
   const crudo = Array.isArray(valor) ? valor.map(texto).join("|") : texto(valor);
   if (!crudo) return [];
-  const comparable = crudo.toLowerCase().replace(/\s+/g, " ");
-  return COMO_CONOCIO.filter((o) =>
-    comparable.includes(o.valor.toLowerCase().replace(/\s+/g, " ")),
-  ).map((o) => o.valor);
+  const comparable = comparableConocio(crudo);
+  return COMO_CONOCIO.filter((o) => comparable.includes(comparableConocio(o.valor))).map(
+    (o) => o.valor,
+  );
 }
 
 export function comoContactoInforme(contacto: Registro): ContactoInforme {

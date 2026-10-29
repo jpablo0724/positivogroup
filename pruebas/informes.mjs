@@ -62,6 +62,12 @@ console.log("\n== Contacto completo ==");
   comprobar("etiquetas mal escritas en Clientify se reconocen", c.origenes.length === 2, JSON.stringify(c.origenes));
 }
 comprobar("cómo conoció como lista", comoConocioDe(["Google", "Ascensor"]).length === 2);
+comprobar(
+  "cómo conoció sin importar espacios ni mayúsculas",
+  JSON.stringify(comoConocioDe(["Tik Tok", "Youtube", "Linkedin"])) ===
+    JSON.stringify(["LinkedIn", "TikTok", "YouTube"]),
+  JSON.stringify(comoConocioDe(["Tik Tok", "Youtube", "Linkedin"])),
+);
 
 console.log("\n== Tiempo de conversión ==");
 {
