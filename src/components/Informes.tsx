@@ -29,9 +29,8 @@ interface InformesProps {
 // de una sola serie, así que basta un color; la fila elegida se marca con el
 // fondo y el borde, no con otro tono.
 const COLOR_BARRA = "#2a78d6";
-const TOPE_FILAS_TABLA = 300;
 
-/** Qué grupo del embudo está abierto en el nivel 4 y en la tabla de contactos. */
+/** Qué grupo del embudo está abierto en el nivel 4. */
 type Seleccion = { nivel: 2 | 3; clave: string };
 
 interface Barra {
@@ -88,8 +87,7 @@ export default function Informes({ onError }: InformesProps) {
       mapa.get(`${tipo}:${tipo === "sub" ? clave.toLowerCase() : clave}`) ?? clave;
   }, [catalogos]);
 
-  // Período y comercial, sin el filtro de origen: la tabla "por origen"
-  // compara todos los orígenes entre sí, así que no puede quedarse con uno.
+  // Período y comercial primero; el filtro de origen se aplica aparte.
   const enPeriodo = useMemo(
     () =>
       catalogos
@@ -172,24 +170,6 @@ export default function Informes({ onError }: InformesProps) {
 
   // --- Desgloses ---
 
-  const filasOrigen = useMemo<FilaDesglose[]>(() => {
-    if (!catalogos) return [];
-    const filas = catalogos.origenes.map((o) =>
-      resumir(o.clave, o.nombre, enPeriodo.filter((c) => c.origenes.includes(o.clave)), {
-        grupo: o.grupo,
-        nota: o.nota,
-      }),
-    );
-    const conocio = catalogos.comoConocio.map((o) =>
-      resumir(`conocio:${o.valor}`, o.nombre, enPeriodo.filter((c) => c.comoConocio.includes(o.valor)), {
-        grupo: "¿Cómo nos conoció? (formulario)",
-      }),
-    );
-    return [...filas, ...conocio];
-  }, [catalogos, enPeriodo]);
-
-  const sinOrigen = enPeriodo.filter((c) => c.origenes.length === 0 && c.comoConocio.length === 0).length;
-
   const filasComercial = useMemo<FilaDesglose[]>(() => {
     const porComercial = new Map<string, ContactoInforme[]>();
     for (const c of filtrados) {
@@ -219,8 +199,6 @@ export default function Informes({ onError }: InformesProps) {
   const grupos = [...new Set(catalogos.origenes.map((o) => o.grupo))];
   const hayFiltros =
     periodo !== "este-mes" || comercial !== "" || origen !== ORIGEN_IDENTIFICADO;
-
-  const diasPorContacto = new Map(conversion?.detalle.map((d) => [d.id, d.dias]) ?? []);
 
   return (
     <div className="flex-1 overflow-auto p-6">
@@ -439,90 +417,6 @@ export default function Informes({ onError }: InformesProps) {
           />
         </div>
       </section>
-
-      {/* --- Desglose por origen --- */}
-      <section className="mb-6 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="px-5 pt-5">
-          <h2 className="text-sm font-semibold text-slate-800">Resultados por origen</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Con el período y el comercial elegidos, sin importar el filtro de origen. Un lead con
-            varias etiquetas cuenta en cada una.
-            {sinOrigen > 0 &&
-              ` ${sinOrigen.toLocaleString("es-CO")} contactos del período no tienen etiqueta de campaña ni "¿Cómo nos conoció?".`}
-          </p>
-        </div>
-        <TablaDesglose
-          filas={filasOrigen}
-          agrupar
-          elegida={origen}
-          onElegir={(clave) => setOrigen(clave === origen ? ORIGEN_IDENTIFICADO : clave)}
-        />
-      </section>
-
-      {/* --- Contactos del grupo elegido --- */}
-      <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="px-5 pt-5">
-          <h2 className="text-sm font-semibold text-slate-800">Contactos: {nombreSeleccion}</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            {grupoSeleccionado.length.toLocaleString("es-CO")}{" "}
-            {grupoSeleccionado.length === 1 ? "contacto" : "contactos"} con los filtros actuales.
-          </p>
-        </div>
-        <table className="mt-3 w-full min-w-[900px] text-left text-sm">
-          <thead>
-            <tr className="border-y border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="px-4 py-3">Nombre</th>
-              <th className="px-4 py-3">Comercial</th>
-              <th className="px-4 py-3">Ingreso</th>
-              <th className="px-4 py-3">Origen</th>
-              <th className="px-4 py-3">Calificación</th>
-              <th className="px-4 py-3">Estado de gestión</th>
-              {seleccion.clave === "cliente" && <th className="px-4 py-3 text-right">Días a cliente</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {grupoSeleccionado.slice(0, TOPE_FILAS_TABLA).map((c) => {
-              const dias = diasPorContacto.get(c.id);
-              return (
-                <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-slate-900">{c.nombre || "—"}</span>
-                    {c.empresa && <span className="block text-xs text-slate-500">{c.empresa}</span>}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{c.comercial || <Vacio />}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">{fechaCorta(c.creado)}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {[
-                      ...c.origenes.map((o) => nombreDe("ori", o)),
-                      ...c.comoConocio.map((v) => `Conoció por: ${v}`),
-                    ].join(", ") || <Vacio />}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{nombreDe("cal", c.calificacion)}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {c.estadoGestion ? nombreDe("sub", c.estadoGestion) : <Vacio />}
-                  </td>
-                  {seleccion.clave === "cliente" && (
-                    <td className="px-4 py-3 text-right tabular-nums text-slate-600">
-                      {dias === undefined ? <Vacio /> : formatoDias(dias)}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {grupoSeleccionado.length === 0 && (
-          <p className="px-4 py-6 text-center text-sm text-slate-400">
-            No hay contactos en este grupo con los filtros actuales.
-          </p>
-        )}
-        {grupoSeleccionado.length > TOPE_FILAS_TABLA && (
-          <p className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-400">
-            Mostrando {TOPE_FILAS_TABLA} de {grupoSeleccionado.length.toLocaleString("es-CO")}. Usa los
-            filtros para acotar la lista.
-          </p>
-        )}
-      </section>
     </div>
   );
 }
@@ -634,22 +528,18 @@ function Nivel({
 
 function TablaDesglose({
   filas,
-  agrupar,
   elegida,
   onElegir,
 }: {
   filas: FilaDesglose[];
-  agrupar?: boolean;
   elegida: string;
   onElegir: (clave: string) => void;
 }) {
-  const columnas = 7;
-  let grupoAnterior: string | undefined;
   return (
     <table className="mt-3 w-full min-w-[760px] text-left text-sm">
       <thead>
         <tr className="border-y border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          <th className="px-4 py-3">{agrupar ? "Origen" : "Comercial"}</th>
+          <th className="px-4 py-3">Comercial</th>
           <th className="px-4 py-3 text-right">Leads</th>
           <th className="px-4 py-3 text-right">Aplican</th>
           <th className="px-4 py-3 text-right">% aplica</th>
@@ -660,18 +550,8 @@ function TablaDesglose({
       </thead>
       <tbody>
         {filas.map((f) => {
-          const encabezado =
-            agrupar && f.grupo !== grupoAnterior ? (
-              <tr key={`g-${f.grupo}`} className="bg-slate-50/60">
-                <td colSpan={columnas} className="px-4 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  {f.grupo}
-                </td>
-              </tr>
-            ) : null;
-          grupoAnterior = f.grupo;
           const activa = elegida === f.clave;
-          return [
-            encabezado,
+          return (
             <tr
               key={f.clave}
               onClick={() => onElegir(f.clave)}
@@ -690,16 +570,12 @@ function TablaDesglose({
               <td className="px-4 py-2.5 text-right tabular-nums">{f.gestion.toLocaleString("es-CO")}</td>
               <td className="px-4 py-2.5 text-right tabular-nums">{f.clientes.toLocaleString("es-CO")}</td>
               <td className="px-4 py-2.5 text-right tabular-nums">{porcentaje(f.clientes, f.aplica)}</td>
-            </tr>,
-          ];
+            </tr>
+          );
         })}
       </tbody>
     </table>
   );
-}
-
-function Vacio() {
-  return <span className="text-slate-400">—</span>;
 }
 
 function fechaCorta(fecha: string): string {
