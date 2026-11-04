@@ -486,6 +486,16 @@ function leerOcultasKpi(): Set<string> {
 }
 
 function TablaKpi({ columnas, valores }: { columnas: ColumnaKpi[]; valores: number[][] }) {
+  // Los grupos (OP, G, OFF, NA) arrancan cerrados; el clic despliega sus estados.
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  const alternar = (clave: string) =>
+    setAbiertos((actual) => {
+      const nuevos = new Set(actual);
+      if (nuevos.has(clave)) nuevos.delete(clave);
+      else nuevos.add(clave);
+      return nuevos;
+    });
+
   return (
     <div className="mt-3 overflow-x-auto">
       <table
@@ -514,25 +524,57 @@ function TablaKpi({ columnas, valores }: { columnas: ColumnaKpi[]; valores: numb
           </tr>
         </thead>
         <tbody>
-          {FILAS_KPI.map((fila, i) => (
-            <tr key={fila.clave} className="border-b border-slate-100 last:border-0">
-              <td
-                className={`sticky left-0 z-10 whitespace-nowrap px-4 py-1.5 text-xs font-medium ${TONO_KPI[fila.tono]}`}
+          {FILAS_KPI.map((fila, i) => {
+            if (fila.padre && !abiertos.has(fila.padre)) return null;
+            const abierto = abiertos.has(fila.clave);
+            return (
+              <tr
+                key={fila.clave}
+                className={`border-b border-slate-100 last:border-0 ${fila.grupo ? "font-semibold" : ""}`}
               >
-                {fila.nombre}
-              </td>
-              {valores[i].map((n, j) => (
                 <td
-                  key={columnas[j].clave}
-                  className={`px-3 py-1.5 text-center tabular-nums ${
-                    columnas[j].total ? "bg-amber-50/60 font-semibold" : ""
-                  } ${n === 0 ? "text-slate-300" : "text-slate-800"}`}
+                  className={`sticky left-0 z-10 whitespace-nowrap py-1.5 pr-4 text-xs ${
+                    fila.padre ? "pl-10 font-normal" : "pl-4 font-medium"
+                  } ${TONO_KPI[fila.tono]}`}
                 >
-                  {n.toLocaleString("es-CO")}
+                  {fila.grupo ? (
+                    <button
+                      type="button"
+                      onClick={() => alternar(fila.clave)}
+                      aria-expanded={abierto}
+                      className="flex items-center gap-1.5 font-semibold"
+                      title={abierto ? "Ocultar el detalle" : "Ver el detalle"}
+                    >
+                      <svg
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`h-3.5 w-3.5 shrink-0 transition-transform ${abierto ? "rotate-90" : ""}`}
+                      >
+                        <path d="m8 5 5 5-5 5" />
+                      </svg>
+                      {fila.nombre}
+                    </button>
+                  ) : (
+                    fila.nombre
+                  )}
                 </td>
-              ))}
-            </tr>
-          ))}
+                {valores[i].map((n, j) => (
+                  <td
+                    key={columnas[j].clave}
+                    className={`px-3 py-1.5 text-center tabular-nums ${
+                      columnas[j].total ? "bg-amber-50/60 font-semibold" : ""
+                    } ${n === 0 ? "text-slate-300" : "text-slate-800"}`}
+                  >
+                    {n.toLocaleString("es-CO")}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

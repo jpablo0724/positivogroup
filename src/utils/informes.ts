@@ -256,6 +256,10 @@ export interface FilaKpi {
   nombre: string;
   tono: TonoKpi;
   cuenta: (c: ContactoInforme) => boolean;
+  /** Fila que agrupa a otras (OP, G, OFF, NA) y se despliega con un clic. */
+  grupo?: boolean;
+  /** Clave del grupo al que pertenece; solo se ve con el grupo desplegado. */
+  padre?: string;
 }
 
 const conOrigen =
@@ -345,27 +349,41 @@ const estado = (valor: string, tono: TonoKpi): FilaKpi => ({
   cuenta: conEstado(valor),
 });
 
-/** Filas en el orden de la hoja, con los valores de "Estado de gestión" tal cual en Clientify. */
+/**
+ * Una fila de grupo seguida de sus estados. Cada lead tiene un solo estado de
+ * gestión, así que el grupo cuenta a los que tengan cualquiera de ellos.
+ */
+const grupoKpi = (clave: string, nombre: string, tono: TonoKpi, valores: string[]): FilaKpi[] => [
+  { clave, nombre, tono, cuenta: conEstado(...valores), grupo: true },
+  ...valores.map((v) => ({ ...estado(v, tono), padre: clave })),
+];
+
+/** Filas de la tabla, con los valores de "Estado de gestión" tal cual en Clientify. */
 export const FILAS_KPI: FilaKpi[] = [
   { clave: "leads", nombre: "Leads Clientify", tono: "neutro", cuenta: () => true },
   { clave: "aplica", nombre: "Aplica", tono: "neutro", cuenta: (c) => c.calificacion === "aplica" },
+  ...grupoKpi("grupo-op", "OP - Oportunidad", "oportunidad", [
+    "OP - Contactado por Email",
+    "OP - Contactado por WApp",
+    "OP - Interes de Compra Mayor a 3 Meses",
+  ]),
+  ...grupoKpi("grupo-g", "G - Gestión", "gestion", [
+    "G - Informacion Comercial Enviada",
+    "G - Cotizacion Enviada",
+    "G - Interes de Compra Menos a 3 Meses",
+    "G - En Espera de documentos para Creacion de cliente",
+    "G - Estudio de Credito",
+  ]),
   // "Cliente" a secas es el valor viejo de la misma opción.
   { clave: "cliente", nombre: "C - Cliente", tono: "cliente", cuenta: conEstado("C - Cliente", "Cliente") },
-  estado("OP - Contactado por Email", "oportunidad"),
-  estado("OP - Contactado por WApp", "oportunidad"),
-  estado("OP - Interes de Compra Mayor a 3 Meses", "oportunidad"),
-  estado("G - Informacion Comercial Enviada", "gestion"),
-  estado("G - Cotizacion Enviada", "gestion"),
-  estado("G - Interes de Compra Menos a 3 Meses", "gestion"),
-  estado("G - En Espera de documentos para Creacion de cliente", "gestion"),
-  estado("G - Estudio de Credito", "gestion"),
-  estado("NA - Administrador de PH", "no-aplica"),
-  estado("NA - Descartado por Presupuesto", "no-aplica"),
-  estado("NA - No tenemos lo que busca", "no-aplica"),
-  estado("NA - Numero equivocado", "no-aplica"),
-  estado("NA - No Info No Contesta", "no-aplica"),
-  estado("OFF - Solo Busca Informacion", "off"),
-  estado("OFF - No contesta", "off"),
+  ...grupoKpi("grupo-off", "OFF", "off", ["OFF - Solo Busca Informacion", "OFF - No contesta"]),
+  ...grupoKpi("grupo-na", "NA - No aplica", "no-aplica", [
+    "NA - Administrador de PH",
+    "NA - Descartado por Presupuesto",
+    "NA - No tenemos lo que busca",
+    "NA - Numero equivocado",
+    "NA - No Info No Contesta",
+  ]),
   estado("Contacto Secundario", "neutro"),
   estado("Duplicado", "neutro"),
 ];
