@@ -3,6 +3,7 @@ import {
   aplicarFiltros,
   calcularKpi,
   columnasKpi,
+  columnasVisiblesKpi,
   contarPor,
   FILAS_KPI,
   formatoDias,
@@ -177,10 +178,24 @@ export default function Informes({ onError }: InformesProps) {
   // --- Desgloses ---
 
   const columnasKpiActuales = useMemo(() => (catalogos ? columnasKpi(catalogos) : []), [catalogos]);
-  const valoresKpi = useMemo(
-    () => calcularKpi(enPeriodo, columnasKpiActuales),
-    [enPeriodo, columnasKpiActuales],
+  const [ocultasKpi, setOcultasKpi] = useState<Set<string>>(leerOcultasKpi);
+  const columnasKpiVisibles = useMemo(
+    () => columnasVisiblesKpi(columnasKpiActuales, ocultasKpi),
+    [columnasKpiActuales, ocultasKpi],
   );
+  const valoresKpi = useMemo(
+    () => calcularKpi(enPeriodo, columnasKpiVisibles),
+    [enPeriodo, columnasKpiVisibles],
+  );
+
+  const cambiarOcultasKpi = (ocultas: Set<string>) => {
+    setOcultasKpi(ocultas);
+    try {
+      localStorage.setItem(CLAVE_OCULTAS_KPI, JSON.stringify([...ocultas]));
+    } catch {
+      // Sin almacenamiento la elección dura solo mientras la página esté abierta.
+    }
+  };
 
   const filasComercial = useMemo<FilaDesglose[]>(() => {
     const porComercial = new Map<string, ContactoInforme[]>();
@@ -438,10 +453,16 @@ export default function Informes({ onError }: InformesProps) {
             {textoRango(desde, hasta)}
             {comercial && ` · ${comercial}`}. Con el período y el comercial elegidos, sin importar el
             filtro de origen. Un lead con varias fuentes cuenta en cada columna, pero una sola vez en
-            el total.
+            el total. "Otros" son los leads con origen identificado que no entran en ninguna de las
+            demás columnas; el total suma solo las columnas que estén a la vista.
           </p>
+          <FiltroColumnasKpi
+            columnas={columnasKpiActuales.filter((col) => col.clave !== "total")}
+            ocultas={ocultasKpi}
+            onCambiar={cambiarOcultasKpi}
+          />
         </div>
-        <TablaKpi columnas={columnasKpiActuales} valores={valoresKpi} />
+        <TablaKpi columnas={columnasKpiVisibles} valores={valoresKpi} />
       </section>
     </div>
   );
@@ -456,10 +477,79 @@ const TONO_KPI: Record<TonoKpi, string> = {
   off: "bg-sky-300 text-sky-950",
 };
 
+const CLAVE_OCULTAS_KPI = "informes.kpi.columnasOcultas";
+
+function leerOcultasKpi(): Set<string> {
+  try {
+    const guardadas = JSON.parse(localStorage.getItem(CLAVE_OCULTAS_KPI) ?? "[]");
+    return new Set(Array.isArray(guardadas) ? guardadas : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Botones para elegir qué columnas de la tabla de KPI's se ven. */
+function FiltroColumnasKpi({
+  columnas,
+  ocultas,
+  onCambiar,
+}: {
+  columnas: ColumnaKpi[];
+  ocultas: Set<string>;
+  onCambiar: (ocultas: Set<string>) => void;
+}) {
+  const alternar = (clave: string) => {
+    const nuevas = new Set(ocultas);
+    if (nuevas.has(clave)) nuevas.delete(clave);
+    else nuevas.add(clave);
+    onCambiar(nuevas);
+  };
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <span className="mr-1 text-xs font-medium text-slate-600">Columnas:</span>
+      {columnas.map((col) => {
+        const visible = !ocultas.has(col.clave);
+        return (
+          <button
+            key={col.clave}
+            type="button"
+            aria-pressed={visible}
+            onClick={() => alternar(col.clave)}
+            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+              visible
+                ? "border-orange-300 bg-orange-50 font-medium text-orange-900"
+                : "border-slate-200 bg-white text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            {col.nombre}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        onClick={() => onCambiar(new Set())}
+        className="ml-1 text-xs font-medium text-slate-500 hover:text-slate-800"
+      >
+        Todas
+      </button>
+      <button
+        type="button"
+        onClick={() => onCambiar(new Set(columnas.map((col) => col.clave)))}
+        className="text-xs font-medium text-slate-500 hover:text-slate-800"
+      >
+        Ninguna
+      </button>
+    </div>
+  );
+}
+
 function TablaKpi({ columnas, valores }: { columnas: ColumnaKpi[]; valores: number[][] }) {
   return (
     <div className="mt-3 overflow-x-auto">
-      <table className="w-full min-w-[1400px] border-collapse text-sm">
+      <table
+        className="w-full border-collapse text-sm"
+        style={{ minWidth: 260 + columnas.length * 85 }}
+      >
         <thead>
           <tr className="text-[11px] text-slate-400">
             <th className="sticky left-0 z-10 bg-white" />

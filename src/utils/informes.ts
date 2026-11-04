@@ -286,17 +286,41 @@ export function columnasKpi(catalogos: CatalogosInforme): ColumnaKpi[] {
     { clave: "sitio-web", nombre: "Sitio web", fuente: "positivo-organico", pasa: conOrigen("organico") },
     { clave: "ascensor", nombre: "Ascensor", fuente: "Campo", pasa: conConocio("Ascensor") },
   ];
-  // Un lead con varias fuentes (p. ej. etiqueta de Meta y "Conoció por:
-  // Facebook") cuenta una sola vez en el total, no una por columna.
-  const fuentes = columnas.filter((col) => !col.total);
+  // Leads con origen identificado (los que cuenta "Leads entrantes") que no
+  // caen en ninguna de las columnas anteriores: otra campaña, otro "¿Cómo nos
+  // conoció?"… Con esto el total cuadra con los leads entrantes.
+  const conocidas = columnas.filter((col) => !col.total);
   columnas.push({
-    clave: "total",
-    nombre: "Total",
-    fuente: "Sin repetir",
-    total: true,
-    pasa: (c) => fuentes.some((col) => col.pasa(c)),
+    clave: "otros",
+    nombre: "Otros",
+    fuente: "Otro origen",
+    pasa: (c) => tieneOrigen(c) && !conocidas.some((col) => col.pasa(c)),
   });
-  return columnas;
+  return conTotal(columnas);
+}
+
+/**
+ * Agrega la columna "Total" sobre las columnas dadas. Un lead con varias
+ * fuentes (p. ej. etiqueta de Meta y "Conoció por: Facebook") cuenta una sola
+ * vez en el total, no una por columna.
+ */
+function conTotal(columnas: ColumnaKpi[]): ColumnaKpi[] {
+  const fuentes = columnas.filter((col) => col.clave !== "total");
+  return [
+    ...fuentes,
+    {
+      clave: "total",
+      nombre: "Total",
+      fuente: "Sin repetir",
+      total: true,
+      pasa: (c) => fuentes.some((col) => col.pasa(c)),
+    },
+  ];
+}
+
+/** Columnas que se ven según el filtro de la tabla; el total suma solo esas. */
+export function columnasVisiblesKpi(columnas: ColumnaKpi[], ocultas: Set<string>): ColumnaKpi[] {
+  return conTotal(columnas.filter((col) => col.clave !== "total" && !ocultas.has(col.clave)));
 }
 
 const conEstado =
