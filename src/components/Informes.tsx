@@ -9,7 +9,6 @@ import {
   formatoDias,
   obtenerConversiones,
   obtenerInformeContactos,
-  ORIGEN_IDENTIFICADO,
   ORIGEN_NINGUNO,
   ORIGEN_TODOS,
   PERIODOS,
@@ -26,6 +25,7 @@ import {
   type TonoKpi,
 } from "../utils/informes";
 import { selectTriggerClass } from "./SearchableSelect";
+import SelectorMultiple, { type GrupoOpciones } from "./SelectorMultiple";
 
 interface InformesProps {
   onError: (err: unknown) => void;
@@ -58,7 +58,7 @@ export default function Informes({ onError }: InformesProps) {
   const [desdeManual, setDesdeManual] = useState("");
   const [hastaManual, setHastaManual] = useState("");
   const [comercial, setComercial] = useState("");
-  const [origen, setOrigen] = useState(ORIGEN_IDENTIFICADO);
+  const [origenes, setOrigenes] = useState<string[]>([]);
   const [seleccion, setSeleccion] = useState<Seleccion>({ nivel: 3, clave: "gestion" });
 
   useEffect(() => {
@@ -93,22 +93,10 @@ export default function Informes({ onError }: InformesProps) {
       mapa.get(`${tipo}:${tipo === "sub" ? clave.toLowerCase() : clave}`) ?? clave;
   }, [catalogos]);
 
-  // Período y comercial, sin el filtro de origen: la tabla de KPI's compara
-  // todas las fuentes entre sí, así que no puede quedarse con una.
-  const enPeriodo = useMemo(
-    () =>
-      catalogos
-        ? aplicarFiltros(contactos, { desde, hasta, comercial, origen: ORIGEN_TODOS }, catalogos)
-        : [],
-    [contactos, catalogos, desde, hasta, comercial],
-  );
-
   const filtrados = useMemo(
     () =>
-      catalogos
-        ? aplicarFiltros(enPeriodo, { desde: "", hasta: "", comercial: "", origen }, catalogos)
-        : [],
-    [enPeriodo, catalogos, origen],
+      catalogos ? aplicarFiltros(contactos, { desde, hasta, comercial, origenes }, catalogos) : [],
+    [contactos, catalogos, desde, hasta, comercial, origenes],
   );
 
   const aplican = useMemo(() => filtrados.filter((c) => c.calificacion === "aplica"), [filtrados]);
@@ -184,8 +172,8 @@ export default function Informes({ onError }: InformesProps) {
     [columnasKpiActuales, ocultasKpi],
   );
   const valoresKpi = useMemo(
-    () => calcularKpi(enPeriodo, columnasKpiVisibles),
-    [enPeriodo, columnasKpiVisibles],
+    () => calcularKpi(filtrados, columnasKpiVisibles),
+    [filtrados, columnasKpiVisibles],
   );
 
   const cambiarOcultasKpi = (ocultas: Set<string>) => {
@@ -224,8 +212,30 @@ export default function Informes({ onError }: InformesProps) {
   if (!catalogos) return null;
 
   const grupos = [...new Set(catalogos.origenes.map((o) => o.grupo))];
-  const hayFiltros =
-    periodo !== "este-mes" || comercial !== "" || origen !== ORIGEN_IDENTIFICADO;
+  const hayFiltros = periodo !== "este-mes" || comercial !== "" || origenes.length > 0;
+  const gruposOrigen: GrupoOpciones[] = [
+    ...grupos.map((g) => ({
+      titulo: g,
+      opciones: [
+        { valor: `grupo:${g}`, nombre: `${g} (todo el grupo)` },
+        ...catalogos.origenes
+          .filter((o) => o.grupo === g)
+          .map((o) => ({ valor: o.clave, nombre: o.nombre })),
+      ],
+    })),
+    {
+      titulo: "¿Cómo nos conoció?",
+      opciones: catalogos.comoConocio.map((o) => ({ valor: `conocio:${o.valor}`, nombre: o.nombre })),
+    },
+    {
+      titulo: "Otros",
+      opciones: [
+        { valor: ORIGEN_NINGUNO, nombre: "Sin origen identificado" },
+        { valor: ORIGEN_TODOS, nombre: "Todos los contactos del CRM" },
+      ],
+    },
+  ];
+  const columnasElegibles = columnasKpiActuales.filter((col) => col.clave !== "total");
 
   return (
     <div className="flex-1 overflow-auto p-6">
@@ -282,36 +292,12 @@ export default function Informes({ onError }: InformesProps) {
         </Filtro>
 
         <Filtro etiqueta="Origen del lead">
-          <select
-            className={selectTriggerClass}
-            value={origen}
-            onChange={(e) => setOrigen(e.target.value)}
-          >
-            <option value={ORIGEN_IDENTIFICADO}>Todos los orígenes identificados</option>
-            {grupos.map((g) => (
-              <optgroup key={g} label={g}>
-                <option value={`grupo:${g}`}>{g} (todo el grupo)</option>
-                {catalogos.origenes
-                  .filter((o) => o.grupo === g)
-                  .map((o) => (
-                    <option key={o.clave} value={o.clave}>
-                      {o.nombre}
-                    </option>
-                  ))}
-              </optgroup>
-            ))}
-            <optgroup label="¿Cómo nos conoció?">
-              {catalogos.comoConocio.map((o) => (
-                <option key={o.valor} value={`conocio:${o.valor}`}>
-                  {o.nombre}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Otros">
-              <option value={ORIGEN_NINGUNO}>Sin origen identificado</option>
-              <option value={ORIGEN_TODOS}>Todos los contactos del CRM</option>
-            </optgroup>
-          </select>
+          <SelectorMultiple
+            grupos={gruposOrigen}
+            elegidos={origenes}
+            onCambiar={setOrigenes}
+            textoVacio="Todos los orígenes identificados"
+          />
         </Filtro>
 
         {hayFiltros && (
@@ -320,7 +306,7 @@ export default function Informes({ onError }: InformesProps) {
             onClick={() => {
               setPeriodo("este-mes");
               setComercial("");
-              setOrigen(ORIGEN_IDENTIFICADO);
+              setOrigenes([]);
             }}
             className="mb-2 text-xs font-medium text-slate-500 hover:text-slate-800"
           >
@@ -451,16 +437,27 @@ export default function Informes({ onError }: InformesProps) {
           <h2 className="text-sm font-semibold text-slate-800">KPI's por fuente</h2>
           <p className="mt-1 text-xs text-slate-500">
             {textoRango(desde, hasta)}
-            {comercial && ` · ${comercial}`}. Con el período y el comercial elegidos, sin importar el
-            filtro de origen. Un lead con varias fuentes cuenta en cada columna, pero una sola vez en
-            el total. "Otros" son los leads con origen identificado que no entran en ninguna de las
-            demás columnas; el total suma solo las columnas que estén a la vista.
+            {comercial && ` · ${comercial}`}. Con todos los filtros de arriba aplicados. Un lead con
+            varias fuentes cuenta en cada columna, pero una sola vez en el total. "Otros" son los
+            leads que no entran en ninguna de las demás columnas; el total suma solo las columnas
+            elegidas.
           </p>
-          <FiltroColumnasKpi
-            columnas={columnasKpiActuales.filter((col) => col.clave !== "total")}
-            ocultas={ocultasKpi}
-            onCambiar={cambiarOcultasKpi}
-          />
+          <div className="mt-3 max-w-xs">
+            <label className="mb-1 block text-xs font-medium text-slate-600">Columnas de la tabla</label>
+            <SelectorMultiple
+              grupos={[
+                { opciones: columnasElegibles.map((col) => ({ valor: col.clave, nombre: col.nombre })) },
+              ]}
+              elegidos={columnasElegibles.map((col) => col.clave).filter((c) => !ocultasKpi.has(c))}
+              onCambiar={(elegidas) =>
+                cambiarOcultasKpi(
+                  new Set(columnasElegibles.map((col) => col.clave).filter((c) => !elegidas.includes(c))),
+                )
+              }
+              textoVacio="Ninguna columna"
+              textoTodos="Todas las columnas"
+            />
+          </div>
         </div>
         <TablaKpi columnas={columnasKpiVisibles} valores={valoresKpi} />
       </section>
@@ -486,61 +483,6 @@ function leerOcultasKpi(): Set<string> {
   } catch {
     return new Set();
   }
-}
-
-/** Botones para elegir qué columnas de la tabla de KPI's se ven. */
-function FiltroColumnasKpi({
-  columnas,
-  ocultas,
-  onCambiar,
-}: {
-  columnas: ColumnaKpi[];
-  ocultas: Set<string>;
-  onCambiar: (ocultas: Set<string>) => void;
-}) {
-  const alternar = (clave: string) => {
-    const nuevas = new Set(ocultas);
-    if (nuevas.has(clave)) nuevas.delete(clave);
-    else nuevas.add(clave);
-    onCambiar(nuevas);
-  };
-  return (
-    <div className="mt-3 flex flex-wrap items-center gap-1.5">
-      <span className="mr-1 text-xs font-medium text-slate-600">Columnas:</span>
-      {columnas.map((col) => {
-        const visible = !ocultas.has(col.clave);
-        return (
-          <button
-            key={col.clave}
-            type="button"
-            aria-pressed={visible}
-            onClick={() => alternar(col.clave)}
-            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-              visible
-                ? "border-orange-300 bg-orange-50 font-medium text-orange-900"
-                : "border-slate-200 bg-white text-slate-400 hover:text-slate-600"
-            }`}
-          >
-            {col.nombre}
-          </button>
-        );
-      })}
-      <button
-        type="button"
-        onClick={() => onCambiar(new Set())}
-        className="ml-1 text-xs font-medium text-slate-500 hover:text-slate-800"
-      >
-        Todas
-      </button>
-      <button
-        type="button"
-        onClick={() => onCambiar(new Set(columnas.map((col) => col.clave)))}
-        className="text-xs font-medium text-slate-500 hover:text-slate-800"
-      >
-        Ninguna
-      </button>
-    </div>
-  );
 }
 
 function TablaKpi({ columnas, valores }: { columnas: ColumnaKpi[]; valores: number[][] }) {

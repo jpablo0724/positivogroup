@@ -137,12 +137,34 @@ export interface FiltrosInforme {
   desde: string;
   hasta: string;
   comercial: string;
-  /** Clave de origen, "grupo:<nombre>", "conocio:<valor>" o uno de los ORIGEN_*. */
-  origen: string;
+  /**
+   * Claves de origen, "grupo:<nombre>", "conocio:<valor>" o ORIGEN_*. Pasa el
+   * lead que cumpla cualquiera; vacío equivale a ORIGEN_IDENTIFICADO.
+   */
+  origenes: string[];
 }
 
 export function tieneOrigen(c: ContactoInforme): boolean {
   return c.origenes.length > 0 || c.comoConocio.length > 0;
+}
+
+function filtroDeOrigen(
+  origen: string,
+  catalogos: CatalogosInforme,
+): (c: ContactoInforme) => boolean {
+  if (origen === ORIGEN_TODOS) return () => true;
+  if (origen === ORIGEN_IDENTIFICADO) return tieneOrigen;
+  if (origen === ORIGEN_NINGUNO) return (c) => !tieneOrigen(c);
+  if (origen.startsWith("grupo:")) {
+    const grupo = origen.slice(6);
+    const claves = new Set(catalogos.origenes.filter((o) => o.grupo === grupo).map((o) => o.clave));
+    return (c) => c.origenes.some((o) => claves.has(o));
+  }
+  if (origen.startsWith("conocio:")) {
+    const valor = origen.slice(8);
+    return (c) => c.comoConocio.includes(valor);
+  }
+  return (c) => c.origenes.includes(origen);
 }
 
 export function aplicarFiltros(
@@ -150,22 +172,11 @@ export function aplicarFiltros(
   filtros: FiltrosInforme,
   catalogos: CatalogosInforme,
 ): ContactoInforme[] {
-  const { desde, hasta, comercial, origen } = filtros;
-  let pasaOrigen: (c: ContactoInforme) => boolean;
-
-  if (origen === ORIGEN_TODOS) pasaOrigen = () => true;
-  else if (origen === ORIGEN_IDENTIFICADO) pasaOrigen = tieneOrigen;
-  else if (origen === ORIGEN_NINGUNO) pasaOrigen = (c) => !tieneOrigen(c);
-  else if (origen.startsWith("grupo:")) {
-    const grupo = origen.slice(6);
-    const claves = new Set(catalogos.origenes.filter((o) => o.grupo === grupo).map((o) => o.clave));
-    pasaOrigen = (c) => c.origenes.some((o) => claves.has(o));
-  } else if (origen.startsWith("conocio:")) {
-    const valor = origen.slice(8);
-    pasaOrigen = (c) => c.comoConocio.includes(valor);
-  } else {
-    pasaOrigen = (c) => c.origenes.includes(origen);
-  }
+  const { desde, hasta, comercial, origenes } = filtros;
+  const pasan = (origenes.length ? origenes : [ORIGEN_IDENTIFICADO]).map((o) =>
+    filtroDeOrigen(o, catalogos),
+  );
+  const pasaOrigen = (c: ContactoInforme) => pasan.some((pasa) => pasa(c));
 
   return contactos.filter(
     (c) =>
@@ -286,15 +297,14 @@ export function columnasKpi(catalogos: CatalogosInforme): ColumnaKpi[] {
     { clave: "sitio-web", nombre: "Sitio web", fuente: "positivo-organico", pasa: conOrigen("organico") },
     { clave: "ascensor", nombre: "Ascensor", fuente: "Campo", pasa: conConocio("Ascensor") },
   ];
-  // Leads con origen identificado (los que cuenta "Leads entrantes") que no
-  // caen en ninguna de las columnas anteriores: otra campaña, otro "¿Cómo nos
-  // conoció?"… Con esto el total cuadra con los leads entrantes.
+  // Leads que no caen en ninguna de las columnas anteriores: otra campaña,
+  // otro "¿Cómo nos conoció?"… Con esto el total cuadra con los leads entrantes.
   const conocidas = columnas.filter((col) => !col.total);
   columnas.push({
     clave: "otros",
     nombre: "Otros",
     fuente: "Otro origen",
-    pasa: (c) => tieneOrigen(c) && !conocidas.some((col) => col.pasa(c)),
+    pasa: (c) => !conocidas.some((col) => col.pasa(c)),
   });
   return conTotal(columnas);
 }
